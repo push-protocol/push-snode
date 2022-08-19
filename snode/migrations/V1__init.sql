@@ -6,6 +6,7 @@
    inbox:ZZZYYY -> node2
    inbox:ZZZYYY -> node3
    .
+   .
  */
 DROP TABLE IF EXISTS network_storage_layout;
 CREATE TABLE IF NOT EXISTS network_storage_layout
