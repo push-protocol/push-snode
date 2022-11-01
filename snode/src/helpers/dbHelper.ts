@@ -19,7 +19,7 @@ export default class DbHelper {
       let buf = crypto.createHash('md5').update(key).digest();
       let i32 = buf.readUInt32LE(0);
       const i8bits = i32 & 0xFF;
-      console.log(buf, '->' , i32, '->', i8bits);
+      log.debug('calculateShardForNamespaceIndex(): ',buf, '->' , i32, '->', i8bits);
       return i8bits;
     }
 
@@ -56,6 +56,45 @@ export default class DbHelper {
         catch(err => {
             log.debug(err);
             return Promise.resolve('');
+        });
+    }
+
+    public static async findValueInTable(tableName: string, key: string):Promise<string> {
+        log.debug(`tableName is ${tableName} , key is ${key}`);
+        const sql = `select payload
+                     from ${tableName}
+                     where rowuuid = '${key}'`;
+        log.debug(sql);
+        return db.query(sql).then(data => {
+            log.debug(data);
+            if(data.length!=1) {
+                return Promise.reject('missing table with the correct name');
+            }
+            log.debug(`data found: ${ JSON.stringify(data[0].payload)}`)
+            return data[0].payload;
+        }).
+        catch(err => {
+            log.debug(err);
+            return Promise.resolve('');
+        });
+    }
+
+    static async putValueInTable(namespace: string, namespaceShardId: number,
+                                 storageTable: string, key: string, jsonValue: string) {
+        log.debug(`putValueInTable() namespace=${namespace}, namespaceShardId=${namespaceShardId}
+        ,storageTable=${storageTable}, key=${key}, jsonValue=${jsonValue}`);
+        const sql = `INSERT INTO ${storageTable} 
+                    (namespace_id, namespace_shard_id, rowuuid, dataschema, data, payload)
+                    values ('${namespace}', '${namespaceShardId}', '${key}', '', '{}', '${jsonValue}')
+                    ON CONFLICT (rowUuid) DO UPDATE SET payload = '${jsonValue}'`
+        log.debug(sql);
+        return db.none(sql).then(data => {
+            log.debug(data);
+            return Promise.resolve();
+        }).
+        catch(err => {
+            log.debug(err);
+            return Promise.reject(err);
         });
     }
 }
