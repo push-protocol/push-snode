@@ -1,4 +1,4 @@
--- CREATE DATABASE "storage1"  WITH OWNER "postgres"
+-- CREATE DATABASE "postgres"  WITH OWNER "postgres"
 --  ENCODING 'UTF8' LC_COLLATE = 'en_US.utf8'  LC_CTYPE = 'en_US.utf8';
 
 /*
@@ -56,44 +56,52 @@ How the data is structured:
 DROP TABLE IF EXISTS storage_ns_inbox_d_202208;
 CREATE TABLE IF NOT EXISTS storage_ns_inbox_d_202208
 (
-    namespace_id VARCHAR(20) NOT NULL,
+    namespace VARCHAR(20) NOT NULL,
     namespace_shard_id VARCHAR(20) NOT NULL,
+    namespace_id VARCHAR(20) NOT NULL,
     ts TIMESTAMP NOT NULL default NOW(),
     rowUuid VARCHAR(64) NOT NULL PRIMARY KEY,
     dataSchema VARCHAR(20) NOT NULL,
-    data JSONB,
     payload JSONB
 );
 
 DROP INDEX IF EXISTS storage_table_ns_id_ts_index;
-CREATE INDEX storage_table_ns_id_ts_index ON storage_ns_inbox_d_202208 USING btree (namespace_id ASC, namespace_shard_id ASC, ts ASC);
+CREATE INDEX storage_table_ns_id_ts_index ON storage_ns_inbox_d_202208 USING btree (namespace ASC, namespace_shard_id ASC, namespace_id ASC, ts ASC);
 
 comment on column storage_ns_inbox_d_202208.rowUuid is 'unique row id that is globally unique, i.e. ALDKFJ880123';
 comment on column storage_ns_inbox_d_202208.namespace_id is 'namespace index usually related to inbox id or chat id, i.e. 991';
-comment on column storage_ns_inbox_d_202208.data is 'the useful payload itself';
 comment on column storage_ns_inbox_d_202208.ts is 'we store only time series data because we provide sharding by time also, so this is a required field which reporesent the moment when data is appended';
 
 
 -- Dummy data
 
-insert into storage_ns_inbox_d_202208 (namespace_shard_id, namespace_id, ts, rowuuid, dataschema, data, payload) values ('211', 'feeds', '2022-08-23 00:22:21.000000', 'feeds-2022-08-23 1111', 'feedv1', '{"users": ["0x74415Bc4C4Bf4Baecc2DD372426F0a1D016Fa924", "0xD8634C39BBFd4033c0d3289C4515275102423681"], "channel": "0xD8634C39BBFd4033c0d3289C4515275102423681", "is_spam": 1, "attempts": 0, "use_push": 1, "payloadId": "19", "processed": 0, "blockchain": "ETH_TEST_KOVAN"}', '{"apns": {"payload": {"aps": {"category": "withappicon", "mutable-content": 1, "content-available": 1}}, "fcm_options": {"image": ""}}, "data": {"app": "", "url": "", "acta": "", "aimg": "", "amsg": "ETH at [d:$403.54]\n\nHourly Movement: [t:-0.35%]\nDaily Movement: [s:4.70%]\nWeekly Movement: [s:3.20%][timestamp: 1604556000]", "asub": "ETH Price Movement", "icon": "", "type": "1", "appbot": "0", "hidden": "0", "secret": ""}, "android": {"notification": {"icon": "@drawable/ic_stat_name", "color": "#e20880", "image": "", "default_vibrate_timings": true}}, "notification": {"body": "\nHourly Movement: -0.35%\nDaily Movement: 4.70%\nWeekly Movement: 3.20%", "title": " - ETH at $403.54"}}');
+insert into storage_ns_inbox_d_202208 (namespace, namespace_shard_id, namespace_id, ts, rowuuid, dataschema, payload)
+values ('feeds', '129', '1000000', '2022-08-23 00:22:21.000000', 'feeds-2022-08-23 1111', 'feedv1',
+        '{"data": {"apns": {"payload": {"aps": {"category": "withappicon", "mutable-content": 1, "content-available": 1}}, "fcm_options": {"image": ""}}, "data": {"app": "", "url": "", "acta": "", "aimg": "", "amsg": "ETH at [d:$403.54]\n\nHourly Movement: [t:-0.35%]\nDaily Movement: [s:4.70%]\nWeekly Movement: [s:3.20%][timestamp: 1604556000]", "asub": "ETH Price Movement", "icon": "", "type": "1", "appbot": "0", "hidden": "0", "secret": ""}, "android": {"notification": {"icon": "@drawable/ic_stat_name", "color": "#e20880", "image": "", "default_vibrate_timings": true}}, "notification": {"body": "\nHourly Movement: -0.35%\nDaily Movement: 4.70%\nWeekly Movement: 3.20%", "title": " - ETH at $403.54"}}, "metadata": {"users": ["0x74415Bc4C4Bf4Baecc2DD372426F0a1D016Fa924", "0xD8634C39BBFd4033c0d3289C4515275102423681"], "channel": "0xD8634C39BBFd4033c0d3289C4515275102423681", "is_spam": 1, "attempts": 0, "use_push": 1, "payloadId": "19", "processed": 0, "blockchain": "ETH_TEST_KOVAN"}}');
 insert into node_storage_layout (namespace, namespace_shard_id, ts_start, ts_end, table_name) values ('feeds', '211', '2022-08-01 00:28:34.000000', '2022-08-31 00:28:40.000000', 'storage_ns_inbox_d_202208');
 insert into network_storage_layout (id, namespace, namespace_shard_id, node_id) values (1, 'feeds', '211', '1');
 insert into network_storage_layout (id, namespace, namespace_shard_id, node_id) values (2, 'feeds', 'XX', '2');
 insert into network_storage_layout (id, namespace, namespace_shard_id, node_id) values (3, 'feeds', 'XX', '3');
 
 -- Test queries
--- curl -X GET --location "http://localhost:4000/api/v1/kv/ns/feeds/nsidx/10/date/20220815/key/a1200bbbb"
 
 -- INDEX on a jsonb text field
 DROP INDEX IF EXISTS storage_table_data_channel;
-CREATE INDEX storage_table_data_channel ON storage_ns_inbox_d_202208 ((data->>'channel'));
-select * from storage_ns_inbox_d_202208 where (data->>'channel') = '0xD8634C39BBFd4033c0d3289C4515275102423681';
-explain analyze select * from storage_ns_inbox_d_202208 where (data->>'channel') = '0xD8634C39BBFd4033c0d3289C4515275102423681';
+CREATE INDEX storage_table_data_channel ON storage_ns_inbox_d_202208 ((payload->>'data'->>'channel'));
+select * from storage_ns_inbox_d_202208 where (payload->>'data'->>'channel') = '0xD8634C39BBFd4033c0d3289C4515275102423681';
+explain analyze select * from storage_ns_inbox_d_202208 where (payload->>'data'->>'channel') = '0xD8634C39BBFd4033c0d3289C4515275102423681';
+
+-- show inbox items
+-- {"apns": {"payload": {"aps": {"category": "withappicon", "mutable-content": 1, "content-available": 1}}, "fcm_options": {"image": ""}}, "data": {"app": "", "url": "", "acta": "", "aimg": "", "amsg": "ETH at [d:$403.54]\n\nHourly Movement: [t:-0.35%]\nDaily Movement: [s:4.70%]\nWeekly Movement: [s:3.20%][timestamp: 1604556000]", "asub": "ETH Price Movement", "icon": "", "type": "1", "appbot": "0", "hidden": "0", "secret": ""}, "android": {"notification": {"icon": "@drawable/ic_stat_name", "color": "#e20880", "image": "", "default_vibrate_timings": true}}, "notification": {"body": "\nHourly Movement: -0.35%\nDaily Movement: 4.70%\nWeekly Movement: 3.20%", "title": " - ETH at $403.54"}}
+select payload as payload, md5(payload::text) as hash
+from storage_ns_inbox_d_202208
+order by ts
+limit 2
+offset 1;
 
 
-explain analyze select (data->'channel')::text from storage_ns_inbox_d_202208 where (data->'channel')::text = '0xD8634C39BBFd4033c0d3289C4515275102423681';;
-select * from storage_ns_inbox_d_202208 where (data->'channel')::text = '0xD8634C39BBFd4033c0d3289C4515275102423681';
+explain analyze select (payload->>'data'->'channel')::text from storage_ns_inbox_d_202208 where (payload->>'data'->'channel')::text = '0xD8634C39BBFd4033c0d3289C4515275102423681';;
+select * from storage_ns_inbox_d_202208 where (payload->>'data'->'channel')::text = '0xD8634C39BBFd4033c0d3289C4515275102423681';
 
  SELECT count(*) FROM network_storage_layout where namespace='feeds' and namespace_shard_id='377' and node_id='1'
 

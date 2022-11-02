@@ -104,7 +104,49 @@ export default (app: Router) => {
                 log.error('storage table not found');
                 return res.status(401).json('storage table not found');
             }
-            const storageValue = await DbHelper.putValueInTable(nsName, shardId, storageTable, key, body);
+            const storageValue = await DbHelper.putValueInTable(nsName, shardId, nsIndex, storageTable, key, body);
+            log.debug(`found value: ${storageValue}`)
+            log.debug('success is ' + success);
+            try {
+                // const messaging = Container.get(MessagingService);
+                return res.status(201).json(storageValue);
+            } catch (e) {
+                // log.error('🔥 error: %o', e);
+                return next(e);
+            }
+        }
+    );
+
+    route.post(
+        '/ns/:nsName/nsidx/:nsIndex/date/:dt/listInbox/page/:page', /*  */
+        async (req: Request, res: Response, next: NextFunction) => {
+            logRequest(req);
+            const nsName = req.params.nsName;
+            const nsIndex = req.params.nsIndex;
+            const dt = req.params.dt;
+            const key = req.params.key;
+            const nodeId = 1; // todo read this from db
+            const body = JSON.stringify(req.body);
+            const page = parseInt(req.params.page);
+            log.debug(`nsName=${nsName} nsIndex=${nsIndex} dt=${dt} key=${key} nodeId=${nodeId} body=${body}`);
+            let shardId = DbHelper.calculateShardForNamespaceIndex(nsName, nsIndex);
+            log.debug(`nodeId=${nodeId} shardId=${shardId}`);
+            const success = await DbHelper.checkThatShardIsOnThisNode(nsName, shardId, nodeId);
+            if (!success) {
+                let errMsg = `${nsName}.${nsIndex} maps to shard ${shardId} which is missing on node ${nodeId}`;
+                console.log(errMsg);
+                return res.status(500)
+                    .json({errorMessage: errMsg})
+            }
+            const date = DateTime.fromISO(dt, {zone: 'utc'});
+            log.debug(`parsed date ${dt} -> ${date}`)
+            const storageTable = await DbHelper.findStorageTableByDate(nsName, shardId, date);
+            log.debug(`found table ${storageTable}`)
+            if (StrUtil.isEmpty(storageTable)) {
+                log.error('storage table not found');
+                return res.status(401).json('storage table not found');
+            }
+            const storageValue = await DbHelper.listInbox(nsName, shardId, storageTable, date, page);
             log.debug(`found value: ${storageValue}`)
             log.debug('success is ' + success);
             try {

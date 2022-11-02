@@ -80,12 +80,13 @@ export default class DbHelper {
     }
 
     static async putValueInTable(namespace: string, namespaceShardId: number,
+                                 namespaceId:string,
                                  storageTable: string, key: string, jsonValue: string) {
         log.debug(`putValueInTable() namespace=${namespace}, namespaceShardId=${namespaceShardId}
         ,storageTable=${storageTable}, key=${key}, jsonValue=${jsonValue}`);
         const sql = `INSERT INTO ${storageTable} 
-                    (namespace_id, namespace_shard_id, rowuuid, dataschema, data, payload)
-                    values ('${namespace}', '${namespaceShardId}', '${key}', '', '{}', '${jsonValue}')
+                    (namespace, namespace_shard_id, namespace_id, rowuuid, dataschema, payload)
+                    values ('${namespace}',  '${namespaceShardId}', '${namespaceId}', '${key}', 'v1', '${jsonValue}')
                     ON CONFLICT (rowUuid) DO UPDATE SET payload = '${jsonValue}'`
         log.debug(sql);
         return db.none(sql).then(data => {
@@ -95,6 +96,29 @@ export default class DbHelper {
         catch(err => {
             log.debug(err);
             return Promise.reject(err);
+        });
+    }
+
+    static async listInbox(namespace: string, namespaceShardId: number,
+                                 storageTable: string, dateYmd:any, page:number):Promise<string[]> {
+        log.debug(`date is ${dateYmd.toISO()}`);
+        const pageSize = 10;
+        const sql = `select payload as payload
+                     from ${storageTable}
+                     order by ts desc
+                     limit ${pageSize}
+                     offset ${page * pageSize}'`
+        log.debug(sql);
+        return db.query(sql).then(data => {
+            log.debug(data);
+            if(data.length!=1) {
+                return Promise.reject('missing table with the correct name');
+            }
+            return data[0];
+        }).
+        catch(err => {
+            log.debug(err);
+            return Promise.resolve('');
         });
     }
 }
