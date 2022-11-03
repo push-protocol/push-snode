@@ -24,9 +24,12 @@ export default class DbHelper {
     }
 
     public static async createNewStorageDatabase():Promise<boolean>{
+        const date = new Date()
+        const dbdate = date.getFullYear().toString() + date.getMonth().toString()
+        console.log(dbdate);
         const sql = `
-        DROP TABLE IF EXISTS storage_ns_inbox_d_202208;
-            CREATE TABLE IF NOT EXISTS storage_ns_inbox_d_202208
+        DROP TABLE IF EXISTS storage_ns_inbox_d_${dbdate};
+            CREATE TABLE IF NOT EXISTS storage_ns_inbox_d_${dbdate}
             (
                 namespace VARCHAR(20) NOT NULL,
                 namespace_shard_id VARCHAR(20) NOT NULL,
