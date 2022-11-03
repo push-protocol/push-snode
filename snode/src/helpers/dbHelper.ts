@@ -23,6 +23,31 @@ export default class DbHelper {
       return i8bits;
     }
 
+    public static async createNewStorageDatabase():Promise<boolean>{
+        const sql = `
+        DROP TABLE IF EXISTS storage_ns_inbox_d_202208;
+            CREATE TABLE IF NOT EXISTS storage_ns_inbox_d_202208
+            (
+                namespace VARCHAR(20) NOT NULL,
+                namespace_shard_id VARCHAR(20) NOT NULL,
+                namespace_id VARCHAR(20) NOT NULL,
+                ts TIMESTAMP NOT NULL default NOW(),
+                rowUuid VARCHAR(64) NOT NULL PRIMARY KEY,
+                dataSchema VARCHAR(20) NOT NULL,
+                payload JSONB
+            );
+        `
+        console.log(sql)
+        return db.query(sql).then(data => {
+            console.log(data)
+            return Promise.resolve(true)
+        }).
+        catch(err => {
+            console.log(err);
+            return Promise.resolve(false);
+        });
+    }
+
     // todo fix params substitution for the pg library;
     public static async checkThatShardIsOnThisNode(namespace: string, namespaceShardId: number, nodeId: number): Promise<boolean> {
         const sql = `SELECT count(*) FROM network_storage_layout
