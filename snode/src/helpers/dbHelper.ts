@@ -23,12 +23,33 @@ export default class DbHelper {
       return i8bits;
     }
 
-    public static async createNewStorageDatabase():Promise<boolean>{
+    public static async checkIfStorageTableExists():Promise<boolean>{
+        const date = new Date();
+        const dbdate = date.getFullYear().toString() + date.getMonth().toString();
+        var sql =`
+            SELECT EXISTS(
+                SELECT FROM pg_tables 
+                WHERE schemaname='public' AND 
+                tablename='storage_ns_inbox_d_${dbdate}')
+        `
+        console.log(sql)
+        return db.query(sql).then(data => {
+            console.log(data)
+            return Promise.resolve(true)
+        }).
+        catch(err => {
+            console.log(err);
+            return Promise.resolve(false);
+        });
+    }
+
+
+
+    public static async createNewStorageTable():Promise<boolean>{
         const date = new Date()
         const dbdate = date.getFullYear().toString() + date.getMonth().toString()
         console.log(dbdate);
         const sql = `
-        DROP TABLE IF EXISTS storage_ns_inbox_d_${dbdate};
             CREATE TABLE IF NOT EXISTS storage_ns_inbox_d_${dbdate}
             (
                 namespace VARCHAR(20) NOT NULL,
