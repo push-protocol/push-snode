@@ -43,14 +43,33 @@ export default class DbHelper {
         });
     }
 
+    public static async findStorageTablebyName(namespace: string, namespaceShardId: number, storagetable:string ):Promise<boolean>{
+        const date = new Date();
+        const dbdate = date.getFullYear().toString() + date.getMonth().toString();
+        var sql =`select exists(select table_name from node_storage_layout 
+            where table_name=${storagetable} 
+            and namespace=${namespace}
+            and namespace_shard_id=${namespaceShardId} )`
+        
+    }
 
+    public static async createNewNodestorageRecord(namespace: string, namespaceShardId: number, ts_start:any, ts_end:any, table_name:string):Promise<boolean>{
+        const sql =`
+        insert into node_storage_layout (namespace, namespace_shard_id, ts_start, ts_end, table_name) values ('${namespace}', '${namespaceShardId}', '${ts_start} 00:28:34.000000', '${ts_end} 00:28:40.000000', '${table_name}');
+        `
+        return db.query(sql).then(data => {
+            console.log(data)
+            return Promise.resolve(true)
+        }).
+        catch(err => {
+            console.log(err);
+            return Promise.resolve(false);
+        });
+    }
 
-    public static async createNewStorageTable():Promise<boolean>{
-        const date = new Date()
-        const dbdate = date.getFullYear().toString() + date.getMonth().toString()
-        console.log(dbdate);
+    public static async createNewStorageTable(dt:string):Promise<boolean>{
         const sql = `
-            CREATE TABLE IF NOT EXISTS storage_ns_inbox_d_${dbdate}
+            CREATE TABLE IF NOT EXISTS storage_ns_inbox_d_${dt}
             (
                 namespace VARCHAR(20) NOT NULL,
                 namespace_shard_id VARCHAR(20) NOT NULL,

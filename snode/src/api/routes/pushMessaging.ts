@@ -98,12 +98,21 @@ export default (app: Router) => {
             }
             const date = DateTime.fromISO(dt, {zone: 'utc'});
             log.debug(`parsed date ${dt} -> ${date}`)
-            const storageTable = await DbHelper.findStorageTableByDate(nsName, shardId, date);
+            var storageTable = await DbHelper.findStorageTableByDate(nsName, shardId, date);
             log.debug(`found table ${storageTable}`)
             if (StrUtil.isEmpty(storageTable)) {
                 log.error('storage table not found');
-                return res.status(401).json('storage table not found');
+                var ts_start= new Date(parseInt(dt.slice(0,4)),parseInt(dt.slice(4,6))-1,2);
+                var ts_end= new Date(parseInt(dt.slice(0,4)),parseInt(dt.slice(4,6)),1);
+                console.log("timestart:",ts_start.toString().slice(0,10),ts_end);
+                log.debug('creating node storage layout mapping')
+                const createnodelayout=await DbHelper.createNewNodestorageRecord(nsName,shardId,ts_start.toISOString().slice(0,10),ts_end.toISOString().slice(0,10),`storage_ns_inbox_d_${dt.slice(0,6)}`);
+                log.debug('creating new storage table');
+                const createtable = await DbHelper.createNewStorageTable(dt.slice(0,6));
+                console.log(createtable);
+                console.log(createnodelayout)
             }
+            var storageTable = await DbHelper.findStorageTableByDate(nsName, shardId, date);
             const storageValue = await DbHelper.putValueInTable(nsName, shardId, nsIndex, storageTable, key, body);
             log.debug(`found value: ${storageValue}`)
             log.debug('success is ' + success);
