@@ -102,12 +102,12 @@ export default (app: Router) => {
             log.debug(`found table ${storageTable}`)
             if (StrUtil.isEmpty(storageTable)) {
                 log.error('storage table not found');
-                var ts_start= new Date(parseInt(dt.slice(0,4)),parseInt(dt.slice(4,6))-1,2);
-                var ts_end= new Date(parseInt(dt.slice(0,4)),parseInt(dt.slice(4,6)),1);
+                var ts_start= DateTime.fromISO(date).startOf('month').toString();
+                var ts_end= DateTime.fromISO(date).endOf('month').toString();
                 log.debug('creating new storage table');
                 const createtable = await DbHelper.createNewStorageTable(nsName, dt.slice(0,6));
                 log.debug('creating node storage layout mapping')
-                const createnodelayout=await DbHelper.createNewNodestorageRecord(nsName,shardId,ts_start.toISOString().slice(0,10),ts_end.toISOString().slice(0,10),`storage_ns_${nsName}_d_${dt.slice(0,6)}`);
+                const createnodelayout=await DbHelper.createNewNodestorageRecord(nsName,shardId,ts_start.slice(0,10),ts_end.slice(0,10),`storage_ns_${nsName}_d_${dt.slice(0,6)}`);
                 log.debug(createnodelayout)
                 log.debug(createtable);
             }
