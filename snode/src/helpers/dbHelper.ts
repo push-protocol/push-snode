@@ -43,21 +43,19 @@ export default class DbHelper {
         });
     }
 
-    public static async findStorageTablebyName(namespace: string, namespaceShardId: number, storagetable:string ):Promise<boolean>{
-        const date = new Date();
-        const dbdate = date.getFullYear().toString() + date.getMonth().toString();
-        var sql =`select exists(select table_name from node_storage_layout 
-            where table_name=${storagetable} 
-            and namespace=${namespace}
-            and namespace_shard_id=${namespaceShardId} )`
-        
-    }
-
     public static async createNewNodestorageRecord(namespace: string, namespaceShardId: number, ts_start:any, ts_end:any, table_name:string):Promise<boolean>{
+        const named = require('yesql').pg
         const sql =`
-        insert into node_storage_layout (namespace, namespace_shard_id, ts_start, ts_end, table_name) values ('${namespace}', '${namespaceShardId}', '${ts_start} 00:00:00.000000', '${ts_end} 23:59:59.000000', '${table_name}') on conflict do nothing;
+        insert into node_storage_layout (namespace, namespace_shard_id, ts_start, ts_end, table_name) values (:namespace, :namespace_shard_id, :ts_start, :ts_end , :table_name) on conflict do nothing;
         `
-        return db.query(sql).then(data => {
+        log.debug(sql);
+        return db.query(named(sql)({
+            namespace:namespace,
+            namespace_shard_id:namespaceShardId,
+            ts_start:ts_start,
+            ts_end:ts_end+' 23:59:59',
+            table_name:table_name
+        })).then(data => {
             console.log(data)
             return Promise.resolve(true)
         }).
@@ -153,14 +151,22 @@ export default class DbHelper {
     static async putValueInTable(namespace: string, namespaceShardId: number,
                                  namespaceId:string,
                                  storageTable: string, key: string, jsonValue: string) {
+        const named = require('yesql').pg
         log.debug(`putValueInTable() namespace=${namespace}, namespaceShardId=${namespaceShardId}
         ,storageTable=${storageTable}, key=${key}, jsonValue=${jsonValue}`);
         const sql = `INSERT INTO ${storageTable} 
                     (namespace, namespace_shard_id, namespace_id, rowuuid, dataschema, payload)
-                    values ('${namespace}',  '${namespaceShardId}', '${namespaceId}', '${key}', 'v1', '${jsonValue}')
-                    ON CONFLICT (rowUuid) DO UPDATE SET payload = '${jsonValue}'`
+                    values (:namespace, :namespace_shard_id, :namespace_id, :rowuuid, :dataschema, :payload)
+                    ON CONFLICT (rowUuid) DO UPDATE SET payload = :payload`
         log.debug(sql);
-        return db.none(sql).then(data => {
+        return db.none(named(sql)({
+            namespace:namespace,
+            namespace_shard_id:namespaceShardId,
+            namespace_id:namespaceId,
+            rowuuid:key,
+            dataschema:'v1',
+            payload:jsonValue
+        })).then(data => {
             log.debug(data);
             return Promise.resolve();
         }).

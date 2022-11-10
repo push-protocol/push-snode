@@ -90,7 +90,8 @@
     "typings": "^2.1.1",
     "unique-names-generator": "^4.7.1",
     "web3": "1.6.0",
-    "winston": "^3.2.1"
+    "winston": "^3.2.1",
+    "yesql": "^5.0.0"
   },
   "devDependencies": {
     "@types/agenda": "^2.0.4",
