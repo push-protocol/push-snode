@@ -23,8 +23,8 @@ function splitIntoNameAndIndex(nsNameWithIndex: string): string[] {
 function logRequest(req: Request) {
     log.debug('Calling %o %o with body: %o', req.method, req.url, req.body);
 }
-// curl -X GET --location "http://localhost:4000/api/v1/kv/ns/feeds/nsidx/10/date/20220815/key/a1200bbbb"
-// curl -X POST -H "Content-Type: application/json" --location "http://localhost:4000/api/v1/kv/ns/feeds/nsidx/10/date/20220815/key/b120" -d '{"user":"Someone"}'
+// curl -v -X GET --location "http://localhost:4000/api/v1/kv/ns/feeds/nsidx/1000000/date/20220815/key/b120"
+// curl -X POST -H "Content-Type: application/json" --location "http://localhost:4000/api/v1/kv/ns/feeds/nsidx/1000000/date/20220815/key/b120" -d '{"user":"Someone"}'
 
 export default (app: Router) => {
     app.use(bodyParser.json());
