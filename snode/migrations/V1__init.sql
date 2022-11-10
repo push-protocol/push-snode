@@ -103,8 +103,7 @@ offset 1;
 explain analyze select (payload->>'data'->'channel')::text from storage_ns_inbox_d_202208 where (payload->>'data'->'channel')::text = '0xD8634C39BBFd4033c0d3289C4515275102423681';;
 select * from storage_ns_inbox_d_202208 where (payload->>'data'->'channel')::text = '0xD8634C39BBFd4033c0d3289C4515275102423681';
 
- SELECT count(*) FROM network_storage_layout where namespace='feeds' and namespace_shard_id='377' and node_id='1'
-
+ SELECT count(*) FROM network_storage_layout where namespace='feeds' and namespace_shard_id='377' and node_id='1';
 
 select table_name from node_storage_layout
 where namespace='feeds' and namespace_shard_id='211' and ts_start <= '2022-08-15' and ts_end >= '2022-08-15'

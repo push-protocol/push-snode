@@ -23,6 +23,77 @@ export default class DbHelper {
       return i8bits;
     }
 
+    public static async checkIfStorageTableExists():Promise<boolean>{
+        const date = new Date();
+        const dbdate = date.getFullYear().toString() + date.getMonth().toString();
+        var sql =`
+            SELECT EXISTS(
+                SELECT FROM pg_tables 
+                WHERE schemaname='public' AND 
+                tablename='storage_ns_inbox_d_${dbdate}')
+        `
+        console.log(sql)
+        return db.query(sql).then(data => {
+            console.log(data)
+            return Promise.resolve(true)
+        }).
+        catch(err => {
+            console.log(err);
+            return Promise.resolve(false);
+        });
+    }
+
+    public static async findStorageTablebyName(namespace: string, namespaceShardId: number, storagetable:string ):Promise<boolean>{
+        const date = new Date();
+        const dbdate = date.getFullYear().toString() + date.getMonth().toString();
+        var sql =`select exists(select table_name from node_storage_layout 
+            where table_name=${storagetable} 
+            and namespace=${namespace}
+            and namespace_shard_id=${namespaceShardId} )`
+        
+    }
+
+    public static async createNewNodestorageRecord(namespace: string, namespaceShardId: number, ts_start:any, ts_end:any, table_name:string):Promise<boolean>{
+        const sql =`
+        insert into node_storage_layout (namespace, namespace_shard_id, ts_start, ts_end, table_name) values ('${namespace}', '${namespaceShardId}', '${ts_start} 00:00:00.000000', '${ts_end} 23:59:59.000000', '${table_name}') on conflict do nothing;
+        `
+        return db.query(sql).then(data => {
+            console.log(data)
+            return Promise.resolve(true)
+        }).
+        catch(err => {
+            console.log(err);
+            return Promise.resolve(false);
+        });
+    }
+
+    public static async createNewStorageTable(nsName:string, dt:string):Promise<boolean>{
+        const sql = `
+            CREATE TABLE IF NOT EXISTS storage_ns_${nsName}_d_${dt}
+            (
+                namespace VARCHAR(20) NOT NULL,
+                namespace_shard_id VARCHAR(20) NOT NULL,
+                namespace_id VARCHAR(20) NOT NULL,
+                ts TIMESTAMP NOT NULL default NOW(),
+                rowUuid VARCHAR(64) NOT NULL PRIMARY KEY,
+                dataSchema VARCHAR(20) NOT NULL,
+                payload JSONB
+            );
+
+            DROP INDEX IF EXISTS storage_table_ns_id_ts_index;
+            CREATE INDEX storage_table_ns_id_ts_index ON storage_ns_${nsName}_d_${dt} USING btree (namespace ASC, namespace_shard_id ASC, namespace_id ASC, ts ASC);
+        `
+        console.log(sql)
+        return db.query(sql).then(data => {
+            console.log(data)
+            return Promise.resolve(true)
+        }).
+        catch(err => {
+            console.log(err);
+            return Promise.resolve(false);
+        });
+    }
+
     // todo fix params substitution for the pg library;
     public static async checkThatShardIsOnThisNode(namespace: string, namespaceShardId: number, nodeId: number): Promise<boolean> {
         const sql = `SELECT count(*) FROM network_storage_layout
