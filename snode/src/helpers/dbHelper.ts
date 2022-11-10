@@ -23,26 +23,6 @@ export default class DbHelper {
       return i8bits;
     }
 
-    public static async checkIfStorageTableExists():Promise<boolean>{
-        const date = new Date();
-        const dbdate = date.getFullYear().toString() + date.getMonth().toString();
-        var sql =`
-            SELECT EXISTS(
-                SELECT FROM pg_tables 
-                WHERE schemaname='public' AND 
-                tablename='storage_ns_inbox_d_${dbdate}')
-        `
-        console.log(sql)
-        return db.query(sql).then(data => {
-            console.log(data)
-            return Promise.resolve(true)
-        }).
-        catch(err => {
-            console.log(err);
-            return Promise.resolve(false);
-        });
-    }
-
     public static async createNewNodestorageRecord(namespace: string, namespaceShardId: number, ts_start:any, ts_end:any, table_name:string):Promise<boolean>{
         const named = require('yesql').pg
         const sql =`
@@ -78,8 +58,8 @@ export default class DbHelper {
                 payload JSONB
             );
 
-            DROP INDEX IF EXISTS storage_table_ns_id_ts_index;
-            CREATE INDEX storage_table_ns_id_ts_index ON storage_ns_${nsName}_d_${dt} USING btree (namespace ASC, namespace_shard_id ASC, namespace_id ASC, ts ASC);
+            DROP INDEX IF EXISTS storage_table_${nsName}_id_${dt}_index;
+            CREATE INDEX storage_table_${nsName}_id_${dt}_index ON storage_ns_${nsName}_d_${dt} USING btree (namespace ASC, namespace_shard_id ASC, namespace_id ASC, ts ASC);
         `
         console.log(sql)
         return db.query(sql).then(data => {
@@ -94,10 +74,17 @@ export default class DbHelper {
 
     // todo fix params substitution for the pg library;
     public static async checkThatShardIsOnThisNode(namespace: string, namespaceShardId: number, nodeId: number): Promise<boolean> {
+        const named = require('yesql').pg
         const sql = `SELECT count(*) FROM network_storage_layout
-        where namespace='${namespace}' and namespace_shard_id='${namespaceShardId}'`
-        console.log(sql);
-        return db.query(sql).then(data => {
+        where namespace= :nspace and namespace_shard_id= :nsid`
+        console.log(named(sql)({
+            nspace:namespace,
+            nsid:namespaceShardId
+        }));
+        return db.query(named(sql)({
+            nspace:namespace,
+            nsid:namespaceShardId
+        })).then(data => {
             console.log(data)
             let cnt = parseInt(data[0].count);
             console.log(cnt);
@@ -110,12 +97,17 @@ export default class DbHelper {
     }
 
     public static async findStorageTableByDate(namespace: string, namespaceShardId: number, dateYmd:any):Promise<string> {
+        const named = require('yesql').pg
         log.debug(`date is ${dateYmd.toISO()}`);
         const sql = `select table_name from node_storage_layout
-                     where namespace='${namespace}' and namespace_shard_id='${namespaceShardId}' 
-                     and ts_start <= '${dateYmd.toISO()}' and ts_end >= '${dateYmd.toISO()}'`
+                     where namespace= :nspace and namespace_shard_id= :nsid 
+                     and ts_start <= :dymd and ts_end >= :dymd`
         log.debug(sql);
-        return db.query(sql).then(data => {
+        return db.query(named(sql)({
+            nspace:namespace,
+            nsid:namespaceShardId,
+            dymd:dateYmd.toISO()
+        })).then(data => {
             log.debug(data);
             if(data.length!=1) {
                 return Promise.reject('missing table with the correct name');
