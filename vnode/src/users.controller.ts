@@ -8,14 +8,14 @@ interface nodeurl {
 
 @Controller("/vnode/kv/v1")
 export class UsersController {
-    @Get("/nsid/:id/nsname/:name")
+    @Get("/nsid/:nsid/nsname/:nsname")
     async findAll(@Param() params:nodeurl): Promise<any> {
         console.log(params);
-        const nodeidexists = await db.checkIfNodeExists(params.nsid, params.nsname);
+        const nodeidexists = await db.checkIfNodeExists((params.nsid).toString(), (params.nsname).toString());
         if(nodeidexists) {
-            const sql = await db.checkIfNodeUrlExists(params.nsid);
+            const sql = await db.checkIfNodeUrlExists((params.nsid).toString());
             if(sql) {
-                const nodeurl = db.getNodeUrl(params.nsid);
+                const nodeurl = db.getNodeUrl((params.nsid).toString());
                 return nodeurl;
             }else{
                 return 'node url does not exist';

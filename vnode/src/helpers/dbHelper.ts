@@ -45,9 +45,7 @@ export default class DbHelper {
         console.log(sql);
         return db.query(sql).then(data => {
             console.log(data);
-            let cnt = parseInt(data[0].count);
-            console.log(cnt);
-            return cnt === 1
+            return Promise.resolve(true)
         }).catch(err => {
             console.log(err);
             return Promise.resolve(false);
@@ -59,9 +57,7 @@ export default class DbHelper {
         console.log(sql);
         return db.query(sql).then(data => {
             console.log(data);
-            let cnt = parseInt(data[0].count);
-            console.log(cnt);
-            return cnt === 1;
+            return Promise.resolve(true)
         }
         ).catch(err => {
             console.log(err);
