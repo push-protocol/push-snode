@@ -79,31 +79,6 @@ insert into storage_ns_inbox_d_202208 (namespace, namespace_shard_id, namespace_
 values ('feeds', '129', '1000000', '2022-08-23 00:22:21.000000', 'feeds-2022-08-23 1111', 'feedv1',
         '{"data": {"apns": {"payload": {"aps": {"category": "withappicon", "mutable-content": 1, "content-available": 1}}, "fcm_options": {"image": ""}}, "data": {"app": "", "url": "", "acta": "", "aimg": "", "amsg": "ETH at [d:$403.54]\n\nHourly Movement: [t:-0.35%]\nDaily Movement: [s:4.70%]\nWeekly Movement: [s:3.20%][timestamp: 1604556000]", "asub": "ETH Price Movement", "icon": "", "type": "1", "appbot": "0", "hidden": "0", "secret": ""}, "android": {"notification": {"icon": "@drawable/ic_stat_name", "color": "#e20880", "image": "", "default_vibrate_timings": true}}, "notification": {"body": "\nHourly Movement: -0.35%\nDaily Movement: 4.70%\nWeekly Movement: 3.20%", "title": " - ETH at $403.54"}}, "metadata": {"users": ["0x74415Bc4C4Bf4Baecc2DD372426F0a1D016Fa924", "0xD8634C39BBFd4033c0d3289C4515275102423681"], "channel": "0xD8634C39BBFd4033c0d3289C4515275102423681", "is_spam": 1, "attempts": 0, "use_push": 1, "payloadId": "19", "processed": 0, "blockchain": "ETH_TEST_KOVAN"}}');
 insert into node_storage_layout (namespace, namespace_shard_id, ts_start, ts_end, table_name) values ('feeds', '211', '2022-08-01 00:28:34.000000', '2022-08-31 00:28:40.000000', 'storage_ns_inbox_d_202208');
-insert into network_storage_layout (id, namespace, namespace_shard_id, node_id) values (1, 'feeds', '211', '1');
+insert into network_storage_layout (id, namespace, namespace_shard_id, node_id) values (1, 'feeds', '129', '1');
 insert into network_storage_layout (id, namespace, namespace_shard_id, node_id) values (2, 'feeds', 'XX', '2');
 insert into network_storage_layout (id, namespace, namespace_shard_id, node_id) values (3, 'feeds', 'XX', '3');
-
--- Test queries
-
--- INDEX on a jsonb text field
-DROP INDEX IF EXISTS storage_table_data_channel;
-CREATE INDEX storage_table_data_channel ON storage_ns_inbox_d_202208 ((payload->>'data'->>'channel'));
-select * from storage_ns_inbox_d_202208 where (payload->>'data'->>'channel') = '0xD8634C39BBFd4033c0d3289C4515275102423681';
-explain analyze select * from storage_ns_inbox_d_202208 where (payload->>'data'->>'channel') = '0xD8634C39BBFd4033c0d3289C4515275102423681';
-
--- show inbox items
--- {"apns": {"payload": {"aps": {"category": "withappicon", "mutable-content": 1, "content-available": 1}}, "fcm_options": {"image": ""}}, "data": {"app": "", "url": "", "acta": "", "aimg": "", "amsg": "ETH at [d:$403.54]\n\nHourly Movement: [t:-0.35%]\nDaily Movement: [s:4.70%]\nWeekly Movement: [s:3.20%][timestamp: 1604556000]", "asub": "ETH Price Movement", "icon": "", "type": "1", "appbot": "0", "hidden": "0", "secret": ""}, "android": {"notification": {"icon": "@drawable/ic_stat_name", "color": "#e20880", "image": "", "default_vibrate_timings": true}}, "notification": {"body": "\nHourly Movement: -0.35%\nDaily Movement: 4.70%\nWeekly Movement: 3.20%", "title": " - ETH at $403.54"}}
-select payload as payload, md5(payload::text) as hash
-from storage_ns_inbox_d_202208
-order by ts
-limit 2
-offset 1;
-
-
-explain analyze select (payload->>'data'->'channel')::text from storage_ns_inbox_d_202208 where (payload->>'data'->'channel')::text = '0xD8634C39BBFd4033c0d3289C4515275102423681';;
-select * from storage_ns_inbox_d_202208 where (payload->>'data'->'channel')::text = '0xD8634C39BBFd4033c0d3289C4515275102423681';
-
- SELECT count(*) FROM network_storage_layout where namespace='feeds' and namespace_shard_id='377' and node_id='1';
-
-select table_name from node_storage_layout
-where namespace='feeds' and namespace_shard_id='211' and ts_start <= '2022-08-15' and ts_end >= '2022-08-15'

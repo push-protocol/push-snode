@@ -97,7 +97,7 @@ export default class DbHelper {
     // todo fix params substitution for the pg library;
     public static async checkThatShardIsOnThisNode(namespace: string, namespaceShardId: number, nodeId: number): Promise<boolean> {
         const sql = `SELECT count(*) FROM network_storage_layout
-        where namespace='${namespace}' and namespace_shard_id='${namespaceShardId}'`
+        where namespace='${namespace}' and namespace_shard_id='${namespaceShardId}' and node_id='${nodeId}'`
         console.log(sql);
         return db.query(sql).then(data => {
             console.log(data)
@@ -191,5 +191,79 @@ export default class DbHelper {
             log.debug(err);
             return Promise.resolve('');
         });
+    }
+
+
+    static async listInbox(namespace: string, namespaceShardId: number,
+                           storageTable: string, firstTsExcluded: string): Promise<object> {
+        const pageSize = 5;
+        const pageLookAhead = 3;
+        const pageSizeForSameTimestamp = pageSize * 20;
+        const isFirstQuery = StrUtil.isEmpty(firstTsExcluded);
+        const sql = `select rowuuid as rowuuid,
+                     extract(epoch from ts) as ts,
+                     payload as payload
+                     from ${storageTable} ${ isFirstQuery ? '' : `where ts > to_timestamp(${firstTsExcluded})` }
+                     order by ts
+                     limit ${pageSize + pageLookAhead}`;
+        log.debug(sql);
+        let data1 = await db.any(sql);
+        var items = [];
+        var lastTs: number = 0;
+        for (let i = 0; i < Math.min(data1.length, pageSize); i++) {
+            items.push(DbHelper.convertRowToItem(data1[i], namespace));
+            lastTs = data1[i].ts;
+        }
+        log.debug(`added ${items.length} items; lastTs=${lastTs}`)
+        // [0...{pagesize-1 (lastTs)}...{data1.length-1 (lastTsRowId)}....]
+        // we always request pageSize+3 rows; so if we have these additional rows we can verify that their ts != last row ts,
+        // otherwise we should add these additional rows to the output (works only for 2..3 rows)
+        // otherwise we should execute and additional page request
+        var lastTsRowId = pageSize - 1;
+        if (data1.length > pageSize) {
+            // add extra rows for ts = lastTs
+            for (let i = pageSize; i < data1.length; i++) {
+                if (data1[i].ts == lastTs) {
+                    lastTsRowId = i;
+                } else {
+                    break;
+                }
+            }
+            if (lastTsRowId == data1.length - 1) {
+                // we have more rows with same timestamp, they won't fit in pageSize+pageLookAhead rows
+                // let's peform additional select for ts = lastTs
+                const sql2 = `select rowuuid as rowuuid,
+                     extract(epoch from ts) as ts,
+                     payload as payload
+                     from ${storageTable}
+                     where ts = to_timestamp(${lastTs})
+                     order by ts
+                     limit ${pageSizeForSameTimestamp}`;
+                log.debug(sql2);
+                let data2 = await db.any(sql2);
+                for (let row of data2) {
+                    items.push(DbHelper.convertRowToItem(row, namespace));
+                }
+                log.debug(`extra query with ${data2.length} items to fix duplicate timestamps pagination, total size is ${items.length}`);
+            } else if (lastTsRowId > pageSize - 1) {
+                // we have more rows with same timestamp, they fit in pageSize+pageLookAhead rows
+                for (let i = pageSize; i <= lastTsRowId; i++) {
+                    items.push(DbHelper.convertRowToItem(data1[i], namespace));
+                }
+                log.debug(`updated to ${items.length} items to fix duplicate timestamps pagination`)
+            }
+        }
+        return {
+            'items': items,
+            'lastTs': lastTs
+        };
+    }
+
+    private static convertRowToItem(rowObj:any, namespace: string) {
+        return {
+            fqkey: namespace + ':' + rowObj.rowuuid,
+            ts: rowObj.ts,
+            payload: rowObj.payload
+        };
     }
 }
