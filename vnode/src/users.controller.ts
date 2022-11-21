@@ -6,14 +6,17 @@ interface nodeurl {
     nsname: string;
 }
 
-@Controller("/kv/v1")
+@Controller("/vnode/kv/v1")
 export class UsersController {
     @Get("/nsid/:id/nsname/:name")
     findAll(@Param() params:nodeurl): any {
         const nodeidexists = db.checkIfNodeExists(params.nsid,params.nsname);
         if(nodeidexists) {
-            const sql= db.getNodeUrl(params.nsid);
-            return {status: "ok", message: "node exists", data: sql};
+            const sql = db.checkIfNodeUrlExists(params.nsid);
+            if(sql) {
+                const nodeurl = db.getNodeUrl(params.nsid);
+                return nodeurl;
+            }
         }
         else {
             return {status: "error", message: "node does not exist"};

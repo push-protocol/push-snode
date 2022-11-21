@@ -1,10 +1,10 @@
 
 import config from '../config';
 import log from '../loaders/logger';
-import pgPromise from 'pg-promise';
+
 const { DateTime } = require("luxon");
 
-const pg = pgPromise();
+const pg = require('pg-promise')({});
 
 // todo switch to a config file
 export const db = pg("postgres://postgres:postgres@localhost:5432/postgres");
@@ -44,6 +44,7 @@ export default class DbHelper {
         where node_id='${nodeid}' and namespace='${namespace}')`
         console.log(sql);
         return db.query(sql).then(data => {
+            console.log(data);
             return Promise.resolve(true)
         }).catch(err => {
             console.log(err);
@@ -55,6 +56,7 @@ export default class DbHelper {
         const sql = `SELECT EXISTS ( SELECT count(*) FROM network_nodes where node_id='${nodeid}')`
         console.log(sql);
         return db.query(sql).then(data => {
+            console.log(data);
             return Promise.resolve(true)
         }
         ).catch(err => {
@@ -64,9 +66,10 @@ export default class DbHelper {
     }
 
     public static async getNodeUrl(nodeid:string):Promise<string>{
-        const sql = `SELECT 1 FROM network_nodes where node_id='${nodeid}'`
+        const sql = `SELECT * FROM network_nodes where node_id='${nodeid}'`
         console.log(sql);
         return db.query(sql).then(data => {
+            console.log(data);
             return Promise.resolve(data)
         }
         ).catch(err => {
