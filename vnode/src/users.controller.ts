@@ -9,13 +9,16 @@ interface nodeurl {
 @Controller("/vnode/kv/v1")
 export class UsersController {
     @Get("/nsid/:id/nsname/:name")
-    findAll(@Param() params:nodeurl): any {
-        const nodeidexists = db.checkIfNodeExists(params.nsid,params.nsname);
+    async findAll(@Param() params:nodeurl): Promise<any> {
+        console.log(params);
+        const nodeidexists = await db.checkIfNodeExists(params.nsid, params.nsname);
         if(nodeidexists) {
-            const sql = db.checkIfNodeUrlExists(params.nsid);
+            const sql = await db.checkIfNodeUrlExists(params.nsid);
             if(sql) {
                 const nodeurl = db.getNodeUrl(params.nsid);
                 return nodeurl;
+            }else{
+                return 'node url does not exist';
             }
         }
         else {
