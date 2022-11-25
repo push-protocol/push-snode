@@ -7,7 +7,7 @@ const { DateTime } = require("luxon");
 const pg = require('pg-promise')({});
 
 // todo switch to a config file
-export const db = pg("postgres://postgres:postgres@localhost:5432/postgres");
+export const db = pg("postgres://postgres:postgres@localhost:5432/postgres@vnode");
 const crypto = require('crypto');
 
 export default class DbHelper {
@@ -53,7 +53,7 @@ export default class DbHelper {
     }
 
     public static async checkIfNodeUrlExists(nodeid:string):Promise<boolean>{
-        const sql = `SELECT EXISTS ( SELECT count(*) FROM network_nodes where node_id='${nodeid}')`
+        const sql = `SELECT EXISTS ( SELECT count(*) FROM node_address where node_id='${nodeid}')`
         console.log(sql);
         return db.query(sql).then(data => {
             console.log(data);
@@ -65,18 +65,28 @@ export default class DbHelper {
         });
     }
 
-    public static async getNodeUrl(nodeid:string):Promise<string>{
-        const sql = `SELECT * FROM network_nodes where node_id='${nodeid}'`
+    public static async getNodeUrl(nodeid:string):Promise<any>{
+        const sql = `SELECT * FROM node_address where node_id='${nodeid}'`
         console.log(sql);
         return db.query(sql).then(data => {
-            console.log(data);
-            return Promise.resolve(data)
+            return data;
         }
         ).catch(err => {
             console.log(err);
             return Promise.resolve('');
         });
     };
+
+    public static async getAllNodeIds(nsName,nShardid):Promise<string[]>{
+        const sql = `select node_id from network_storage_layout where namespace='${nsName}' and namespace_shard_id='${nShardid}'`;
+        console.log(sql);
+        return db.query(sql).then(data => {
+            return Promise.resolve(data)
+        }).catch(err => {
+            console.log(err);
+            return Promise.resolve([]);
+        })
+    }
 
     
 }
