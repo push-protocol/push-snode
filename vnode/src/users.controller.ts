@@ -8,12 +8,19 @@ interface nodeurl {
     key:string
 }
 
-function generateRandom(min: number, max: number) {
-    let difference = max - min;
-    let rand = Math.random();
-    rand = Math.floor( rand * difference);
-    rand = rand + min;
-    return rand;
+function getRandomNodesAsList(randomNodeCount, nodeList) {
+    let result = [];
+    for (let i = 0; i < Math.min(randomNodeCount, nodeList.length); i++) {
+        console.log(`nodeList`, nodeList)
+        let rnd01 = Math.random();
+        console.log('rnd01 is', rnd01);
+        var rndIndex = Math.round(rnd01 * (nodeList.length - 1));
+        var newNodeId = nodeList[rndIndex];
+        console.log(`rndIndex=${rndIndex} newNodeId=${newNodeId}`)
+        nodeList.splice(rndIndex, 1);
+        result.push(newNodeId);
+    }
+    return result;
 }
 
 @Controller("/api/v1/kv")
@@ -28,11 +35,12 @@ export class UsersController {
         console.log("Node Ids for the shard : ",number_of_nodes);
         console.log("Node Ids for the shard : ",node_ids);
         var randomnodes = [];
-        for(var i=1;i<=number_of_nodes/2 + 1;i++){
-            const randomnode = generateRandom(0,number_of_nodes);
-            randomnodes.push(node_ids[randomnode.toString()].node_id);
+        for(let i=0;i<number_of_nodes;i++){
+            randomnodes.push(node_ids[i.toString()].node_id);
         }
-        console.log("Random nodes : ",randomnodes);
+        randomnodes = getRandomNodesAsList(number_of_nodes/2 + 1, randomnodes);
+        console.log("Random Nodes : ",randomnodes);
+
         for(var i=0;i<randomnodes.length;i++){
             const nodeurl = await db.getNodeUrl(randomnodes[i]);
             console.log("Current Node Url : ",nodeurl);
