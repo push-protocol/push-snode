@@ -66,7 +66,7 @@ export default class DbHelper {
     }
 
     public static async getNodeUrl(nodeid:string):Promise<any>{
-        const sql = `SELECT * FROM node_address where node_id='${nodeid}'`
+        const sql = `SELECT node_url FROM node_address where node_id='${nodeid}'`
         console.log(sql);
         return db.query(sql).then(data => {
             return data;
