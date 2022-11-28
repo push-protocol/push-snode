@@ -1,5 +1,7 @@
 import { Controller, Get, Param } from "@nestjs/common";
 import db from './helpers/dbHelper';
+import snodedb from "./helpers/dbHelper";
+import StrUtil from "./helpers/strUtil";
 import random from 'random';
 interface nodeurl {
     nsName:string,
@@ -7,6 +9,8 @@ interface nodeurl {
     dt:string,
     key:string
 }
+
+const {DateTime} = require("luxon");
 
 function getRandomNodesAsList(randomNodeCount, nodeList) {
     let result = [];
@@ -43,7 +47,34 @@ export class UsersController {
 
         for(var i=0;i<randomnodes.length;i++){
             const nodeurl = await db.getNodeUrl(randomnodes[i]);
+            var nodeId = randomnodes[i];
             console.log("Current Node Url : ",nodeurl);
+
+            const success = await db.checkThatShardIsOnThisNode(params.nsName, shardid, nodeId);
+            if (!success) {
+                let errMsg = `${params.nsName}.${params.nsIndex} maps to shard ${shardid} which is missing on node ${nodeId}`;
+                console.log(errMsg);
+                return Promise.reject(errMsg);
+            }
+
+            const date = DateTime.fromISO(params.dt, {zone: 'utc'});
+            console.log(`parsed date ${params.dt} -> ${date}`)
+            const storageTable = await db.findStorageTableByDate(params.nsName, shardid, date);
+            console.log(`found table ${storageTable}`)
+            if (StrUtil.isEmpty(storageTable)) {
+                console.log('storage table not found');
+                return Promise.resolve('storage table not found');
+            }
+            const storageValue = await db.findValueInTable(storageTable, params.key);
+            console.log(`found value: ${storageValue}`)
+            console.log('success is ' + success);
+            try {
+                // const messaging = Container.get(MessagingService);
+                return Promise.resolve(storageValue);
+            } catch (e) {
+                // log.error('🔥 error: %o', e);
+                return Promise.reject(e);
+            }
         }
     }
 }
