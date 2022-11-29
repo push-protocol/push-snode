@@ -17,16 +17,6 @@ class DynamicLoggerTransport extends Transport {
     this.dynamicLogging = object;
   }
 
-  public log(info, callback) {
-    setImmediate(() => {
-      if (this.dynamicLogging) {
-        this.dynamicLogging.updateFooterLogs(this.formatLogInfo(info));
-      }
-    });
-
-    // Perform the writing to the remote service
-    callback();
-  }
 }
 
 const customLevels = {
@@ -78,83 +68,49 @@ const formatLogInfo = info => {
   const { timestamp, level, message, meta } = info;
 
   const ts = moment(timestamp)
-    .local()
-    .format('HH:MM:ss');
+      .local()
+      .format('HH:MM:ss');
   const metaMsg = meta ? `: ${parser(meta)}` : '';
 
   return `${ts} ${level}    ${parser(message)} ${metaMsg}`;
 };
 
 const formatter = winston.format.combine(
-  winston.format.errors({ stack: true }),
-  winston.format.splat(),
-  winston.format.printf(info => {
-    return formatLogInfo(info);
-  }),
-  winston.format.colorize({
-    all: true
-  })
+    winston.format.errors({ stack: true }),
+    winston.format.splat(),
+    winston.format.printf(info => {
+      return formatLogInfo(info);
+    }),
+    winston.format.colorize({
+      all: true
+    })
 );
 
 let transports = [];
-let dynamicLoggingTransport = new DynamicLoggerTransport(
-  {
-    format: formatter
-  },
-  formatLogInfo
-);
 
 transports.push(
-  // Console should always be at 0 and dynamic log should always be at 2
-  // remember and not change it as it's manually baked in hijackLogger
-  new winston.transports.Console({
-    format: formatter
-  }),
-  new winston.transports.File(options.file),
-  dynamicLoggingTransport
+    // Console should always be at 0 and dynamic log should always be at 2
+    // remember and not change it as it's manually baked in hijackLogger
+    new winston.transports.Console({
+      format: formatter
+    }),
+    new winston.transports.File(options.file)
 );
 
 const LoggerInstance = winston.createLogger({
-  level: global.logLevel || config.logs.level,
+  level: config.logs.level,
   levels: customLevels.levels,
   format: winston.format.combine(
-    winston.format.timestamp({
-      format: 'YYYY-MM-DD HH:mm:ss',
-    }),
-    winston.format.errors({ stack: true }),
-    winston.format.splat(),
-    winston.format.json()
+      winston.format.timestamp({
+        format: 'YYYY-MM-DD HH:mm:ss',
+      }),
+      winston.format.errors({ stack: true }),
+      winston.format.splat(),
+      winston.format.json()
   ),
   transports
 });
 
 winston.addColors(customLevels.colors);
-
-const hijackLogger = dynamicLogger => {
-  dynamicLoggingTransport.setDynamicLoggerObject(dynamicLogger);
-
-  let count = 0;
-  LoggerInstance.transports.forEach(t => {
-    let silence = false;
-
-    if (dynamicLogger) {
-      // dynamic logger is on, make console silent
-      if (count == 0) {
-        silence = true;
-      }
-    } else {
-      // dynamic logger is off, make it silent
-      if (count == 2) {
-        silence = true;
-      }
-    }
-
-    t.silent = silence;
-
-    count++;
-  });
-};
-
-LoggerInstance.hijackLogger = hijackLogger;
 
 export default LoggerInstance;
