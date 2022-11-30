@@ -57,6 +57,9 @@ export default (app: Router) => {
                     .json({errorMessage: errMsg})
             }
             const date = DateTime.fromISO(dt, {zone: 'utc'});
+            if(!date.isValid) {
+                return res.status(400).json('Invalid date ' + dt);
+            }
             log.debug(`parsed date ${dt} -> ${date}`)
             const storageTable = await DbHelper.findStorageTableByDate(nsName, shardId, date);
             log.debug(`found table ${storageTable}`)

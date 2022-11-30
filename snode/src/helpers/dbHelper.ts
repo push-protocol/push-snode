@@ -43,15 +43,6 @@ export default class DbHelper {
         });
     }
 
-    public static async findStorageTablebyName(namespace: string, namespaceShardId: number, storagetable:string ):Promise<boolean>{
-        const date = new Date();
-        const dbdate = date.getFullYear().toString() + date.getMonth().toString();
-        var sql =`select exists(select table_name from node_storage_layout 
-            where table_name=${storagetable} 
-            and namespace=${namespace}
-            and namespace_shard_id=${namespaceShardId} )`
-        
-    }
 
     public static async createNewNodestorageRecord(namespace: string, namespaceShardId: number, ts_start:any, ts_end:any, table_name:string):Promise<boolean>{
         const sql =`
@@ -68,8 +59,10 @@ export default class DbHelper {
     }
 
     public static async createNewStorageTable(nsName:string, dt:string):Promise<boolean>{
+        const tableName = `storage_ns_${nsName}_d_${dt}`;
+        const indexName = `${tableName}_idx`;
         const sql = `
-            CREATE TABLE IF NOT EXISTS storage_ns_${nsName}_d_${dt}
+            CREATE TABLE IF NOT EXISTS ${tableName}
             (
                 namespace VARCHAR(20) NOT NULL,
                 namespace_shard_id VARCHAR(20) NOT NULL,
@@ -80,8 +73,8 @@ export default class DbHelper {
                 payload JSONB
             );
 
-            DROP INDEX IF EXISTS storage_table_ns_id_ts_index;
-            CREATE INDEX storage_table_ns_id_ts_index ON storage_ns_${nsName}_d_${dt} USING btree (namespace ASC, namespace_shard_id ASC, namespace_id ASC, ts ASC);
+            DROP INDEX IF EXISTS ${tableName}_idx;
+            CREATE INDEX ${tableName}_idx ON storage_ns_${nsName}_d_${dt} USING btree (namespace ASC, namespace_shard_id ASC, namespace_id ASC, ts ASC);
         `
         console.log(sql)
         return db.query(sql).then(data => {
@@ -171,30 +164,6 @@ export default class DbHelper {
     }
 
     static async listInbox(namespace: string, namespaceShardId: number,
-                                 storageTable: string, dateYmd:any, page:number):Promise<string[]> {
-        log.debug(`date is ${dateYmd.toISO()}`);
-        const pageSize = 10;
-        const sql = `select payload as payload
-                     from ${storageTable}
-                     order by ts desc
-                     limit ${pageSize}
-                     offset ${page * pageSize}'`
-        log.debug(sql);
-        return db.query(sql).then(data => {
-            log.debug(data);
-            if(data.length!=1) {
-                return Promise.reject('missing table with the correct name');
-            }
-            return data[0];
-        }).
-        catch(err => {
-            log.debug(err);
-            return Promise.resolve('');
-        });
-    }
-
-
-    static async listInbox(namespace: string, namespaceShardId: number,
                            storageTable: string, firstTsExcluded: string): Promise<object> {
         const pageSize = 5;
         const pageLookAhead = 3;
@@ -259,7 +228,7 @@ export default class DbHelper {
         };
     }
 
-    private static convertRowToItem(rowObj:any, namespace: string) {
+    private static convertRowToItem(rowObj:any, namespace: string):any {
         return {
             fqkey: namespace + ':' + rowObj.rowuuid,
             ts: rowObj.ts,
