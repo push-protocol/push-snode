@@ -3,7 +3,8 @@ import config from '../config';
 import StrUtil from './strUtil'
 import log from '../loaders/logger';
 import pgPromise from 'pg-promise';
-const { DateTime } = require("luxon");
+
+import {DateTime} from "ts-luxon";
 
 const pg = pgPromise({});
 
@@ -43,19 +44,10 @@ export default class DbHelper {
         });
     }
 
-    public static async findStorageTablebyName(namespace: string, namespaceShardId: number, storagetable:string ):Promise<boolean>{
-        const date = new Date();
-        const dbdate = date.getFullYear().toString() + date.getMonth().toString();
-        var sql =`select exists(select table_name from node_storage_layout 
-            where table_name=${storagetable} 
-            and namespace=${namespace}
-            and namespace_shard_id=${namespaceShardId} )`
-        
-    }
 
     public static async createNewNodestorageRecord(namespace: string, namespaceShardId: number, ts_start:any, ts_end:any, table_name:string):Promise<boolean>{
         const sql =`
-        insert into node_storage_layout (namespace, namespace_shard_id, ts_start, ts_end, table_name) values ('${namespace}', '${namespaceShardId}', '${ts_start} 00:00:00.000000', '${ts_end} 23:59:59.000000', '${table_name}') on conflict do nothing;
+        insert into node_storage_layout (namespace, namespace_shard_id, ts_start, ts_end, table_name) values ('${namespace}', '${namespaceShardId}', '${ts_start} 00:00:00.000000', '${ts_end} 00:00:00.000000', '${table_name}') on conflict do nothing;
         `
         return db.query(sql).then(data => {
             console.log(data)
@@ -67,9 +59,9 @@ export default class DbHelper {
         });
     }
 
-    public static async createNewStorageTable(nsName:string, dt:string):Promise<boolean>{
+    public static async createNewStorageTable(tableName:string):Promise<boolean>{
         const sql = `
-            CREATE TABLE IF NOT EXISTS storage_ns_${nsName}_d_${dt}
+            CREATE TABLE IF NOT EXISTS ${tableName}
             (
                 namespace VARCHAR(20) NOT NULL,
                 namespace_shard_id VARCHAR(20) NOT NULL,
@@ -80,8 +72,8 @@ export default class DbHelper {
                 payload JSONB
             );
 
-            DROP INDEX IF EXISTS storage_table_ns_id_ts_index;
-            CREATE INDEX storage_table_ns_id_ts_index ON storage_ns_${nsName}_d_${dt} USING btree (namespace ASC, namespace_shard_id ASC, namespace_id ASC, ts ASC);
+            DROP INDEX IF EXISTS ${tableName}_idx;
+            CREATE INDEX ${tableName}_idx ON ${tableName} USING btree (namespace ASC, namespace_shard_id ASC, namespace_id ASC, ts ASC);
         `
         console.log(sql)
         return db.query(sql).then(data => {
@@ -111,11 +103,11 @@ export default class DbHelper {
         });
     }
 
-    public static async findStorageTableByDate(namespace: string, namespaceShardId: number, dateYmd:any):Promise<string> {
+    public static async findStorageTableByDate(namespace: string, namespaceShardId: number, dateYmd:DateTime):Promise<string> {
         log.debug(`date is ${dateYmd.toISO()}`);
         const sql = `select table_name from node_storage_layout
                      where namespace='${namespace}' and namespace_shard_id='${namespaceShardId}' 
-                     and ts_start <= '${dateYmd.toISO()}' and ts_end >= '${dateYmd.toISO()}'`
+                     and ts_start <= '${dateYmd.toISO()}' and ts_end > '${dateYmd.toISO()}'`
         log.debug(sql);
         return db.query(sql).then(data => {
             log.debug(data);
@@ -150,15 +142,14 @@ export default class DbHelper {
         });
     }
 
-    static async putValueInTable(namespace: string, namespaceShardId: number,
-                                 namespaceId:string,
-                                 storageTable: string, key: string, jsonValue: string) {
-        log.debug(`putValueInTable() namespace=${namespace}, namespaceShardId=${namespaceShardId}
-        ,storageTable=${storageTable}, key=${key}, jsonValue=${jsonValue}`);
+    static async putValueInTable(ns: string, shardId: number, nsIndex: string,
+                                 storageTable: string, ts:string, key: string, body: string) {
+        log.debug(`putValueInTable() namespace=${ns}, namespaceShardId=${shardId}
+        ,storageTable=${storageTable}, key=${key}, jsonValue=${body}`);
         const sql = `INSERT INTO ${storageTable} 
-                    (namespace, namespace_shard_id, namespace_id, rowuuid, dataschema, payload)
-                    values ('${namespace}',  '${namespaceShardId}', '${namespaceId}', '${key}', 'v1', '${jsonValue}')
-                    ON CONFLICT (rowUuid) DO UPDATE SET payload = '${jsonValue}'`
+                    (namespace, namespace_shard_id, namespace_id, ts, rowuuid, dataschema, payload)
+                    values ('${ns}',  '${shardId}', '${nsIndex}', to_timestamp(${ts}),'${key}', 'v1', '${body}')
+                    ON CONFLICT (rowUuid) DO UPDATE SET payload = '${body}'`
         log.debug(sql);
         return db.none(sql).then(data => {
             log.debug(data);
@@ -169,30 +160,6 @@ export default class DbHelper {
             return Promise.reject(err);
         });
     }
-
-    static async listInbox(namespace: string, namespaceShardId: number,
-                                 storageTable: string, dateYmd:any, page:number):Promise<string[]> {
-        log.debug(`date is ${dateYmd.toISO()}`);
-        const pageSize = 10;
-        const sql = `select payload as payload
-                     from ${storageTable}
-                     order by ts desc
-                     limit ${pageSize}
-                     offset ${page * pageSize}'`
-        log.debug(sql);
-        return db.query(sql).then(data => {
-            log.debug(data);
-            if(data.length!=1) {
-                return Promise.reject('missing table with the correct name');
-            }
-            return data[0];
-        }).
-        catch(err => {
-            log.debug(err);
-            return Promise.resolve('');
-        });
-    }
-
 
     static async listInbox(namespace: string, namespaceShardId: number,
                            storageTable: string, firstTsExcluded: string): Promise<object> {
@@ -259,7 +226,7 @@ export default class DbHelper {
         };
     }
 
-    private static convertRowToItem(rowObj:any, namespace: string) {
+    private static convertRowToItem(rowObj:any, namespace: string):any {
         return {
             fqkey: namespace + ':' + rowObj.rowuuid,
             ts: rowObj.ts,

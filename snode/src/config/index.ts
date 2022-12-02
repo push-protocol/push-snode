@@ -11,7 +11,6 @@ if (envFound.error) {
 
 export const changeLogLevel = (level: string) => {
   if (level) {
-    global.logLevel = level;
   }
 };
 

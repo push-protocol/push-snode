@@ -8,8 +8,9 @@ import DbHelper from '../../helpers/dbHelper';
 import {isEmpty} from "lodash";
 import StrUtil from "../../helpers/strUtil";
 import bodyParser from "body-parser";
+import DateUtil from "../../helpers/dateUtil";
 
-const {DateTime} = require("luxon");
+import {DateTime} from "ts-luxon";
 // const log = Container.get('logger');
 // console.log("pushMessaging imported");
 
@@ -24,7 +25,7 @@ function logRequest(req: Request) {
     log.debug('Calling %o %o with body: %o', req.method, req.url, req.body);
 }
 // curl -X GET --location "http://localhost:4000/api/v1/kv/ns/feeds/nsidx/1000000/date/20220815/key/a1200bbbb"
-// curl -X POST -H "Content-Type: application/json" --location "http://localhost:4000/api/v1/kv/ns/feeds/nsidx/1000000/date/20220815/key/b120" -d '{"user":"Someone"}'
+// curl -X POST -H "Content-Type: application/json" --location "http://localhost:4000/api/v1/kv/ns/feeds/nsidx/1000000/ts/1661214142.000000/key/b120" -d '{"user":"Someone"}'
 // curl -X POST -H "Content-Type: application/json" --location "http://localhost:4000/api/v1/kv/ns/feeds/nsidx/1000000/month/202208/listInbox?firstTs=1661214142.000000"
 
 export default (app: Router) => {
@@ -57,6 +58,9 @@ export default (app: Router) => {
                     .json({errorMessage: errMsg})
             }
             const date = DateTime.fromISO(dt, {zone: 'utc'});
+            if(!date.isValid) {
+                return res.status(400).json('Invalid date ' + dt);
+            }
             log.debug(`parsed date ${dt} -> ${date}`)
             const storageTable = await DbHelper.findStorageTableByDate(nsName, shardId, date);
             log.debug(`found table ${storageTable}`)
@@ -69,7 +73,7 @@ export default (app: Router) => {
             log.debug('success is ' + success);
             try {
                 // const messaging = Container.get(MessagingService);
-                return res.status(201).json(storageValue);
+                return res.status(200).json(storageValue);
             } catch (e) {
                 // log.error('🔥 error: %o', e);
                 return next(e);
@@ -78,16 +82,16 @@ export default (app: Router) => {
     );
 
     route.post(
-        '/ns/:nsName/nsidx/:nsIndex/date/:dt/key/:key', /*  */
+        '/ns/:nsName/nsidx/:nsIndex/ts/:ts/key/:key', /*  */
         async (req: Request, res: Response, next: NextFunction) => {
             logRequest(req);
-            const nsName = req.params.nsName;
-            const nsIndex = req.params.nsIndex;
-            const dt = req.params.dt;
-            const key = req.params.key;
+            const nsName = req.params.nsName; // ex: feeds
+            const nsIndex = req.params.nsIndex; // ex: 1000000
+            const ts:string = req.params.ts; //ex: 1661214142.123456
+            const key = req.params.key; // ex: 5b62a7b2-d6eb-49ef-b080-20a7fa3091ad
             const nodeId = 1; // todo read this from db
             const body = JSON.stringify(req.body);
-            log.debug(`nsName=${nsName} nsIndex=${nsIndex} dt=${dt} key=${key} nodeId=${nodeId} body=${body}`);
+            log.debug(`nsName=${nsName} nsIndex=${nsIndex} ts=${ts} key=${key} nodeId=${nodeId} body=${body}`);
             let shardId = DbHelper.calculateShardForNamespaceIndex(nsName, nsIndex);
             log.debug(`nodeId=${nodeId} shardId=${shardId}`);
             const success = await DbHelper.checkThatShardIsOnThisNode(nsName, shardId, nodeId);
@@ -97,23 +101,26 @@ export default (app: Router) => {
                 return res.status(500)
                     .json({errorMessage: errMsg})
             }
-            const date = DateTime.fromISO(dt, {zone: 'utc'});
-            log.debug(`parsed date ${dt} -> ${date}`)
+            const date = DateUtil.parseUnixFloatAsDateTime(ts);
+            log.debug(`parsed date ${ts} -> ${date}`)
             var storageTable = await DbHelper.findStorageTableByDate(nsName, shardId, date);
             log.debug(`found table ${storageTable}`)
             if (StrUtil.isEmpty(storageTable)) {
                 log.error('storage table not found');
-                var ts_start= DateTime.fromISO(date).startOf('month').toISODate().toString();
-                var ts_end= DateTime.fromISO(date).endOf('month').toISODate().toString();
+                var monthStart = date.startOf('month').toISODate().toString();
+                var monthEndExclusive = date.startOf('month').plus({months: 1}).toISODate().toString();
                 log.debug('creating new storage table');
-                const createtable = await DbHelper.createNewStorageTable(nsName, dt.slice(0,6));
+                const dateYYYYMM = DateUtil.formatYYYYMM(date);
+                const tableName = `storage_ns_${nsName}_d_${dateYYYYMM}`;
+                const createtable = await DbHelper.createNewStorageTable(tableName);
                 log.debug('creating node storage layout mapping')
-                const createnodelayout=await DbHelper.createNewNodestorageRecord(nsName,shardId,ts_start,ts_end,`storage_ns_${nsName}_d_${dt.slice(0,6)}`);
+                const createnodelayout = await DbHelper.createNewNodestorageRecord(nsName, shardId,
+                    monthStart, monthEndExclusive, tableName);
                 log.debug(createnodelayout)
                 log.debug(createtable);
             }
             var storageTable = await DbHelper.findStorageTableByDate(nsName, shardId, date);
-            const storageValue = await DbHelper.putValueInTable(nsName, shardId, nsIndex, storageTable, key, body);
+            const storageValue = await DbHelper.putValueInTable(nsName, shardId, nsIndex, storageTable, ts, key, body);
             log.debug(`found value: ${storageValue}`)
             log.debug('success is ' + success);
             try {
@@ -131,7 +138,7 @@ export default (app: Router) => {
        Timestamp example: 1661214142.000000 ( unixtime.microseconds )
     * */
     route.post(
-        '/ns/:nsName/nsidx/:nsIndex/month/:month/listInbox/', /*  */
+        '/ns/:nsName/nsidx/:nsIndex/month/:month/list/', /*  */
         async (req: Request, res: Response, next: NextFunction) => {
             logRequest(req);
             // we will search for data starting from this key exclusive
@@ -161,7 +168,7 @@ export default (app: Router) => {
             log.debug(`found table ${storageTable}`)
             if (StrUtil.isEmpty(storageTable)) {
                 log.error('storage table not found');
-                return res.status(401).json('storage table not found');
+                return res.status(204).json(`storage table not found for date ${req.params.month}`);
             }
             const storageValue = await DbHelper.listInbox(nsName, shardId, storageTable, firstTs);
             log.debug(`found value: ${storageValue}`)
