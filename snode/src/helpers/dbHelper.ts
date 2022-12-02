@@ -46,7 +46,7 @@ export default class DbHelper {
 
     public static async createNewNodestorageRecord(namespace: string, namespaceShardId: number, ts_start:any, ts_end:any, table_name:string):Promise<boolean>{
         const sql =`
-        insert into node_storage_layout (namespace, namespace_shard_id, ts_start, ts_end, table_name) values ('${namespace}', '${namespaceShardId}', '${ts_start} 00:00:00.000000', '${ts_end} 23:59:59.000000', '${table_name}') on conflict do nothing;
+        insert into node_storage_layout (namespace, namespace_shard_id, ts_start, ts_end, table_name) values ('${namespace}', '${namespaceShardId}', '${ts_start} 00:00:00.000000', '${ts_end} 00:00:00.000000', '${table_name}') on conflict do nothing;
         `
         return db.query(sql).then(data => {
             console.log(data)
@@ -108,7 +108,7 @@ export default class DbHelper {
         log.debug(`date is ${dateYmd.toISO()}`);
         const sql = `select table_name from node_storage_layout
                      where namespace='${namespace}' and namespace_shard_id='${namespaceShardId}' 
-                     and ts_start <= '${dateYmd.toISO()}' and ts_end >= '${dateYmd.toISO()}'`
+                     and ts_start <= '${dateYmd.toISO()}' and ts_end > '${dateYmd.toISO()}'`
         log.debug(sql);
         return db.query(sql).then(data => {
             log.debug(data);

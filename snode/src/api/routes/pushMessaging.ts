@@ -72,7 +72,7 @@ export default (app: Router) => {
             log.debug('success is ' + success);
             try {
                 // const messaging = Container.get(MessagingService);
-                return res.status(201).json(storageValue);
+                return res.status(200).json(storageValue);
             } catch (e) {
                 // log.error('🔥 error: %o', e);
                 return next(e);
@@ -106,12 +106,12 @@ export default (app: Router) => {
             log.debug(`found table ${storageTable}`)
             if (StrUtil.isEmpty(storageTable)) {
                 log.error('storage table not found');
-                var ts_start= DateTime.fromISO(date).startOf('month').toISODate().toString();
-                var ts_end= DateTime.fromISO(date).endOf('month').toISODate().toString();
+                var monthStart = date.startOf('month').toISODate().toString();
+                var monthEndExclusive = date.startOf('month').plus({ months: 1 }).toISODate().toString();
                 log.debug('creating new storage table');
                 const createtable = await DbHelper.createNewStorageTable(nsName, dt.slice(0,6));
                 log.debug('creating node storage layout mapping')
-                const createnodelayout=await DbHelper.createNewNodestorageRecord(nsName,shardId,ts_start,ts_end,`storage_ns_${nsName}_d_${dt.slice(0,6)}`);
+                const createnodelayout = await DbHelper.createNewNodestorageRecord(nsName,shardId,monthStart,monthEndExclusive,`storage_ns_${nsName}_d_${dt.slice(0,6)}`);
                 log.debug(createnodelayout)
                 log.debug(createtable);
             }

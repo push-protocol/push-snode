@@ -9,9 +9,23 @@ const expect = chai.expect
 
 import pgPromise, {IDatabase} from 'pg-promise';
 import {isDeepStrictEqual} from "util";
+import {AxiosResponse} from "axios";
+import PromiseUtil from "../src/helpers/promiseUtil";
 const { DateTime } = require("luxon");
 const axios = require('axios');
 
+function patchPromiseWithState() {
+    Object.defineProperty(Promise.prototype, "state", {
+        get: function(){
+            const o = {};
+            return Promise.race([this, o]).then(
+                v => v === o ? "pending" : "resolved",
+                () => "rejected");
+        }
+    });
+}
+
+patchPromiseWithState();
 
 async function cleanAllTablesAndInitNetworkStorageLayout(db:IDatabase<any>) {
     await db.result('TRUNCATE TABLE network_storage_layout');
@@ -57,17 +71,61 @@ async function selectWithParam(db:IDatabase<any>, value:string) {
     console.log(result1.rows[0].value);
 }
 
-async function doPut(baseUri:string, ns:string, nsIndex:string, date:string, key:string, data:any) {
+async function doPut(baseUri:string, ns:string, nsIndex:string, date:string, key:string, data:any):Promise<AxiosResponse> {
     let url = `${baseUri}/api/v1/kv/ns/${ns}/nsidx/${nsIndex}/date/${date}/key/${key}`;
     console.log(`PUT ${url}`, data);
-    let resp = await axios.post(url, data);
+    let resp = await axios.post(url, data, { timeout : 5000 });
     console.log(resp.status);
+    return resp;
 }
 
-async function doGet(baseUri:string, ns:string, nsIndex:string, date:string, key:string) {
-    let resp = await axios.get(`${baseUri}/api/v1/kv/ns/${ns}/nsidx/${nsIndex}/date/${date}/key/${key}`);
+async function doGet(baseUri:string, ns:string, nsIndex:string, date:string, key:string):Promise<AxiosResponse> {
+    let resp = await axios.get(`${baseUri}/api/v1/kv/ns/${ns}/nsidx/${nsIndex}/date/${date}/key/${key}`, { timeout : 3000 });
     console.log(resp.status, resp.data);
-    return resp.data;
+    return resp;
+}
+
+async function performOneTest(testCounter: number):Promise<number> {
+    const startTs = Date.now();
+    console.log("-->started test", testCounter);
+    let key = crypto.randomUUID();
+    let dataToDb = {
+        name: 'john' + '1',
+        surname: crypto.randomBytes(10).toString('base64'),
+        id: RandomUtil.getRandomInt(0, 100000)
+    };
+
+    let ns = 'feeds';
+    let nsIndex = RandomUtil.getRandomInt(0, 100000).toString();
+    let yearValue = 2022;
+    let monthValue = RandomUtil.getRandomInt(1, 13);
+    let dayValue = RandomUtil.getRandomInt(1, 28);
+    let dateObj = DateTime.fromObject({ year: yearValue, month: monthValue, day: dayValue});
+    if(!dateObj.isValid) {
+        console.log("INVALID DATE !!! ", yearValue, monthValue, dayValue);
+        return
+    }
+    let dateFormatted = dateObj.toFormat('yyyyMMdd');
+    console.log('dateFormatted', dateFormatted);
+    let putResult = await doPut('http://localhost:4000', ns, nsIndex, dateFormatted, key, dataToDb);
+    if(putResult.status!=201) {
+        console.log('PUT ERROR!!! ', putResult.status);
+        return;
+    }
+    let getResult = await doGet('http://localhost:4000', ns, nsIndex, dateFormatted, key);
+    if(getResult.status!=200) {
+        console.log('GET ERROR!!! ', getResult.status);
+        return;
+    }
+    let dataFromDb = getResult.data;
+    let isEqual = _.isEqual(dataToDb, dataFromDb);
+    if (!isEqual) {
+        console.log(`isEqual = `, isEqual);
+        console.log('dataToDb', dataToDb, 'dataFromDb', dataFromDb);
+    }
+    console.log("-->finished test", testCounter, " elapsed ", (Date.now() - startTs)/1000.0);
+    expect(isEqual).equals(true);
+    return Promise.resolve(getResult.status);
 }
 
 describe('test-snode-full', function () {
@@ -76,50 +134,32 @@ describe('test-snode-full', function () {
     const snode1Db = pg("postgres://postgres:postgres@localhost:5432/postgres");
 
     it('init-snode', async function () {
+        this.timeout(30000);
         await cleanAllTablesAndInitNetworkStorageLayout(snode1Db);
     })
 
     it('test-snode', async function () {
-
-        let testCounter = 0;
-        async function performOneTest() {
-            console.log("-->test", testCounter++);
-            let key = crypto.randomUUID();
-            let dataToDb = {
-                name: 'john' + '1',
-                surname: crypto.randomBytes(10).toString('base64'),
-                id: RandomUtil.getRandomInt(0, 100000)
-            };
-
-            let ns = 'feeds';
-            let nsIndex = RandomUtil.getRandomInt(0, 100000).toString();
-            let yearValue = RandomUtil.getRandomInt(2020, 2023);
-            let monthValue = RandomUtil.getRandomInt(1, 13);
-            let dayValue = RandomUtil.getRandomInt(1, 28);
-            let dateObj = DateTime.fromObject({ year: yearValue, month: monthValue, day: dayValue});
-            if(!dateObj.isValid) {
-                console.log("INVALID DATE !!! ", yearValue, monthValue, dayValue);
-                return
-            }
-            let dateFormatted = dateObj.toFormat('yyyyMMdd');
-            console.log('dateFormatted', dateFormatted);
-            await doPut('http://localhost:4000', ns, nsIndex, dateFormatted, key, dataToDb);
-            let dataFromDb = await doGet('http://localhost:4000', ns, nsIndex, dateFormatted, key);
-            let isEqual = _.isEqual(dataToDb, dataFromDb);
-            if (!isEqual) {
-                console.log(`isEqual = `, isEqual);
-                console.log('dataToDb', dataToDb, 'dataFromDb', dataFromDb);
-            }
-            expect(isEqual).equals(true);
-        }
+        this.timeout(30000);
 
         let promiseArr = [];
-        for(let i=0;i<20;i++) {
-             promiseArr.push(performOneTest()); // TODO !!!!!!!!!
-            // TODO node_storage_layout
-            //  ts_start 2022-11-01 00:00:00.000000,
-            //  ts_end 2022-11-30 23:59:59.000000
+        let parallelThreads = 50;
+        for(let i=0; i<parallelThreads; i++) {
+            try {
+                promiseArr.push(performOneTest(i)); // TODO !!!!!!!!!
+            } catch (e) {
+                console.log("failed to submit thread#", i);
+            }
+
         }
-        await Promise.all(promiseArr);
-    })
+        let result = await PromiseUtil.allSettled(promiseArr);
+        console.log(result);
+        for (const p of promiseArr) {
+            try {
+                await p;
+            } catch (e) {
+                console.log('failed to await promise', e)
+            }
+            console.log(p.state);
+        }
+    });
 })
