@@ -3,7 +3,8 @@ import config from '../config';
 import StrUtil from './strUtil'
 import log from '../loaders/logger';
 import pgPromise from 'pg-promise';
-const { DateTime } = require("luxon");
+
+import {DateTime} from "ts-luxon";
 
 const pg = pgPromise({});
 
@@ -58,9 +59,7 @@ export default class DbHelper {
         });
     }
 
-    public static async createNewStorageTable(nsName:string, dt:string):Promise<boolean>{
-        const tableName = `storage_ns_${nsName}_d_${dt}`;
-        const indexName = `${tableName}_idx`;
+    public static async createNewStorageTable(tableName:string):Promise<boolean>{
         const sql = `
             CREATE TABLE IF NOT EXISTS ${tableName}
             (
@@ -74,7 +73,7 @@ export default class DbHelper {
             );
 
             DROP INDEX IF EXISTS ${tableName}_idx;
-            CREATE INDEX ${tableName}_idx ON storage_ns_${nsName}_d_${dt} USING btree (namespace ASC, namespace_shard_id ASC, namespace_id ASC, ts ASC);
+            CREATE INDEX ${tableName}_idx ON ${tableName} USING btree (namespace ASC, namespace_shard_id ASC, namespace_id ASC, ts ASC);
         `
         console.log(sql)
         return db.query(sql).then(data => {
@@ -104,7 +103,7 @@ export default class DbHelper {
         });
     }
 
-    public static async findStorageTableByDate(namespace: string, namespaceShardId: number, dateYmd:any):Promise<string> {
+    public static async findStorageTableByDate(namespace: string, namespaceShardId: number, dateYmd:DateTime):Promise<string> {
         log.debug(`date is ${dateYmd.toISO()}`);
         const sql = `select table_name from node_storage_layout
                      where namespace='${namespace}' and namespace_shard_id='${namespaceShardId}' 
@@ -143,15 +142,14 @@ export default class DbHelper {
         });
     }
 
-    static async putValueInTable(namespace: string, namespaceShardId: number,
-                                 namespaceId:string,
-                                 storageTable: string, key: string, jsonValue: string) {
-        log.debug(`putValueInTable() namespace=${namespace}, namespaceShardId=${namespaceShardId}
-        ,storageTable=${storageTable}, key=${key}, jsonValue=${jsonValue}`);
+    static async putValueInTable(ns: string, shardId: number, nsIndex: string,
+                                 storageTable: string, ts:string, key: string, body: string) {
+        log.debug(`putValueInTable() namespace=${ns}, namespaceShardId=${shardId}
+        ,storageTable=${storageTable}, key=${key}, jsonValue=${body}`);
         const sql = `INSERT INTO ${storageTable} 
-                    (namespace, namespace_shard_id, namespace_id, rowuuid, dataschema, payload)
-                    values ('${namespace}',  '${namespaceShardId}', '${namespaceId}', '${key}', 'v1', '${jsonValue}')
-                    ON CONFLICT (rowUuid) DO UPDATE SET payload = '${jsonValue}'`
+                    (namespace, namespace_shard_id, namespace_id, ts, rowuuid, dataschema, payload)
+                    values ('${ns}',  '${shardId}', '${nsIndex}', to_timestamp(${ts}),'${key}', 'v1', '${body}')
+                    ON CONFLICT (rowUuid) DO UPDATE SET payload = '${body}'`
         log.debug(sql);
         return db.none(sql).then(data => {
             log.debug(data);
