@@ -23,4 +23,18 @@ export default class RandomUtil {
         let rnd = this.getRandomInt(minInt, maxInt);
         return DateTime.fromMillis(rnd);
     }
+
+    public static getRandomSubArray(sourceArray:any[], subArraySize:number):any[] {
+        let len = sourceArray.length;
+        const result = new Array(subArraySize);
+        const taken = new Array(len);
+        if (subArraySize > len)
+            throw new RangeError("getRandom: more elements taken than available");
+        while (subArraySize--) {
+            var x = Math.floor(Math.random() * len);
+            result[subArraySize] = sourceArray[x in taken ? taken[x] : x];
+            taken[x] = --len in taken ? taken[len] : len;
+        }
+        return result;
+    }
 }
