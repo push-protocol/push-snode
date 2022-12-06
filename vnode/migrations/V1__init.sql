@@ -31,4 +31,4 @@ CREATE TABLE IF NOT EXISTS node_info
     node_url VARCHAR(50) NOT NULL
 );
 
--- INSERT INTO public.node_info (node_id, node_url) VALUES ('"1"', 'http://localhost:3000');
+

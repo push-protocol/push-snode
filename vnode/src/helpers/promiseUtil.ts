@@ -11,8 +11,10 @@ export default class PromiseUtil {
 
 }
 
+
+
 // todo use interface
-interface WrappedResult {
+export interface WrappedResult {
     // 'fulfilled', 'rejected'
     status: string;
     value: any;

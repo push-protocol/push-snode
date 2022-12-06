@@ -15,10 +15,10 @@ async function bootstrap() {
 
   let log = new Logger('main');
   log.debug(`console logger attached!`);
-  log.debug(`using db`, process.env.DB_NAME);
+  log.debug(`using db $1`, process.env.DB_NAME.trim());
 
   const app = await NestFactory.create(AppModule);
-  await app.listen(3000);
+  await app.listen(process.env.PORT);
   log.debug(`app started!`)
 }
 bootstrap();
