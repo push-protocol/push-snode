@@ -1,8 +1,12 @@
 import { Controller, Get, Param } from "@nestjs/common";
-import db from './helpers/dbHelper';
+import dbhelper from './helpers/dbHelper';
 import snodedb from "./helpers/dbHelper";
 import StrUtil from "./helpers/strUtil";
 import random from 'random';
+import { DateTime } from "luxon";
+import * as rax from 'retry-axios';
+import axios from 'axios';
+
 interface nodeurl {
     nsName:string,
     nsIndex:string,
@@ -10,7 +14,7 @@ interface nodeurl {
     key:string
 }
 
-const {DateTime} = require("luxon");
+
 
 function getRandomNodesAsList(randomNodeCount, nodeList) {
     let result = [];
@@ -25,14 +29,29 @@ function getRandomNodesAsList(randomNodeCount, nodeList) {
     return result;
 }
 
+rax.attach();
+
+const apiconfig = {
+    raxConfig: {
+        retry: 3, // number of retry when facing 4xx or 5xx
+        noResponseRetries: 3, // number of retry when facing connection error
+        onRetryAttempt: err => {
+          const cfg = rax.getConfig(err);
+          console.log(`Retry attempt #${cfg.currentRetryAttempt}`);
+        }
+      },
+      timeout: 3000
+}
+
+
 @Controller("/api/v1/kv")
 export class UsersController {
-
+    
     @Get("/ns/:nsName/nsidx/:nsIndex/date/:dt/key/:key")
     async findAll(@Param() params:nodeurl): Promise<any> {
-        const shardid = await db.calculateShardForNamespaceIndex(params.nsName, params.nsIndex);
+        const shardid = await dbhelper.calculateShardForNamespaceIndex(params.nsName, params.nsIndex);
         console.log("Shard Id calculated from namespace and nsIdx : ",shardid);
-        const node_ids = await db.getAllNodeIds(params.nsName, shardid);
+        const node_ids = await dbhelper.getAllNodeIds(params.nsName, shardid);
         const number_of_nodes = node_ids.length;
         console.log("Node Ids for the shard : ",number_of_nodes);
         console.log("Node Ids for the shard : ",node_ids);
@@ -44,28 +63,27 @@ export class UsersController {
         console.log("Random Nodes : ",randomnodes);
 
         for(var i=0;i<randomnodes.length;i++){
-            const nodeurl = await db.getNodeUrl(randomnodes[i]);
+            const nodeurl = await dbhelper.getNodeUrl(randomnodes[i]);
             var nodeId = randomnodes[i];
             console.log("Current Node Url : ",nodeurl);
 
-            const success = await db.checkThatShardIsOnThisNode(params.nsName, shardid, nodeId);
+            const success = await dbhelper.checkThatShardIsOnThisNode(params.nsName, shardid, nodeId);
             if (!success) {
                 let errMsg = `${params.nsName}.${params.nsIndex} maps to shard ${shardid} which is missing on node ${nodeId}`;
                 console.log(errMsg);
                 return Promise.reject(errMsg);
             }
 
-            const date = DateTime.fromISO(params.dt, {zone: 'utc'});
-            console.log(`parsed date ${params.dt} -> ${date}`)
-            const storageTable = await db.findStorageTableByDate(params.nsName, shardid, date);
-            console.log(`found table ${storageTable}`)
-            if (StrUtil.isEmpty(storageTable)) {
-                console.log('storage table not found');
-                return ('storage table not found');
+            try{
+                const response = await axios.get(`http://localhost:4000/api/v1/kv/ns/${params.nsName}/nsidx/${params.nsIndex}/date/${params.dt}/key/${params.key}`,apiconfig);
+                console.log(response.data);
+                return response.data;
+            }catch(err){
+                console.log(err);
             }
-            const storageValue = await db.findValueInTable(storageTable, params.key);
-            console.log(`found value: ${storageValue}`)
-            console.log('success is ' + success);
+
+
+            
         }
     }
 }
