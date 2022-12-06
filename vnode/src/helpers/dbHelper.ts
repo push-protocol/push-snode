@@ -1,20 +1,20 @@
 
 import config from '../config';
-import log from '../loaders/logger';
+import {Logger} from "@nestjs/common";
 
 const { DateTime } = require("luxon");
 
 const pg = require('pg-promise')({});
 
 // todo switch to a config file
-export const db = pg("postgres://postgres:postgres@localhost:5432/postgres@vnode");
-export const snodedb = pg("postgres://postgres:postgres@localhost:5432/postgres");
+export const db = pg(`postgres://${process.env.DB_USER}:${process.env.DB_PASS}@${process.env.DB_HOST}:5432/${process.env.DB_NAME}`);
 const crypto = require('crypto');
 
 export default class DbHelper {
+    private readonly log = new Logger(DbHelper.name);
 
     // maps key -> 8bit space (0..255)
-    // uses first 8bit from an md5 hash
+    // uses first 8bit from a md5 hash
     public static calculateShardForNamespaceIndex(namespace: string, key: string): number {
       let buf = crypto.createHash('md5').update(key).digest();
       let i32 = buf.readUInt32LE(0);
@@ -28,7 +28,7 @@ export default class DbHelper {
         const sql = `SELECT count(*) FROM network_storage_layout
         where namespace='${namespace}' and namespace_shard_id='${namespaceShardId}'`
         console.log(sql);
-        return snodedb.query(sql).then(data => {
+        return db.query(sql).then(data => {
             console.log(data)
             let cnt = parseInt(data[0].count);
             console.log(cnt);
@@ -66,8 +66,8 @@ export default class DbHelper {
         });
     }
 
-    public static async getNodeUrl(nodeid:string):Promise<any>{
-        const sql = `SELECT node_url FROM node_address where node_id='${nodeid}'`
+    public static async getNodeUrl(nodeId:string):Promise<any>{
+        const sql = `SELECT node_url FROM node_info where node_id='${nodeId}'`
         console.log(sql);
         return db.query(sql).then(data => {
             return data;
@@ -78,8 +78,8 @@ export default class DbHelper {
         });
     };
 
-    public static async getAllNodeIds(nsName,nShardid):Promise<string[]>{
-        const sql = `select node_id from network_storage_layout where namespace='${nsName}' and namespace_shard_id='${nShardid}'`;
+    public static async findNodesByNamespaceAndShard(ns:string, nsShardId:number):Promise<string[]>{
+        const sql = `select node_id from network_storage_layout where namespace='${ns}' and namespace_shard_id='${nsShardId}'`;
         console.log(sql);
         return db.query(sql).then(data => {
             return Promise.resolve(data)
@@ -87,45 +87,6 @@ export default class DbHelper {
             console.log(err);
             return Promise.resolve([]);
         })
-    }
-
-    public static async findStorageTableByDate(namespace: string, namespaceShardId: number, dateYmd:any):Promise<string> {
-        console.log(`date is ${dateYmd.toISO()}`);
-        const sql = `select table_name from node_storage_layout
-                     where namespace='${namespace}' and namespace_shard_id='${namespaceShardId}' 
-                     and ts_start <= '${dateYmd.toISO()}' and ts_end >= '${dateYmd.toISO()}'`
-        console.log(sql);
-        return snodedb.query(sql).then(data => {
-            console.log(data);
-            if(data.length!=1) {
-                return Promise.reject('missing table with the correct name');
-            }
-            return data[0].table_name;
-        }).
-        catch(err => {
-            console.log(err);
-            return Promise.resolve('');
-        });
-    }
-
-    public static async findValueInTable(tableName: string, key: string):Promise<string> {
-        console.log(`tableName is ${tableName} , key is ${key}`);
-        const sql = `select payload
-                     from ${tableName}
-                     where rowuuid = '${key}'`;
-        console.log(sql);
-        return snodedb.query(sql).then(data => {
-            console.log(data);
-            if(data.length!=1) {
-                return Promise.reject('missing table with the correct name');
-            }
-            console.log(`data found: ${ JSON.stringify(data[0].payload)}`)
-            return data[0].payload;
-        }).
-        catch(err => {
-            console.log(err);
-            return Promise.resolve('');
-        });
     }
 
     

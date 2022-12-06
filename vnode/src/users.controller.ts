@@ -1,8 +1,14 @@
-import { Controller, Get, Param } from "@nestjs/common";
-import db from './helpers/dbHelper';
+import {Body, Controller, Get, Param, Post} from "@nestjs/common";
+import DbHelper from './helpers/dbHelper';
 import snodedb from "./helpers/dbHelper";
 import StrUtil from "./helpers/strUtil";
 import random from 'random';
+import RandomUtil from "./helpers/randomUtil";
+import axios, {AxiosResponse} from "axios";
+import PromiseUtil from "./helpers/promiseUtil";
+// import log from './loaders/log';
+import { Logger, Injectable } from '@nestjs/common';
+
 interface nodeurl {
     nsName:string,
     nsIndex:string,
@@ -12,27 +18,16 @@ interface nodeurl {
 
 const {DateTime} = require("luxon");
 
-function getRandomNodesAsList(randomNodeCount, nodeList) {
-    let result = [];
-    for (let i = 0; i < Math.min(randomNodeCount, nodeList.length); i++) {
-        console.log(`nodeList`, nodeList)
-        let rnd01 = Math.random();
-        var rndIndex = Math.round(rnd01 * (nodeList.length - 1));
-        var newNodeId = nodeList[rndIndex];
-        nodeList.splice(rndIndex, 1);
-        result.push(newNodeId);
-    }
-    return result;
-}
+const log = new Logger('UsersController');
 
 @Controller("/api/v1/kv")
 export class UsersController {
 
     @Get("/ns/:nsName/nsidx/:nsIndex/date/:dt/key/:key")
     async findAll(@Param() params:nodeurl): Promise<any> {
-        const shardid = await db.calculateShardForNamespaceIndex(params.nsName, params.nsIndex);
+        const shardid = await DbHelper.calculateShardForNamespaceIndex(params.nsName, params.nsIndex);
         console.log("Shard Id calculated from namespace and nsIdx : ",shardid);
-        const node_ids = await db.getAllNodeIds(params.nsName, shardid);
+        const node_ids = await DbHelper.findNodesByNamespaceAndShard(params.nsName, shardid);
         const number_of_nodes = node_ids.length;
         console.log("Node Ids for the shard : ",number_of_nodes);
         console.log("Node Ids for the shard : ",node_ids);
@@ -40,10 +35,10 @@ export class UsersController {
         for(let i=0;i<number_of_nodes;i++){
             randomnodes.push(node_ids[i.toString()].node_id);
         }
-        randomnodes = getRandomNodesAsList(number_of_nodes/2 + 1, randomnodes);
+        randomnodes = RandomUtil.getRandomSubArray(randomnodes, number_of_nodes/2 + 1);
         console.log("Random Nodes : ",randomnodes);
 
-        for(var i=0;i<randomnodes.length;i++){
+        /*for(var i=0;i<randomnodes.length;i++){
             const nodeurl = await db.getNodeUrl(randomnodes[i]);
             var nodeId = randomnodes[i];
             console.log("Current Node Url : ",nodeurl);
@@ -66,6 +61,40 @@ export class UsersController {
             const storageValue = await db.findValueInTable(storageTable, params.key);
             console.log(`found value: ${storageValue}`)
             console.log('success is ' + success);
+        }*/
+    }
+
+    async doPut(baseUri: string, ns: string, nsIndex: string, ts: string, key: string, data: any): Promise<AxiosResponse> {
+        let url = `${baseUri}/api/v1/kv/ns/${ns}/nsidx/${nsIndex}/ts/${ts}/key/${key}`;
+        console.log(`PUT ${url}`, data);
+        let resp = await axios.post(url, data, {timeout: 5000});
+        console.log(resp.status);
+        return resp;
+    }
+
+    @Post('/ns/:nsName/nsidx/:nsIndex/ts/:ts/key/:key')
+    async put(@Param('nsName') nsName:string,
+              @Param('nsIndex') nsIndex:string,
+              @Param('ts') ts:string,
+              @Param('key') key:string,
+              @Body() body:any): Promise<any> {
+        log.debug(`put() nsName=${nsName}, nsIndex=${nsIndex}, ts=${ts}, key=${key}`);
+        const shardId = DbHelper.calculateShardForNamespaceIndex(nsName, nsIndex);
+        log.debug("shardId ",shardId);
+        const nodeIdList:string[] = await DbHelper.findNodesByNamespaceAndShard(nsName, shardId);
+        log.debug(`nodeIdList size=`, nodeIdList.length, nodeIdList);
+        // todo V2 cache nodeIds and nodeUrls in ram, expire once per minute
+        // todo V2 handle case where n/2+1 puts are sync, and rest can be async
+        let promiseList:Promise<AxiosResponse>[] = [];
+        for(let i=0;i<nodeIdList.length;i++){
+            log.debug("quer")
+            let nodeId = nodeIdList[i];
+            let nodeBaseUrl = await DbHelper.getNodeUrl(nodeId);
+            promiseList.push(this.doPut(nodeBaseUrl, nsName, nsIndex, ts, key, body));
         }
+        let allSettled = await PromiseUtil.allSettled(promiseList);
+        log.debug(`error codes`, allSettled.map((resp) => {
+            return resp.status
+        }));
     }
 }
