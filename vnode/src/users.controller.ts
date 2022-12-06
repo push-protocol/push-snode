@@ -4,8 +4,8 @@ import snodedb from "./helpers/dbHelper";
 import StrUtil from "./helpers/strUtil";
 import random from 'random';
 import { DateTime } from "luxon";
-import * as rax from 'retry-axios';
 import axios from 'axios';
+import axiosRetry from "axios-retry";
 
 interface nodeurl {
     nsName:string,
@@ -29,19 +29,8 @@ function getRandomNodesAsList(randomNodeCount, nodeList) {
     return result;
 }
 
-rax.attach();
+axiosRetry(axios, { retries: 3 });
 
-const apiconfig = {
-    raxConfig: {
-        retry: 3, // number of retry when facing 4xx or 5xx
-        noResponseRetries: 3, // number of retry when facing connection error
-        onRetryAttempt: err => {
-          const cfg = rax.getConfig(err);
-          console.log(`Retry attempt #${cfg.currentRetryAttempt}`);
-        }
-      },
-      timeout: 3000
-}
 
 
 @Controller("/api/v1/kv")
@@ -73,13 +62,14 @@ export class UsersController {
                 console.log(errMsg);
                 return Promise.reject(errMsg);
             }
-
+            
             try{
-                const response = await axios.get(`http://localhost:4000/api/v1/kv/ns/${params.nsName}/nsidx/${params.nsIndex}/date/${params.dt}/key/${params.key}`,apiconfig);
+                const response = await axios.get(`http://localhost:4000/api/v1/kv/ns/${params.nsName}/nsidx/${params.nsIndex}/date/${params.dt}/key/${params.key}`,{timeout: 3000});
                 console.log(response.data);
-                return response.data;
+                Promise.resolve(response.data);
             }catch(err){
                 console.log(err);
+                Promise.reject(err);
             }
 
 
