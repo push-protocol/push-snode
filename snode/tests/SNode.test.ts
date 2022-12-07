@@ -144,7 +144,7 @@ class SNode1Constants {
     // DATA GENERATION
     static dbUri = 'postgres://postgres:postgres@localhost:5432/postgres';
     // API TESTS
-    static apiUrl = 'http://localhost:4000';
+    static apiUrl = 'http://localhost:3000';
     static namespace = 'feeds';
 }
 
