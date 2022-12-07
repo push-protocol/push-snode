@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS storage_ns_inbox_d_202208
     namespace_shard_id VARCHAR(20) NOT NULL,
     namespace_id VARCHAR(20) NOT NULL,
     ts TIMESTAMP NOT NULL default NOW(),
-    rowUuid VARCHAR(64) NOT NULL PRIMARY KEY,
+    skey VARCHAR(64) NOT NULL PRIMARY KEY,
     dataSchema VARCHAR(20) NOT NULL,
     payload JSONB
 );
