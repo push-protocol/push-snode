@@ -45,18 +45,20 @@ export default class DbHelper {
     }
 
 
-    public static async createNewNodestorageRecord(namespace: string, namespaceShardId: number, ts_start:any, ts_end:any, table_name:string):Promise<boolean>{
-        const sql =`
-        insert into node_storage_layout (namespace, namespace_shard_id, ts_start, ts_end, table_name) values ('${namespace}', '${namespaceShardId}', '${ts_start} 00:00:00.000000', '${ts_end} 00:00:00.000000', '${table_name}') on conflict do nothing;
+    public static async createNewNodestorageRecord(namespace: string, namespaceShardId: number, ts_start: any, ts_end: any, table_name: string): Promise<boolean> {
+        const sql = `
+        insert into node_storage_layout (namespace, namespace_shard_id, ts_start, ts_end, table_name) 
+        values ($1, $2, $3, $4, $5) on conflict do nothing;
         `
-        return db.query(sql).then(data => {
-            console.log(data)
-            return Promise.resolve(true)
-        }).
-        catch(err => {
-            console.log(err);
-            return Promise.resolve(false);
-        });
+        console.log(sql);
+        return db.result(sql, [namespace, namespaceShardId, ts_start, ts_end, table_name], r => r.rowCount)
+            .then(rowCount => {
+                console.log('inserted rowcount: ', rowCount)
+                return Promise.resolve(rowCount==1)
+            }).catch(err => {
+                console.log(err);
+                return Promise.resolve(false);
+            });
     }
 
     public static async createNewStorageTable(tableName:string):Promise<boolean>{

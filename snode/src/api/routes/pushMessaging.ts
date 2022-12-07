@@ -112,12 +112,17 @@ export default (app: Router) => {
                 log.debug('creating new storage table');
                 const dateYYYYMM = DateUtil.formatYYYYMM(date);
                 const tableName = `storage_ns_${nsName}_d_${dateYYYYMM}`;
-                const createtable = await DbHelper.createNewStorageTable(tableName);
-                log.debug('creating node storage layout mapping')
-                const createnodelayout = await DbHelper.createNewNodestorageRecord(nsName, shardId,
+                const recordCreated = await DbHelper.createNewNodestorageRecord(nsName, shardId,
                     monthStart, monthEndExclusive, tableName);
-                log.debug(createnodelayout)
-                log.debug(createtable);
+                if (recordCreated) {
+                    log.debug('record created: ', recordCreated)
+                    // we've added a new record to node_storage_layout => we can safely try to create a table
+                    // otherwise, if many connections attempt to create a table from multiple threads
+                    // it leads to postgres deadlock sometimes
+                    const createtable = await DbHelper.createNewStorageTable(tableName);
+                    log.debug('creating node storage layout mapping')
+                    log.debug(createtable);
+                }
             }
             var storageTable = await DbHelper.findStorageTableByDate(nsName, shardId, date);
             const storageValue = await DbHelper.putValueInTable(nsName, shardId, nsIndex, storageTable, ts, key, body);
