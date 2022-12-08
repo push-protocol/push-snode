@@ -1,10 +1,11 @@
-import {Body, Controller, Get, HttpException, HttpStatus, Param, Post, Res} from "@nestjs/common";
+// noinspection SpellCheckingInspection
+
+import {Body, Controller, Get, HttpException, HttpStatus, Logger, Param, Post} from "@nestjs/common";
 import DbService from './loaders/dbService';
 import StrUtil from "./helpers/strUtil";
 import RandomUtil from "./helpers/randomUtil";
 import axios, {AxiosResponse} from "axios";
 import PromiseUtil, {WrappedResult} from "./helpers/promiseUtil";
-import {Logger, Injectable} from '@nestjs/common';
 
 interface nodeurl {
     nsName: string,
@@ -16,6 +17,8 @@ interface nodeurl {
 const {DateTime} = require("luxon");
 
 const log = new Logger('UsersController');
+
+// curl -X POST -H "Content-Type: application/json" --location "http://localhost:4000/api/v1/kv/ns/feeds/nsidx/1000/month/201501/list"
 
 @Controller("/api/v1/kv")
 export class AppController {
@@ -74,12 +77,22 @@ export class AppController {
         return resp;
     }
 
+    async doList(baseUri: string, ns: string, nsIndex: string, month: string, firstTs?: string): Promise<AxiosResponse> {
+        let url = `${baseUri}/api/v1/kv/ns/${ns}/nsidx/${nsIndex}/month/${month}/list/`;
+        if (firstTs != null) {
+            url += `?firstTs=${firstTs}`
+        }
+        let resp = await axios.post(url, {timeout: 3000});
+        console.log('LIST', url, resp.status, resp.data);
+        return resp;
+    }
+
     @Post('/ns/:nsName/nsidx/:nsIndex/ts/:ts/key/:key')
-    async put(@Param('nsName') nsName: string,
-              @Param('nsIndex') nsIndex: string,
-              @Param('ts') ts: string,
-              @Param('key') key: string,
-              @Body() body: any): Promise<any> {
+    async postRecord(@Param('nsName') nsName: string,
+                     @Param('nsIndex') nsIndex: string,
+                     @Param('ts') ts: string,
+                     @Param('key') key: string,
+                     @Body() body: any): Promise<any> {
         log.debug(`put() nsName=${nsName}, nsIndex=${nsIndex}, ts=${ts}, key=${key}`);
         const shardId = DbService.calculateShardForNamespaceIndex(nsName, nsIndex);
         log.debug("shardId ", shardId);
@@ -118,4 +131,53 @@ export class AppController {
             throw new HttpException('Forbidden', HttpStatus.GATEWAY_TIMEOUT);
         }
     }
+
+    @Post('/ns/:nsName/nsidx/:nsIndex/month/:month/list/')
+    async listRecordsByMonthStartFromTs(@Param('nsName') nsName: string,
+                                        @Param('nsIndex') nsIndex: string,
+                                        @Param('month') month: string,
+                                        @Param('firstTs') firstTs: string,
+                                        @Body() body: any): Promise<any> {
+        log.debug(`listRecordsByMonthStartFromTs() nsName=${nsName}, nsIndex=${nsIndex}, month=${month}, firstTs=${firstTs}`);
+        const shardId = DbService.calculateShardForNamespaceIndex(nsName, nsIndex);
+        log.debug("shardId ", shardId);
+        const nodeIdList: string[] = await this.dbService.findNodesByNamespaceAndShard(nsName, shardId);
+        log.debug(`nodeIdList size=${nodeIdList.length} nodeIdList=${nodeIdList}`);
+
+        // todo V2 cache nodeIds and nodeUrls in ram, expire once per minute
+        // todo V2 handle case where n/2+1 list are sync, and rest can be async
+        let promiseList: Promise<AxiosResponse>[] = [];
+        for (let i = 0; i < nodeIdList.length; i++) {
+            log.debug("query")
+            let nodeId = nodeIdList[i];
+            let nodeBaseUrl = await this.dbService.getNodeUrl(nodeId);
+            if (StrUtil.isEmpty(nodeBaseUrl)) {
+                throw new Error(`node: ${nodeId} has no url in the database`);
+            }
+            log.debug(`baseUrl=${nodeBaseUrl}`);
+            promiseList.push(this.doList(nodeBaseUrl, nsName, nsIndex, month, firstTs));
+        }
+        let wrList = await PromiseUtil.allSettled(promiseList);
+        this.quorumForList(wrList);
+    }
+
+    private quorumForList(wrList: WrappedResult[]) {
+        let countFullfilled = 0;
+        let count200 = 0;
+        // TODO check why it won't compile if replaced with for(p in allSettled)
+        for (const p of wrList) {
+            let axiosResponse = p.value;
+            log.debug(`promise: ${p.status} httpCode: ${axiosResponse?.status}`);
+            log.debug(`value: ${JSON.stringify(axiosResponse.data)}`)
+            if (p.status == 'fulfilled') {
+                countFullfilled++;
+            }
+            if (axiosResponse?.status == 200) {
+                count200++;
+            }
+        }
+    }
+
+
 }
+
