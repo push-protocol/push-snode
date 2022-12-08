@@ -1,6 +1,6 @@
 import {Logger} from "@nestjs/common";
-import crypto from "crypto";
-
+import {StringCounter} from "./helpers/stringCounter";
+const crypto = require("crypto");
 const log = new Logger('AggregatedReplyHelper');
 
 export class AggregatedReplyHelper {
@@ -43,33 +43,68 @@ export class AggregatedReplyHelper {
         }
     }
 
-    public aggregateItems(): AggregatedReply {
+    public aggregateItems(minQuorumThreshold:number): AggregatedReply {
+        console.log(`aggregateItems()`)
+        let reply = new AggregatedReply();
         // if we have this amount of SAME replies for a key => we have this key
-        const quorumForKey = this.mapNodeToStatus.size / 2 + 1;
-        log.debug(`quorumForKey=${quorumForKey}`);
+        let nodeCount = this.mapNodeToStatus.size;
+        console.log(`quorumForKey=${minQuorumThreshold} nodeCount=${nodeCount}`);
 
         for (let [skey, mapNodeIdToStorageRecord] of this.mapKeyToNodeItems) {
-            log.debug(`checking skey: ${skey}`);
+            console.log(`checking skey: ${skey}`);
 
             // let's figure out quorum for this skey, we have replies from every node
-            let mapHashToCount = new Map<string, number>();
+            let sc = new StringCounter();
+            let goodReplies = 0;
             for (let [nodeId, code] of this.mapNodeToStatus) {
                 if(code == 200) {
                     let record = mapNodeIdToStorageRecord.get(nodeId);
+                    let recordKey = record?.key;
                     let recordHash = record == null ? 'null' : record.computeMd5Hash();
+                    console.log(`recordKey=${recordKey}, recordHash=${recordHash}`);
+                    sc.increment(recordHash, record);
+                }
+                if(code>=200 && code<300) {
+                    goodReplies++;
                 }
             }
-
+            sc.iterateAndSort(false, (index, key, count, context) => {
+                if(index == 0) {
+                    // top result
+                    if(count >= minQuorumThreshold) {
+                        // we have enough items from nodes, that we can conclude this item as useful
+                        reply.items.push(context);
+                    } else {
+                        // top item has not enough copies on the network
+                        reply.result.keysWithoutQuorum.push();
+                    }
+                } else {
+                    reply.result.keysWithoutQuorum.push();
+                }
+            });
+            console.log(`non200Replies=${goodReplies}`);
+            let r = reply.result;
+            if(goodReplies < minQuorumThreshold) {
+                // not enough nodes replies => we can't do anything
+                r.quorumResult = QuorumResult.QUORUM_FAILED_MIN_REPLIES
+            } else {
+                // we have node replies
+                if(reply.items.length == 0) {
+                    // we have no good keys
+                    r.quorumResult = r.keysWithoutQuorum.length > 0 ? QuorumResult.QUORUM_FAILED_BY_MIN_ITEMS : QuorumResult.QUORUM_OK;
+                } else if(reply.items.length > 0) {
+                    // we have good keys
+                    r.quorumResult = r.keysWithoutQuorum.length > 0 ? QuorumResult.QUORUM_OK_PARTIAL : QuorumResult.QUORUM_OK;
+                }
+            }
+            r.itemCount = reply.items.length;
+            r.keysWithoutQuorumCount = r.keysWithoutQuorum.length;
+            console.dir(sc, {depth: 5});
         }
-        return null; // TODO
+        return reply;
     }
 }
 
-class CustomMap {
-
-
-
-}
 
 class AggregatedRequest {
     nsName: string;
@@ -87,14 +122,22 @@ class AggregatedRequest {
 }
 
 export enum QuorumResult {
-    QUORUM_OK,
-    QUORUM_FAILED_NO_REPLIES,
-    QUORUM_FAILED_BY_DATA
+    QUORUM_OK = 'QUORUM_OK',
+    QUORUM_OK_PARTIAL = 'QUORUM_OK_PARTIAL',
+    QUORUM_FAILED_MIN_REPLIES = 'QUORUM_FAILED_MIN_REPLIES',
+    QUORUM_FAILED_BY_MIN_ITEMS = 'QUORUM_FAILED_BY_MIN_ITEMS'
+}
+
+export class Result {
+    quorumResult:QuorumResult;
+    itemCount:number = 0;
+    keysWithoutQuorumCount:number = 0;
+    keysWithoutQuorum:string[] = [];
 }
 
 export class AggregatedReply {
-    quorum: QuorumResult;
-    items: StorageRecord[];
+    items: StorageRecord[] = [];
+    result: Result = new Result();
 }
 
 // this is a single record , received from a node/list
@@ -116,7 +159,7 @@ export class StorageRecord {
             .update(this.ns)
             .update(this.key)
             .update(this.ts + '')
-            .update(this.payload)
-            .digest().toString();
+            .update(JSON.stringify(this.payload))
+            .digest().toString('hex');
     }
 }
