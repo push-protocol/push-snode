@@ -9,9 +9,4 @@ services:
     ports:
       - '5432:5432'
     volumes:
-      - ./external/postgresql:/var/lib/postgresql/data
-#      - db:/var/lib/postgresql/data
-
-networks:
-  main:
-    driver: bridge
+      - ./docker_postgres_init.sql:/docker-entrypoint-initdb.d/docker_postgres_init.sql

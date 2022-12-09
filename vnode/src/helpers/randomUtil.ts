@@ -25,16 +25,14 @@ export default class RandomUtil {
     }
 
     public static getRandomSubArray(sourceArray:any[], subArraySize:number):any[] {
-        let len = sourceArray.length;
-        const result = new Array(subArraySize);
-        const taken = new Array(len);
-        if (subArraySize > len)
-            throw new RangeError("getRandom: more elements taken than available");
-        while (subArraySize--) {
-            var x = Math.floor(Math.random() * len);
-            result[subArraySize] = sourceArray[x in taken ? taken[x] : x];
-            taken[x] = --len in taken ? taken[len] : len;
-        }
-        return result;
+        let result = [];
+    for (let i = 0; i < Math.min(subArraySize, sourceArray.length); i++) {
+        let rnd01 = Math.random();
+        var rndIndex = Math.round(rnd01 * (sourceArray.length - 1));
+        var newNodeId = sourceArray[rndIndex];
+        sourceArray.splice(rndIndex, 1);
+        result.push(newNodeId);
+    }
+    return result;
     }
 }
