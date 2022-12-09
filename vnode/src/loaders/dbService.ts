@@ -43,6 +43,18 @@ export default class DbService {
         });
     }
 
+    public async getNodeurlByNodeId(nodeId: string): Promise<string> {
+        const sql = `SELECT node_url FROM node_address where node_id='${nodeId}'`
+        this.log.debug(sql);
+        return this.db.query(sql).then(data => {
+            this.log.debug(data);
+            return data[0].node_url;
+        }).catch(err => {
+            this.log.debug(err);
+            return Promise.resolve('');
+        });
+    }
+
     public async checkIfNodeExists(nodeid: string, namespace: string): Promise<boolean> {
         const sql = `SELECT EXISTS ( SELECT count(*) FROM network_storage_layout
         where node_id='${nodeid}' and namespace='${namespace}')`
