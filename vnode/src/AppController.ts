@@ -37,36 +37,39 @@ export class AppController {
         console.log("Node Ids for the shard : ", number_of_nodes);
         console.log("Node Ids for the shard : ", node_ids);
         var randomnodes = [];
-        for (let i = 0; i < number_of_nodes; i++) {
-            randomnodes.push(node_ids[i.toString()].node_id);
-        }
-        randomnodes = RandomUtil.getRandomSubArray(randomnodes, number_of_nodes / 2 + 1);
+
+        randomnodes = RandomUtil.getRandomSubArray(node_ids, (number_of_nodes / 2) + 1);
         console.log("Random Nodes : ", randomnodes);
 
-        /*for(var i=0;i<randomnodes.length;i++){
-            const nodeurl = await db.getNodeUrl(randomnodes[i]);
+        for(var i=0;i<randomnodes.length-1;i++){
+            const currnodeurl = await this.dbService.getNodeurlByNodeId(randomnodes[i]);
+            const nextnodeurl = await this.dbService.getNodeurlByNodeId(randomnodes[i+1]);
             var nodeId = randomnodes[i];
-            console.log("Current Node Url : ",nodeurl);
+            log.debug("Current Node :", nodeId);
+            console.log("Current Node Url : ",currnodeurl);
 
-            const success = await db.checkThatShardIsOnThisNode(params.nsName, shardid, nodeId);
-            if (!success) {
-                let errMsg = `${params.nsName}.${params.nsIndex} maps to shard ${shardid} which is missing on node ${nodeId}`;
-                console.log(errMsg);
-                return Promise.reject(errMsg);
-            }
+            const currurl = currnodeurl + "/api/v1/kv/ns/" + params.nsName + "/nsidx/" + params.nsIndex + "/date/" + params.dt + "/key/" + params.key;
+            const nexturl = nextnodeurl + "/api/v1/kv/ns/" + params.nsName + "/nsidx/" + params.nsIndex + "/date/" + params.dt + "/key/" + params.key;
 
-            const date = DateTime.fromISO(params.dt, {zone: 'utc'});
-            console.log(`parsed date ${params.dt} -> ${date}`)
-            const storageTable = await db.findStorageTableByDate(params.nsName, shardid, date);
-            console.log(`found table ${storageTable}`)
-            if (StrUtil.isEmpty(storageTable)) {
-                console.log('storage table not found');
-                return ('storage table not found');
+            const curr_response = await axios.get(currurl, {timeout: 3000});
+            const next_response = await axios.get(nexturl, {timeout: 3000});
+
+            log.debug("Currently comparing nodes : ", randomnodes[i], " and ", randomnodes[i+1]);
+
+            if(curr_response && next_response){
+                if(JSON.stringify(curr_response.data) === JSON.stringify(next_response.data)){
+                    console.log("Consistent Read");
+                }
+                else{
+                    console.log("Inconsistent Read");
+                    Promise.reject("Inconsistent Read");
+                }
             }
-            const storageValue = await db.findValueInTable(storageTable, params.key);
-            console.log(`found value: ${storageValue}`)
-            console.log('success is ' + success);
-        }*/
+            else{
+                console.log("Error");
+                Promise.reject("Error");
+            }
+        }
     }
 
     async doPut(baseUri: string, ns: string, nsIndex: string, ts: string, key: string, data: any): Promise<AxiosResponse> {
