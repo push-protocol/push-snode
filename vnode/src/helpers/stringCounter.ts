@@ -3,29 +3,28 @@
  * 'key' -> COUNTER
  *
  * i.e.
- * 'a' -> 1
- * 'b' -> 2
  * 'c' -> 3
+ * 'b' -> 2
+ * 'a' -> 1
+ *
  *
  * and returns it in ascending/descending order
  *
- * Each value holds an additional context object, i.e. 'a' -> 1, { context }
+ * Each value holds an additional context object, i.e. 'a' -> 1, [ incrementObject1, incrementObject2 ]
  *
  */
 import {map} from "rxjs";
 
-export class StringCounter {
-    map: Map<string, ValueHolder> = new Map<string, ValueHolder>();
+export class StringCounter<T> {
+    map: Map<string, ValueHolder<T>> = new Map<string, ValueHolder<T>>();
 
-    public increment(key: string, context: any = null) {
+    public increment(key: string, contextValue: T = null) {
         let holder = this.map.get(key);
         if (holder == null) {
-            this.map.set(key, new ValueHolder(1, context));
+            this.map.set(key, new ValueHolder(1, contextValue));
         } else {
             holder.value++; // using wrapper to avoid get/put
-            if(holder.context == null && context != null) {
-                holder.context = context; // save only the first non-null value
-            }
+            holder.append(contextValue)
         }
     }
 
@@ -34,21 +33,21 @@ export class StringCounter {
         return holder == undefined ? null : holder.value;
     }
 
-    public getValueContext(key: string): any {
+    public getValueContext(key: string): T[] {
         let holder = this.map.get(key);
-        return holder == undefined ? null : holder.context;
+        return holder == undefined ? null : holder.incrementCtx;
     }
 
     public iterateAndSort(asc: boolean,
-                          callback: (index: number, key: string, count?: number, context?: any) => void) {
+                          callback: (index: number, key: string, count: number, incrementCtx: T[]) => void) {
         this.sort(asc);
         let i = 0;
         for (const [key, valueHolder] of this.map) {
-            callback(i++, key, valueHolder.value, valueHolder.context);
+            callback(i++, key, valueHolder.value, valueHolder.incrementCtx);
         }
     }
 
-    public getMostFrequentEntry(): ValueHolder {
+    public getMostFrequentEntry(): ValueHolder<T> {
         let sortedMap = this.toSortedMap(false);
         for (const [key, valueHolder] of sortedMap.entries()) {
             return valueHolder;
@@ -61,7 +60,7 @@ export class StringCounter {
     }
 
     private toSortedMap(asc: boolean) {
-        let sortedMap = new Map<string, ValueHolder>([...this.map].sort((a, b) => {
+        let sortedMap = new Map<string, ValueHolder<any>>([...this.map].sort((a, b) => {
             // a[0] = key, a[1] = value
             if (a[1].value == b[1].value) return 0;
             if (a[1].value > b[1].value) return asc ? 1 : -1;
@@ -71,12 +70,16 @@ export class StringCounter {
     }
 }
 
-export class ValueHolder {
+export class ValueHolder<V> {
     value: number;
-    context: any = null;
+    incrementCtx: V[] = [];
 
-    constructor(value: number, context: any) {
+    constructor(value: number, contextValue: V) {
         this.value = value;
-        this.context = context;
+        this.incrementCtx.push(contextValue);
+    }
+
+    append(contextValue:V) {
+        this.incrementCtx.push(contextValue);
     }
 }

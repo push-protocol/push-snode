@@ -37,10 +37,11 @@ describe('AppController (e2e)', () => {
         sc.increment('b');
         sc.increment('b');
         expect(sc.getValue('c')).toEqual(3);
-        expect(sc.getValueContext('c')).toEqual({name: 'john1'}); // take 1st value always
+        expect(sc.getValueContext('c')).toEqual([{name: 'john1'}, null, {name: 'john2'}]); // take 1st value always
         expect(sc.getValue('b')).toEqual(2);
+        expect(sc.getValueContext('b')).toEqual([null, null]);
         expect(sc.getValue('a')).toEqual(1);
-        expect(sc.getValueContext('a')).toBeNull();
+        expect(sc.getValueContext('a')).toEqual([null]);
         expect(sc.getValue('z')).toBeNull();
 
         {
@@ -72,7 +73,7 @@ describe('AppController (e2e)', () => {
                 {
                     "ns": "feeds",
                     "key": "a182ae50-9c3c-4c4e-84cd-f7da66f19357",
-                    "ts": "1420101402.476000",
+                    "ts": "1111111111",
                     "payload": {
                         "id": 76576,
                         "name": "john1",
@@ -94,7 +95,7 @@ describe('AppController (e2e)', () => {
                 {
                     "ns": "feeds",
                     "key": "a182ae50-9c3c-4c4e-84cd-f7da66f19357",
-                    "ts": "1420101402.476000",
+                    "ts": "1111111111",
                     "payload": {
                         "name": "john2",
                     }
@@ -127,7 +128,7 @@ describe('AppController (e2e)', () => {
                 {
                     "ns": "feeds",
                     "key": "key1",
-                    "ts": "1420101402.476000",
+                    "ts": "1111111111",
                     "payload": {
                         "id": 100,
                         "name": "john1"
@@ -158,7 +159,7 @@ describe('AppController (e2e)', () => {
                 {
                     "ns": "feeds",
                     "key": "key1",
-                    "ts": "1420101402.476000",
+                    "ts": "1111111111",
                     "payload": {
                         "id": 100,
                         "name": "john1"
@@ -178,7 +179,7 @@ describe('AppController (e2e)', () => {
                 {
                     "key": "key1",
                     "ns": "feeds",
-                    "ts": "1420101402.476000",
+                    "ts": "1111111111",
                     payload: {
                         "id": 100,
                         "name": "john1"
@@ -204,7 +205,6 @@ describe('AppController (e2e)', () => {
             expect(r.items.length).toEqual(0);
         }
     });
-/*
     it('testaggr-diffreply', () => {
         let ar = new AggregatedReplyHelper();
         // for quorum = 3
@@ -214,7 +214,7 @@ describe('AppController (e2e)', () => {
                 {
                     "ns": "feeds",
                     "key": "key1",
-                    "ts": "1420101402.476000",
+                    "ts": "1111111111",
                     "payload": {
                         "id": 100,
                         "name": "john1"
@@ -245,7 +245,7 @@ describe('AppController (e2e)', () => {
                 {
                     "ns": "feeds",
                     "key": "key1",
-                    "ts": "1420101402.476000",
+                    "ts": "1111111111",
                     "payload": {
                         "id": 100,
                         "name": "john1"
@@ -276,7 +276,7 @@ describe('AppController (e2e)', () => {
                 {
                     "ns": "feeds",
                     "key": "key1",
-                    "ts": "1420101402.476000",
+                    "ts": "1111111111",
                     "payload": {
                         "id": 100,
                         "name": "john1"
@@ -291,25 +291,16 @@ describe('AppController (e2e)', () => {
         expect(r.result.keysWithoutQuorumCount).toEqual(2);
         expect(r.result.keysWithoutQuorum.length).toEqual(2);
         expect(r.result.keysWithoutQuorum).toEqual(['key2', 'key3']);
-        expect(r.result.itemCount).toEqual(2);
+        expect(r.result.itemCount).toEqual(1);
         expect(r.items).toEqual([
             {
                 "key" : "key1",
                 "ns" : "feeds",
-                "ts" : "1420101402.476000",
+                "ts" : "1111111111",
                 payload : {
                     "id": 100,
                     "name": "john1"
                 }
-            },
-            {
-                "key" : "key2",
-                "ns" : "feeds",
-                "ts" : "1420157966.693000",
-                payload: {
-                    "id": 200,
-                    "name": "john2"
-                }
             }]);
-    });*/
+    });
 });
