@@ -23,7 +23,9 @@ export class StringCounter {
             this.map.set(key, new ValueHolder(1, context));
         } else {
             holder.value++; // using wrapper to avoid get/put
-            holder.context = holder.context || context;
+            if(holder.context == null && context != null) {
+                holder.context = context; // save only the first non-null value
+            }
         }
     }
 
@@ -71,7 +73,7 @@ export class StringCounter {
 
 export class ValueHolder {
     value: number;
-    context: any;
+    context: any = null;
 
     constructor(value: number, context: any) {
         this.value = value;

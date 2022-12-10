@@ -4,7 +4,7 @@ import * as request from 'supertest';
 import {AppModule} from './../src/app.module';
 import StrUtil from "../src/helpers/strUtil";
 import exp from "constants";
-import {AggregatedReplyHelper} from "../src/AggregatedReplyHelper";
+import {AggregatedReplyHelper, QuorumResult} from "../src/AggregatedReplyHelper";
 import CollectionUtil from "../src/helpers/collectionUtil";
 import {StringCounter} from "../src/helpers/stringCounter";
 
@@ -13,12 +13,12 @@ describe('AppController (e2e)', () => {
 
     beforeEach(async () => {
         global.console = require('console');
-    //   const moduleFixture: TestingModule = await Test.createTestingModule({
-    //     imports: [AppModule],
-    //   }).compile();
-    //
-    //   app = moduleFixture.createNestApplication();
-    //   await app.init();
+        //   const moduleFixture: TestingModule = await Test.createTestingModule({
+        //     imports: [AppModule],
+        //   }).compile();
+        //
+        //   app = moduleFixture.createNestApplication();
+        //   await app.init();
     });
 
     /*  it('/ (GET)', () => {
@@ -65,7 +65,7 @@ describe('AppController (e2e)', () => {
         console.dir(sc);
     });
 
-    it('testAggregatedReplyHelper1', () => {
+    it('testaggr-internal', () => {
         let ar = new AggregatedReplyHelper();
         ar.appendItems('1', 200, {
             "items": [
@@ -120,7 +120,7 @@ describe('AppController (e2e)', () => {
         expect(ar.mapKeyToNodeItems.get('67a876a6-d93f-47e5-8b2f-b087fd0fc2dc').size).toEqual(2);
     });
 
-    it('testAggregatedReplyHelper2', () => {
+    it('testaggr-samereply', () => {
         let ar = new AggregatedReplyHelper();
         ar.appendItems('node1', 200, {
             "items": [
@@ -167,8 +167,149 @@ describe('AppController (e2e)', () => {
             ]
         });
         console.dir(ar, {depth: null});
-        let aggregatedReply = ar.aggregateItems(1);
-        console.log(aggregatedReply);
-        // console.log(StrUtil.toStringFully(ar));
+        {
+            let r = ar.aggregateItems(2);
+            console.log(r);
+            expect(r.result.quorumResult).toEqual(QuorumResult.QUORUM_OK);
+            expect(r.result.keysWithoutQuorumCount).toEqual(0);
+            expect(r.result.keysWithoutQuorum.length).toEqual(0);
+            expect(r.result.itemCount).toEqual(2);
+            expect(r.items).toEqual([
+                {
+                    "key": "key1",
+                    "ns": "feeds",
+                    "ts": "1420101402.476000",
+                    payload: {
+                        "id": 100,
+                        "name": "john1"
+                    }
+                },
+                {
+                    "key": "key2",
+                    "ns": "feeds",
+                    "ts": "1420157966.693000",
+                    payload: {
+                        "id": 200,
+                        "name": "john2"
+                    }
+                }]);
+        }
+        {
+            let r = ar.aggregateItems(3); // no quorum
+            console.dir(r);
+            expect(r.result.quorumResult).toEqual(QuorumResult.QUORUM_FAILED_NODE_REPLIES);
+            expect(r.result.keysWithoutQuorumCount).toEqual(2);
+            expect(r.result.keysWithoutQuorum.length).toEqual(2);
+            expect(r.result.itemCount).toEqual(0);
+            expect(r.items.length).toEqual(0);
+        }
     });
+/*
+    it('testaggr-diffreply', () => {
+        let ar = new AggregatedReplyHelper();
+        // for quorum = 3
+        // key1 = quorum-ok, key2 = quorum-by-time-fail, key3 = quorum by not enough replies
+        ar.appendItems('node1', 200, {
+            "items": [
+                {
+                    "ns": "feeds",
+                    "key": "key1",
+                    "ts": "1420101402.476000",
+                    "payload": {
+                        "id": 100,
+                        "name": "john1"
+                    }
+                },
+                {
+                    "ns": "feeds",
+                    "key": "key2",
+                    "ts": "1420157966.693000",
+                    "payload": {
+                        "id": 200,
+                        "name": "john2",
+                    }
+                }
+            ]
+        });
+        ar.appendItems('node2', 200, {
+            "items": [
+                {
+                    "ns": "feeds",
+                    "key": "key2",
+                    "ts": "1420157966.693000",
+                    "payload": {
+                        "id": 200,
+                        "name": "john2",
+                    }
+                },
+                {
+                    "ns": "feeds",
+                    "key": "key1",
+                    "ts": "1420101402.476000",
+                    "payload": {
+                        "id": 100,
+                        "name": "john1"
+                    }
+                },
+            ]
+        });
+        ar.appendItems('node3', 200, {
+            "items": [
+                {
+                    "ns": "feeds",
+                    "key": "key3",
+                    "ts": "1420157966.693000",
+                    "payload": {
+                        "id": 200,
+                        "name": "john3",
+                    }
+                },
+                {
+                    "ns": "feeds",
+                    "key": "key2",
+                    "ts": "1420159999.999999",
+                    "payload": {
+                        "id": 200,
+                        "name": "john2",
+                    }
+                },
+                {
+                    "ns": "feeds",
+                    "key": "key1",
+                    "ts": "1420101402.476000",
+                    "payload": {
+                        "id": 100,
+                        "name": "john1"
+                    }
+                },
+            ]
+        });
+        console.dir(ar, {depth: null});
+        let r = ar.aggregateItems(3);
+        console.log(r);
+        expect(r.result.quorumResult).toEqual(QuorumResult.QUORUM_OK_PARTIAL);
+        expect(r.result.keysWithoutQuorumCount).toEqual(2);
+        expect(r.result.keysWithoutQuorum.length).toEqual(2);
+        expect(r.result.keysWithoutQuorum).toEqual(['key2', 'key3']);
+        expect(r.result.itemCount).toEqual(2);
+        expect(r.items).toEqual([
+            {
+                "key" : "key1",
+                "ns" : "feeds",
+                "ts" : "1420101402.476000",
+                payload : {
+                    "id": 100,
+                    "name": "john1"
+                }
+            },
+            {
+                "key" : "key2",
+                "ns" : "feeds",
+                "ts" : "1420157966.693000",
+                payload: {
+                    "id": 200,
+                    "name": "john2"
+                }
+            }]);
+    });*/
 });

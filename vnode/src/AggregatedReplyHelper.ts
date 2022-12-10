@@ -1,5 +1,6 @@
 import {Logger} from "@nestjs/common";
 import {StringCounter} from "./helpers/stringCounter";
+
 const crypto = require("crypto");
 const log = new Logger('AggregatedReplyHelper');
 
@@ -25,7 +26,7 @@ export class AggregatedReplyHelper {
                     this.mapKeyToNodeItems.set(key, map2);
                 }
                 let dstItem = new StorageRecord(srcItem.ns,
-                    key, Number.parseFloat(srcItem.ts), srcItem.payload);
+                    key, srcItem.ts, srcItem.payload);
                 map2.set(nodeId, dstItem);
             }
         }
@@ -43,7 +44,7 @@ export class AggregatedReplyHelper {
         }
     }
 
-    public aggregateItems(minQuorumThreshold:number): AggregatedReply {
+    public aggregateItems(minQuorumThreshold: number): AggregatedReply {
         console.log(`aggregateItems()`)
         let reply = new AggregatedReply();
         // if we have this amount of SAME replies for a key => we have this key
@@ -57,42 +58,42 @@ export class AggregatedReplyHelper {
             let sc = new StringCounter();
             let goodReplies = 0;
             for (let [nodeId, code] of this.mapNodeToStatus) {
-                if(code == 200) {
+                if (code == 200) {
                     let record = mapNodeIdToStorageRecord.get(nodeId);
                     let recordKey = record?.key;
                     let recordHash = record == null ? 'null' : record.computeMd5Hash();
-                    console.log(`recordKey=${recordKey}, recordHash=${recordHash}`);
+                    console.log(`nodeId=${nodeId} recordKey=${recordKey}, recordHash=${recordHash}, record=${JSON.stringify(record)}`);
                     sc.increment(recordHash, record);
                 }
-                if(code>=200 && code<300) {
+                if (code >= 200 && code < 300) {
                     goodReplies++;
                 }
             }
-            sc.iterateAndSort(false, (index, key, count, context) => {
-                if(index == 0) {
+            sc.iterateAndSort(false, (index, key, count, context: StorageRecord) => {
+                if (index == 0) {
                     // top result
-                    if(count >= minQuorumThreshold) {
+                    if (count >= minQuorumThreshold) {
                         // we have enough items from nodes, that we can conclude this item as useful
                         reply.items.push(context);
                     } else {
                         // top item has not enough copies on the network
-                        reply.result.keysWithoutQuorum.push();
+                        reply.result.keysWithoutQuorum.push(key);
                     }
                 } else {
-                    reply.result.keysWithoutQuorum.push();
+                    reply.result.keysWithoutQuorum.push(key);
                 }
             });
             console.log(`non200Replies=${goodReplies}`);
             let r = reply.result;
-            if(goodReplies < minQuorumThreshold) {
+            if (goodReplies < minQuorumThreshold) {
                 // not enough nodes replies => we can't do anything
-                r.quorumResult = QuorumResult.QUORUM_FAILED_MIN_REPLIES
+                r.quorumResult = QuorumResult.QUORUM_FAILED_NODE_REPLIES
             } else {
                 // we have node replies
-                if(reply.items.length == 0) {
+                if (reply.items.length == 0) {
                     // we have no good keys
                     r.quorumResult = r.keysWithoutQuorum.length > 0 ? QuorumResult.QUORUM_FAILED_BY_MIN_ITEMS : QuorumResult.QUORUM_OK;
-                } else if(reply.items.length > 0) {
+                } else if (reply.items.length > 0) {
                     // we have good keys
                     r.quorumResult = r.keysWithoutQuorum.length > 0 ? QuorumResult.QUORUM_OK_PARTIAL : QuorumResult.QUORUM_OK;
                 }
@@ -124,15 +125,15 @@ class AggregatedRequest {
 export enum QuorumResult {
     QUORUM_OK = 'QUORUM_OK',
     QUORUM_OK_PARTIAL = 'QUORUM_OK_PARTIAL',
-    QUORUM_FAILED_MIN_REPLIES = 'QUORUM_FAILED_MIN_REPLIES',
+    QUORUM_FAILED_NODE_REPLIES = 'QUORUM_FAILED_NODE_REPLIES',
     QUORUM_FAILED_BY_MIN_ITEMS = 'QUORUM_FAILED_BY_MIN_ITEMS'
 }
 
 export class Result {
-    quorumResult:QuorumResult;
-    itemCount:number = 0;
-    keysWithoutQuorumCount:number = 0;
-    keysWithoutQuorum:string[] = [];
+    quorumResult: QuorumResult;
+    itemCount: number = 0;
+    keysWithoutQuorumCount: number = 0;
+    keysWithoutQuorum: string[] = [];
 }
 
 export class AggregatedReply {
@@ -144,10 +145,10 @@ export class AggregatedReply {
 export class StorageRecord {
     ns: string;
     key: string;
-    ts: number;
+    ts: string;
     payload: any;
 
-    constructor(ns: string, key: string, ts: number, payload: any) {
+    constructor(ns: string, key: string, ts: string, payload: any) {
         this.ns = ns;
         this.key = key;
         this.ts = ts;
