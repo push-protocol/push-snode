@@ -9,20 +9,25 @@ var _ = require('lodash');
 
 const expect = chai.expect
 import assert from 'assert-ts';
-
+const axios = require('axios');
 import {DateTime} from "ts-luxon";
 import DateUtil from "../src/helpers/dateUtil";
 import DbHelper from "../src/helpers/dbHelper";
+import EnvLoader from "../src/config/envLoader";
 
-const axios = require('axios');
+
+EnvLoader.loadEnvOrFail();
+
 
 class SNode1Constants {
     // DATA GENERATION
-    static dbUri = 'postgres://postgres:postgres@localhost:5432/postgres';
+    static dbUri = `postgres://${EnvLoader.getPropertyOrFail('DB_USER')}:${EnvLoader.getPropertyOrFail('DB_PASS')}@${EnvLoader.getPropertyOrFail('DB_HOST')}:5432/${EnvLoader.getPropertyOrFail('DB_NAME')}`;
     // API TESTS
     static apiUrl = 'http://localhost:3000';
     static namespace = 'feeds';
 }
+
+console.log(SNode1Constants.dbUri);
 
 function patchPromiseWithState() {
     Object.defineProperty(Promise.prototype, "state", {
@@ -136,7 +141,7 @@ async function performOneTest(baseUri: string, ns: string, testCounter: number):
         console.log('GET ERROR!!! ', getResult.status);
         return;
     }
-    let dataFromDb = getResult.data;
+    let dataFromDb = getResult.data.items[0].payload;
     let isEqual = _.isEqual(dataToDb, dataFromDb);
     if (!isEqual) {
         console.log(`isEqual = `, isEqual);
@@ -151,7 +156,6 @@ describe('snode-full', function () {
 
     const pg = pgPromise({});
     const snodeDb = pg(SNode1Constants.dbUri);
-
     it('snode-init', async function () {
         this.timeout(30000);
         await cleanAllTablesAndInitNetworkStorageLayout(snodeDb);
@@ -184,11 +188,11 @@ describe('snode-full', function () {
     });
 
     it('snode-test-list', async function () {
-        const seedDate = DateUtil.buildDateTime(2015, 1, 22);
-        const nsIndex = '1000';
-
-        // Generate data within the same month, only days are random
         const numOfRowsToGenerate = 37;
+        const seedDate = DateUtil.buildDateTime(2015, 1, 22);
+        // this is almost unique inbox, so it's empty
+        const nsIndex = '' + RandomUtil.getRandomInt(1000, 10000000000000000);
+        // Generate data within the same month, only days are random
         for (let i = 0; i < numOfRowsToGenerate; i++) {
             const key = crypto.randomUUID();
             const dataToDb = {
@@ -217,7 +221,8 @@ describe('snode-full', function () {
             totalRowsFetched += itemsLength;
             let lastTs = resp?.data?.lastTs;
             console.log('query', query, `got `, itemsLength, 'items, lastTs = ', lastTs);
-            firstTs = lastTs
+            firstTs = lastTs;
+            // await PromiseUtil.sleep(10000);
         } while ((resp?.data?.items?.length || 0) > 0)
 
         console.log('total rows fetched ', totalRowsFetched);

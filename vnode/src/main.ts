@@ -9,7 +9,7 @@ async function bootstrap() {
 
   // configure env
   ConfigModule.forRoot({
-    envFilePath: `vnode.env`,
+    envFilePath: `.env`,
     isGlobal: true,
   });
 

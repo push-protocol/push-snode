@@ -1,6 +1,6 @@
 import { Router } from 'express';
 
-import pushMessaging from './routes/pushMessaging';
+import pushMessaging from './routes/AppController';
 
 // guaranteed to get dependencies
 export default () => {
