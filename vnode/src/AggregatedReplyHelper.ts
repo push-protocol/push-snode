@@ -23,17 +23,20 @@ export class AggregatedReplyHelper {
         this.mapNodeToStatus.set(nodeId, nodeHttpStatus);
         if (httpReplyData?.items?.length > 0) {
             for (let srcItem of httpReplyData.items) {
-                let skey = srcItem.skey;
-                let map2 = this.mapKeyToNodeItems.get(skey);
-                if (map2 == null) {
-                    map2 = new Map<string, StorageRecord>();
-                    this.mapKeyToNodeItems.set(skey, map2);
-                }
-                let dstItem = new StorageRecord(srcItem.ns,
-                    skey, srcItem.ts, srcItem.payload);
-                map2.set(nodeId, dstItem);
+                this.doAppendItem(nodeId, srcItem);
             }
         }
+    }
+
+    private doAppendItem(nodeId: string, storageRecord:any) {
+        let skey = storageRecord.skey;
+        let map2 = this.mapKeyToNodeItems.get(skey);
+        if (map2 == null) {
+            map2 = new Map<string, StorageRecord>();
+            this.mapKeyToNodeItems.set(skey, map2);
+        }
+        let dstItem = new StorageRecord(storageRecord.ns, skey, storageRecord.ts, storageRecord.payload);
+        map2.set(nodeId, dstItem);
     }
 
     private isEnoughReplies(requiredReplies: number): boolean {
