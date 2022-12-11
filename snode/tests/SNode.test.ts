@@ -141,7 +141,7 @@ async function performOneTest(baseUri: string, ns: string, testCounter: number):
         console.log('GET ERROR!!! ', getResult.status);
         return;
     }
-    let dataFromDb = getResult.data;
+    let dataFromDb = getResult.data.items[0].payload;
     let isEqual = _.isEqual(dataToDb, dataFromDb);
     if (!isEqual) {
         console.log(`isEqual = `, isEqual);
