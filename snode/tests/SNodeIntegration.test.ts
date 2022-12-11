@@ -156,7 +156,6 @@ describe('snode-full', function () {
 
     const pg = pgPromise({});
     const snodeDb = pg(SNode1Constants.dbUri);
-
     it('snode-init', async function () {
         this.timeout(30000);
         await cleanAllTablesAndInitNetworkStorageLayout(snodeDb);
