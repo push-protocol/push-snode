@@ -1,10 +1,12 @@
+// noinspection DuplicatedCode
+
 import {Test, TestingModule} from '@nestjs/testing';
 import {INestApplication} from '@nestjs/common';
 import * as request from 'supertest';
 import {AppModule} from './../src/app.module';
 import StrUtil from "../src/helpers/strUtil";
 import exp from "constants";
-import {AggregatedReplyHelper, QuorumResult} from "../src/AggregatedReplyHelper";
+import {AggregatedReplyHelper, NodeHttpStatus, QuorumResult} from "../src/AggregatedReplyHelper";
 import CollectionUtil from "../src/helpers/collectionUtil";
 import {StringCounter} from "../src/helpers/stringCounter";
 
@@ -28,7 +30,7 @@ describe('AppController (e2e)', () => {
           .expect('Hello World!');
       });*/
 
-    it('testCollections', () => {
+    it('test-counter', () => {
         let sc = new StringCounter();
         sc.increment('c', {name: 'john1'});
         sc.increment('c');
@@ -72,7 +74,7 @@ describe('AppController (e2e)', () => {
             "items": [
                 {
                     "ns": "feeds",
-                    "key": "a182ae50-9c3c-4c4e-84cd-f7da66f19357",
+                    "skey": "a182ae50-9c3c-4c4e-84cd-f7da66f19357",
                     "ts": "1111111111",
                     "payload": {
                         "id": 76576,
@@ -82,7 +84,7 @@ describe('AppController (e2e)', () => {
                 },
                 {
                     "ns": "feeds",
-                    "key": "67a876a6-d93f-47e5-8b2f-b087fd0fc2dc",
+                    "skey": "67a876a6-d93f-47e5-8b2f-b087fd0fc2dc",
                     "ts": "1420157966.693000",
                     "payload": {
                         "name": "john1",
@@ -94,7 +96,7 @@ describe('AppController (e2e)', () => {
             "items": [
                 {
                     "ns": "feeds",
-                    "key": "a182ae50-9c3c-4c4e-84cd-f7da66f19357",
+                    "skey": "a182ae50-9c3c-4c4e-84cd-f7da66f19357",
                     "ts": "1111111111",
                     "payload": {
                         "name": "john2",
@@ -102,7 +104,7 @@ describe('AppController (e2e)', () => {
                 },
                 {
                     "ns": "feeds",
-                    "key": "67a876a6-d93f-47e5-8b2f-b087fd0fc2dc",
+                    "skey": "67a876a6-d93f-47e5-8b2f-b087fd0fc2dc",
                     "ts": "1420157966.693000",
                     "payload": {
                         "name": "john2",
@@ -127,7 +129,7 @@ describe('AppController (e2e)', () => {
             "items": [
                 {
                     "ns": "feeds",
-                    "key": "key1",
+                    "skey": "key1",
                     "ts": "1111111111",
                     "payload": {
                         "id": 100,
@@ -136,7 +138,7 @@ describe('AppController (e2e)', () => {
                 },
                 {
                     "ns": "feeds",
-                    "key": "key2",
+                    "skey": "key2",
                     "ts": "1420157966.693000",
                     "payload": {
                         "id": 200,
@@ -149,7 +151,7 @@ describe('AppController (e2e)', () => {
             "items": [
                 {
                     "ns": "feeds",
-                    "key": "key2",
+                    "skey": "key2",
                     "ts": "1420157966.693000",
                     "payload": {
                         "id": 200,
@@ -158,7 +160,7 @@ describe('AppController (e2e)', () => {
                 },
                 {
                     "ns": "feeds",
-                    "key": "key1",
+                    "skey": "key1",
                     "ts": "1111111111",
                     "payload": {
                         "id": 100,
@@ -177,7 +179,7 @@ describe('AppController (e2e)', () => {
             expect(r.result.itemCount).toEqual(2);
             expect(r.items).toEqual([
                 {
-                    "key": "key1",
+                    "skey": "key1",
                     "ns": "feeds",
                     "ts": "1111111111",
                     payload: {
@@ -186,7 +188,7 @@ describe('AppController (e2e)', () => {
                     }
                 },
                 {
-                    "key": "key2",
+                    "skey": "key2",
                     "ns": "feeds",
                     "ts": "1420157966.693000",
                     payload: {
@@ -213,7 +215,7 @@ describe('AppController (e2e)', () => {
             "items": [
                 {
                     "ns": "feeds",
-                    "key": "key1",
+                    "skey": "key1",
                     "ts": "1111111111",
                     "payload": {
                         "id": 100,
@@ -222,7 +224,7 @@ describe('AppController (e2e)', () => {
                 },
                 {
                     "ns": "feeds",
-                    "key": "key2",
+                    "skey": "key2",
                     "ts": "1420157966.693000",
                     "payload": {
                         "id": 200,
@@ -235,7 +237,7 @@ describe('AppController (e2e)', () => {
             "items": [
                 {
                     "ns": "feeds",
-                    "key": "key2",
+                    "skey": "key2",
                     "ts": "1420157966.693000",
                     "payload": {
                         "id": 200,
@@ -244,7 +246,7 @@ describe('AppController (e2e)', () => {
                 },
                 {
                     "ns": "feeds",
-                    "key": "key1",
+                    "skey": "key1",
                     "ts": "1111111111",
                     "payload": {
                         "id": 100,
@@ -257,7 +259,7 @@ describe('AppController (e2e)', () => {
             "items": [
                 {
                     "ns": "feeds",
-                    "key": "key3",
+                    "skey": "key3",
                     "ts": "1420157966.693000",
                     "payload": {
                         "id": 200,
@@ -266,7 +268,7 @@ describe('AppController (e2e)', () => {
                 },
                 {
                     "ns": "feeds",
-                    "key": "key2",
+                    "skey": "key2",
                     "ts": "1420159999.999999",
                     "payload": {
                         "id": 200,
@@ -275,7 +277,7 @@ describe('AppController (e2e)', () => {
                 },
                 {
                     "ns": "feeds",
-                    "key": "key1",
+                    "skey": "key1",
                     "ts": "1111111111",
                     "payload": {
                         "id": 100,
@@ -294,7 +296,7 @@ describe('AppController (e2e)', () => {
         expect(r.result.itemCount).toEqual(1);
         expect(r.items).toEqual([
             {
-                "key" : "key1",
+                "skey" : "key1",
                 "ns" : "feeds",
                 "ts" : "1111111111",
                 payload : {
@@ -302,5 +304,65 @@ describe('AppController (e2e)', () => {
                     "name": "john1"
                 }
             }]);
+    });
+
+    it('testaggr-empty-replies', () => {
+        let ar = new AggregatedReplyHelper();
+        // for quorum = 3
+        // key1 = quorum-ok, key2 = quorum-by-time-fail, key3 = quorum by not enough replies
+        ar.appendItems('node1', 200, {
+            "items": []
+        });
+        ar.appendItems('node2', 200, {
+            "items": []
+        });
+        ar.appendItems('node3', 200, {
+            "items": []
+        });
+        console.dir(ar, {depth: null});
+        let r = ar.aggregateItems(3);
+        console.log(r);
+        expect(r.result.quorumResult).toEqual(QuorumResult.QUORUM_OK);
+        expect(r.result.keysWithoutQuorumCount).toEqual(0);
+        expect(r.result.keysWithoutQuorum.length).toEqual(0);
+        expect(r.result.keysWithoutQuorum).toEqual([]);
+        expect(r.result.itemCount).toEqual(0);
+        expect(r.items).toEqual([]);
+    });
+
+    it('testaggr-node-noreply', () => {
+        let ar = new AggregatedReplyHelper();
+        // for quorum = 3
+        // key1 = quorum-ok, key2 = quorum-by-time-fail, key3 = quorum by not enough replies
+        ar.appendItems('node1', NodeHttpStatus.REPLY_TIMEOUT, null);
+        ar.appendItems('node2', NodeHttpStatus.REPLY_TIMEOUT, null);
+        ar.appendItems('node3', NodeHttpStatus.REPLY_TIMEOUT, null);
+        console.dir(ar, {depth: null});
+        let r = ar.aggregateItems(3);
+        console.log(r);
+        expect(r.result.quorumResult).toEqual(QuorumResult.QUORUM_FAILED_NODE_REPLIES);
+        expect(r.result.keysWithoutQuorumCount).toEqual(0);
+        expect(r.result.keysWithoutQuorum.length).toEqual(0);
+        expect(r.result.keysWithoutQuorum).toEqual([]);
+        expect(r.result.itemCount).toEqual(0);
+        expect(r.items).toEqual([]);
+    });
+
+    it('testaggr-node-errreply', () => {
+        let ar = new AggregatedReplyHelper();
+        // for quorum = 3
+        // key1 = quorum-ok, key2 = quorum-by-time-fail, key3 = quorum by not enough replies
+        ar.appendItems('node1', 500, null);
+        ar.appendItems('node2', 400, null);
+        ar.appendItems('node3', 500, null);
+        console.dir(ar, {depth: null});
+        let r = ar.aggregateItems(3);
+        console.log(r);
+        expect(r.result.quorumResult).toEqual(QuorumResult.QUORUM_FAILED_NODE_REPLIES);
+        expect(r.result.keysWithoutQuorumCount).toEqual(0);
+        expect(r.result.keysWithoutQuorum.length).toEqual(0);
+        expect(r.result.keysWithoutQuorum).toEqual([]);
+        expect(r.result.itemCount).toEqual(0);
+        expect(r.items).toEqual([]);
     });
 });

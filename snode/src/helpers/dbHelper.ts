@@ -9,7 +9,7 @@ import {DateTime} from "ts-luxon";
 const pg = pgPromise({});
 
 // todo switch to a config file
-export const db = pg("postgres://postgres:postgres@localhost:5432/postgres");
+export const db = pg("postgres://postgres:postgres@localhost:5432/snode1");
 const crypto = require('crypto');
 
 export default class DbHelper {

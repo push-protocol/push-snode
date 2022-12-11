@@ -5,7 +5,8 @@ import DbService from './loaders/dbService';
 import StrUtil from "./helpers/strUtil";
 import RandomUtil from "./helpers/randomUtil";
 import axios, {AxiosResponse} from "axios";
-import PromiseUtil, {WrappedResult} from "./helpers/promiseUtil";
+import PromiseUtil, {PromiseResult} from "./helpers/promiseUtil";
+import {AggregatedReplyHelper, NodeHttpStatus} from "./AggregatedReplyHelper";
 
 interface nodeurl {
     nsName: string,
@@ -24,8 +25,12 @@ const log = new Logger('UsersController');
 export class AppController {
     private dbService: DbService;
 
+    minQuorumThreshold:number;
+
     constructor(dbService: DbService) {
         this.dbService = dbService;
+        this.minQuorumThreshold = Number.parseInt(process.env.VNODE_QUORUM_MIN);
+        console.log(`initialized minQuorumThreshold=${this.minQuorumThreshold}`);
     }
 
     @Get("/ns/:nsName/nsidx/:nsIndex/date/:dt/key/:key")
@@ -41,12 +46,12 @@ export class AppController {
         randomnodes = RandomUtil.getRandomSubArray(node_ids, (number_of_nodes / 2) + 1);
         console.log("Random Nodes : ", randomnodes);
 
-        for(var i=0;i<randomnodes.length-1;i++){
+        for (var i = 0; i < randomnodes.length - 1; i++) {
             const currnodeurl = await this.dbService.getNodeurlByNodeId(randomnodes[i]);
-            const nextnodeurl = await this.dbService.getNodeurlByNodeId(randomnodes[i+1]);
+            const nextnodeurl = await this.dbService.getNodeurlByNodeId(randomnodes[i + 1]);
             var nodeId = randomnodes[i];
             log.debug("Current Node :", nodeId);
-            console.log("Current Node Url : ",currnodeurl);
+            console.log("Current Node Url : ", currnodeurl);
 
             const currurl = currnodeurl + "/api/v1/kv/ns/" + params.nsName + "/nsidx/" + params.nsIndex + "/date/" + params.dt + "/key/" + params.key;
             const nexturl = nextnodeurl + "/api/v1/kv/ns/" + params.nsName + "/nsidx/" + params.nsIndex + "/date/" + params.dt + "/key/" + params.key;
@@ -54,18 +59,16 @@ export class AppController {
             const curr_response = await axios.get(currurl, {timeout: 3000});
             const next_response = await axios.get(nexturl, {timeout: 3000});
 
-            log.debug("Currently comparing nodes : ", randomnodes[i], " and ", randomnodes[i+1]);
+            log.debug("Currently comparing nodes : ", randomnodes[i], " and ", randomnodes[i + 1]);
 
-            if(curr_response && next_response){
-                if(JSON.stringify(curr_response.data) === JSON.stringify(next_response.data)){
+            if (curr_response && next_response) {
+                if (JSON.stringify(curr_response.data) === JSON.stringify(next_response.data)) {
                     console.log("Consistent Read");
-                }
-                else{
+                } else {
                     console.log("Inconsistent Read");
                     Promise.reject("Inconsistent Read");
                 }
-            }
-            else{
+            } else {
                 console.log("Error");
                 Promise.reject("Error");
             }
@@ -119,11 +122,11 @@ export class AppController {
         let count201 = 0;
         // TODO check why it won't compile if replaced with for(p in allSettled)
         allSettled.forEach(p => {
-            log.debug(`promise: ${p.status} httpCode: `, p.value?.status);
-            if (p.status == 'fulfilled') {
+            log.debug(`promise: ${p.status} httpCode: `, p.val?.status);
+            if (p.isFullfilled()) {
                 countFullfilled++;
             }
-            if (p.value?.status == 201) {
+            if (p.val?.status == 201) {
                 count201++;
             }
         });
@@ -160,27 +163,25 @@ export class AppController {
             log.debug(`baseUrl=${nodeBaseUrl}`);
             promiseList.push(this.doList(nodeBaseUrl, nsName, nsIndex, month, firstTs));
         }
-        let wrList = await PromiseUtil.allSettled(promiseList);
-        this.quorumForList(wrList);
-    }
+        let prList = await PromiseUtil.allSettled(promiseList);
 
-    private quorumForList(wrList: WrappedResult[]) {
-        let countFullfilled = 0;
-        let count200 = 0;
-        // TODO check why it won't compile if replaced with for(p in allSettled)
-        for (const p of wrList) {
-            let axiosResponse = p.value;
-            log.debug(`promise: ${p.status} httpCode: ${axiosResponse?.status}`);
-            log.debug(`value: ${JSON.stringify(axiosResponse.data)}`)
-            if (p.status == 'fulfilled') {
-                countFullfilled++;
-            }
-            if (axiosResponse?.status == 200) {
-                count200++;
-            }
+        // handle reply
+        let arh = new AggregatedReplyHelper();
+        for (let i = 0; i < nodeIdList.length; i++) {
+            let nodeId = nodeIdList[i];
+            let pr = prList[i];
+            let nodeHttpStatus = pr.isRejected() ? NodeHttpStatus.REPLY_TIMEOUT : pr.val?.status;
+            let replyBody = pr.val?.data;
+            log.debug(`promise: ${pr.status} nodeHttpStatus: ${nodeHttpStatus}`);
+            log.debug(`body: ${JSON.stringify(replyBody)}`)
+            arh.appendItems(nodeId, nodeHttpStatus, replyBody);
         }
+        console.log('internal state');
+        console.dir(arh);
+        let ar = arh.aggregateItems(this.minQuorumThreshold);
+        console.log('result');
+        console.dir(ar);
+        return ar;
     }
-
-
 }
 

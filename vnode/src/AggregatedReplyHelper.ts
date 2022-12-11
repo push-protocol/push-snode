@@ -4,6 +4,10 @@ import {StringCounter} from "./helpers/stringCounter";
 const crypto = require("crypto");
 const log = new Logger('AggregatedReplyHelper');
 
+export enum NodeHttpStatus {
+    REPLY_TIMEOUT = 0
+}
+
 export class AggregatedReplyHelper {
     // initial request
     aggrReq: AggregatedRequest;
@@ -19,14 +23,14 @@ export class AggregatedReplyHelper {
         this.mapNodeToStatus.set(nodeId, nodeHttpStatus);
         if (httpReplyData?.items?.length > 0) {
             for (let srcItem of httpReplyData.items) {
-                let key = srcItem.key;
-                let map2 = this.mapKeyToNodeItems.get(key);
+                let skey = srcItem.skey;
+                let map2 = this.mapKeyToNodeItems.get(skey);
                 if (map2 == null) {
                     map2 = new Map<string, StorageRecord>();
-                    this.mapKeyToNodeItems.set(key, map2);
+                    this.mapKeyToNodeItems.set(skey, map2);
                 }
                 let dstItem = new StorageRecord(srcItem.ns,
-                    key, srcItem.ts, srcItem.payload);
+                    skey, srcItem.ts, srcItem.payload);
                 map2.set(nodeId, dstItem);
             }
         }
@@ -68,7 +72,7 @@ export class AggregatedReplyHelper {
             for (let [nodeId, code] of this.mapNodeToStatus) {
                 if (code == 200) {
                     let record = mapNodeIdToStorageRecord.get(nodeId);
-                    let recordKey = record?.key;
+                    let recordKey = record?.skey;
                     let recordHash = record == null ? 'null' : record.computeMd5Hash();
                     console.log(`nodeId=${nodeId} recordKey=${recordKey}, recordHash=${recordHash}, record=${JSON.stringify(record)}`);
                     if (recordKey != null) {
@@ -121,7 +125,7 @@ export class AggregatedReplyHelper {
         // alternative: target.push(context.filter(value => value !=null).map(sr => sr.key).find(key => true))
         for (const record of context) {
             if (record != null) {
-                target.add(record.key);
+                target.add(record.skey);
                 return;
             }
         }
@@ -166,13 +170,13 @@ export class AggregatedReply {
 // this is a single record , received from a node/list
 export class StorageRecord {
     ns: string;
-    key: string;
+    skey: string;
     ts: string;
     payload: any;
 
-    constructor(ns: string, key: string, ts: string, payload: any) {
+    constructor(ns: string, skey: string, ts: string, payload: any) {
         this.ns = ns;
-        this.key = key;
+        this.skey = skey;
         this.ts = ts;
         this.payload = payload;
     }
@@ -180,7 +184,7 @@ export class StorageRecord {
     // alphabetical order for hashing (!)
     public computeMd5Hash(): string {
         return crypto.createHash('md5')
-            .update(this.key)
+            .update(this.skey)
             .update(this.ns)
             .update(JSON.stringify(this.payload))
             .update(this.ts + '')

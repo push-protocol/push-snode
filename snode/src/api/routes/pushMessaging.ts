@@ -24,9 +24,6 @@ function splitIntoNameAndIndex(nsNameWithIndex: string): string[] {
 function logRequest(req: Request) {
     log.debug('Calling %o %o with body: %o', req.method, req.url, req.body);
 }
-// curl -X GET --location "http://localhost:3000/api/v1/kv/ns/feeds/nsidx/1000000/date/20220815/key/a1200bbbb"
-// curl -X POST -H "Content-Type: application/json" --location "http://localhost:3000/api/v1/kv/ns/feeds/nsidx/1000000/ts/1661214142.000000/key/b120" -d '{"user":"Someone"}'
-// curl -X POST -H "Content-Type: application/json" --location "http://localhost:3000/api/v1/kv/ns/feeds/nsidx/1000000/month/202208/list?firstTs=1661214142.000000"
 
 export default (app: Router) => {
     app.use(bodyParser.json());
@@ -180,7 +177,7 @@ export default (app: Router) => {
             log.debug('success is ' + success);
             try {
                 // const messaging = Container.get(MessagingService);
-                return res.status(201).json(storageValue);
+                return res.status(200).json(storageValue);
             } catch (e) {
                 // log.error('🔥 error: %o', e);
                 return next(e);
