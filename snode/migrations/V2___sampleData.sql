@@ -1,17 +1,66 @@
 -- Dummy data
 
-insert into storage_ns_inbox_d_202208 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload)
-values ('feeds', '129', '1000000', '2022-08-23 00:22:21.000000', 'feeds-2022-08-23 1111', 'feedv1',
+
+DROP TABLE IF EXISTS storage_ns_feeds_d_202208;
+CREATE TABLE IF NOT EXISTS storage_ns_feeds_d_202208
+(
+    namespace VARCHAR(20) NOT NULL,
+    namespace_shard_id VARCHAR(20) NOT NULL,
+    namespace_id VARCHAR(20) NOT NULL,
+    ts TIMESTAMP NOT NULL default NOW(),
+    skey VARCHAR(64) NOT NULL PRIMARY KEY,
+    dataSchema VARCHAR(20) NOT NULL,
+    payload JSONB
+);
+
+DROP INDEX IF EXISTS storage_table_ns_id_ts_index;
+CREATE INDEX storage_table_ns_id_ts_index ON storage_ns_feeds_d_202208 USING btree (namespace ASC, namespace_shard_id ASC, namespace_id ASC, ts ASC);
+
+comment on column storage_ns_feeds_d_202208.skey is 'unique row id that is globally unique, i.e. ALDKFJ880123';
+comment on column storage_ns_feeds_d_202208.namespace_id is 'namespace index usually related to inbox id or chat id, i.e. 991';
+comment on column storage_ns_feeds_d_202208.ts is 'we store only time series data because we provide sharding by time also, so this is a required field which reporesent the moment when data is appended';
+
+
+-- test get
+-- curl -X GET --location "http://localhost:3000/api/v1/kv/ns/feeds/nsidx/1000000/date/20220815/key/a1200bbbb"
+insert into storage_ns_feeds_d_202208 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload)
+values ('feeds', '129', '1000000', '2022-08-23 00:22:21.000000', 'a1200bbbb', 'feedv1',
         '{"data": {"apns": {"payload": {"aps": {"category": "withappicon", "mutable-content": 1, "content-available": 1}}, "fcm_options": {"image": ""}}, "data": {"app": "", "url": "", "acta": "", "aimg": "", "amsg": "ETH at [d:$403.54]\n\nHourly Movement: [t:-0.35%]\nDaily Movement: [s:4.70%]\nWeekly Movement: [s:3.20%][timestamp: 1604556000]", "asub": "ETH Price Movement", "icon": "", "type": "1", "appbot": "0", "hidden": "0", "secret": ""}, "android": {"notification": {"icon": "@drawable/ic_stat_name", "color": "#e20880", "image": "", "default_vibrate_timings": true}}, "notification": {"body": "\nHourly Movement: -0.35%\nDaily Movement: 4.70%\nWeekly Movement: 3.20%", "title": " - ETH at $403.54"}}, "metadata": {"users": ["0x74415Bc4C4Bf4Baecc2DD372426F0a1D016Fa924", "0xD8634C39BBFd4033c0d3289C4515275102423681"], "channel": "0xD8634C39BBFd4033c0d3289C4515275102423681", "is_spam": 1, "attempts": 0, "use_push": 1, "payloadId": "19", "processed": 0, "blockchain": "ETH_TEST_KOVAN"}}');
-insert into node_storage_layout (namespace, namespace_shard_id, ts_start, ts_end, table_name) values ('feeds', '211', '2022-08-01 00:28:34.000000', '2022-08-31 00:28:40.000000', 'storage_ns_inbox_d_202208');
+
+insert into node_storage_layout (namespace, namespace_shard_id, ts_start, ts_end, table_name) values ('feeds', '129', '2022-08-01 00:00:00.000000', '2022-08-31 00:00:00.000000', 'storage_ns_feeds_d_202208');
 insert into network_storage_layout (id, namespace, namespace_shard_id, node_id) values (1, 'feeds', '129', '1');
-insert into network_storage_layout (id, namespace, namespace_shard_id, node_id) values (2, 'feeds', 'XX', '2');
-insert into network_storage_layout (id, namespace, namespace_shard_id, node_id) values (3, 'feeds', 'XX', '3');
+insert into network_storage_layout (id, namespace, namespace_shard_id, node_id) values (2, 'feeds', '129', '2');
+insert into network_storage_layout (id, namespace, namespace_shard_id, node_id) values (3, 'feeds', '129', '3');
+
+-- test put - get
+-- curl -X POST --location "http://localhost:3000/api/v1/kv/ns/feeds/nsidx/1000000/ts/1661214142.000000/key/b120" -d '{"user":"Someone"}'
+-- curl -X GET --location "http://localhost:3000/api/v1/kv/ns/feeds/nsidx/1000000/date/20220815/key/b120"
+
+-- test list
+-- curl -X POST -H "Content-Type: application/json" --location "http://localhost:3000/api/v1/kv/ns/feeds/nsidx/1000000/month/202208/list?firstTs=1661214142.000000"
 
 -- 2015 sample data for 1 month
 -- feeds.1000 (maps to shard 169) for 2015-01 is stored in the table storage_ns_feeds_d_201501
 INSERT INTO node_storage_layout (namespace, namespace_shard_id, ts_start, ts_end, table_name) VALUES ('feeds', '169', '2015-01-01 00:00:00.000000', '2015-02-01 00:00:00.000000', 'storage_ns_feeds_d_201501');
 -- storage_ns_feeds_d_201501 sample data
+
+
+DROP TABLE IF EXISTS storage_ns_feeds_d_201501;
+CREATE TABLE IF NOT EXISTS storage_ns_feeds_d_201501
+(
+    namespace VARCHAR(20) NOT NULL,
+    namespace_shard_id VARCHAR(20) NOT NULL,
+    namespace_id VARCHAR(20) NOT NULL,
+    ts TIMESTAMP NOT NULL default NOW(),
+    skey VARCHAR(64) NOT NULL PRIMARY KEY,
+    dataSchema VARCHAR(20) NOT NULL,
+    payload JSONB
+);
+
+DROP INDEX IF EXISTS storage_table_ns_id_ts_index;
+CREATE INDEX storage_table_ns_id_ts_index ON storage_ns_feeds_d_201501 USING btree (namespace ASC, namespace_shard_id ASC, namespace_id ASC, ts ASC);
+
+
 INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-11 04:33:24.797000', '621a0ad3-c7c0-4aa8-8cb3-c74ecec7e334', 'v1', '{"id": 54998, "name": "john1", "surname": "H2H3uFM9Qht9hw=="}');
 INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-08 09:50:26.395000', 'ea909286-1875-4317-9224-be53ee9ceb52', 'v1', '{"id": 2561, "name": "john1", "surname": "4B6i2/pcRpeKbQ=="}');
 INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-23 01:10:31.292000', '629253d1-862f-4c7e-98ee-e16bdc2c4a5c', 'v1', '{"id": 41037, "name": "john1", "surname": "c9DCdVYL1dTlzQ=="}');

@@ -1,7 +1,8 @@
-
+INSERT INTO node_info (node_id, node_url) VALUES ('0', 'http://localhost:3000');
 INSERT INTO node_info (node_id, node_url) VALUES ('1', 'http://localhost:3000');
 INSERT INTO node_info (node_id, node_url) VALUES ('2', 'http://localhost:3000');
 INSERT INTO node_info (node_id, node_url) VALUES ('3', 'http://localhost:3000');
+
 
 -- network_storage_layout with mapping of feeds.0-255 => node 0,1,2,3
 INSERT INTO network_storage_layout (id, namespace, namespace_shard_id, node_id) VALUES (5121, 'feeds', '0', '0');
