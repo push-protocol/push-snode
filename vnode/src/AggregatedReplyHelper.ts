@@ -28,7 +28,7 @@ export class AggregatedReplyHelper {
         }
     }
 
-    private doAppendItem(nodeId: string, storageRecord:any) {
+    private doAppendItem(nodeId: string, storageRecord: any) {
         let skey = storageRecord.skey;
         let map2 = this.mapKeyToNodeItems.get(skey);
         if (map2 == null) {
@@ -59,6 +59,7 @@ export class AggregatedReplyHelper {
         console.log(`quorumForKey=${minQuorumThreshold} nodeCount=${nodeCount}`);
         let keysWithoutQuorumSet = new Set<string>();
         let goodReplies = 0;
+        let lastTsStr = '0';
         for (let [nodeId, code] of this.mapNodeToStatus) {
             if (code >= 200 && code < 300) {
                 goodReplies++;
@@ -93,7 +94,15 @@ export class AggregatedReplyHelper {
                         // 1. all incrementArr StorageRecords are equal (MD5 verified)
                         // 2. we have at least 1 item
                         // so we can grab the first one reply , since all are the same
-                        reply.items.push(incrementArr[0]);
+                        let first = incrementArr[0];
+                        reply.items.push(first);
+                        // lastTs = latest item ; we use string to preserve equality for all type of hashes
+                        // TODO a good discussion is required to figure out the best way to transfer high precision timestamps via rest
+                        if (first.ts != null) {
+                            if (Number.parseFloat(first.ts) > Number.parseFloat(lastTsStr)) {
+                                lastTsStr = first.ts;
+                            }
+                        }
                     } else {
                         // top item has not enough copies on the network
                         AggregatedReplyHelper.copyNonNullKeysTo(incrementArr, keysWithoutQuorumSet);
@@ -119,12 +128,13 @@ export class AggregatedReplyHelper {
             }
         }
         r.itemCount = reply.items.length;
+        r.lastTs = '' + lastTsStr;
         r.keysWithoutQuorumCount = keysWithoutQuorumSet.size;
         r.keysWithoutQuorum = Array.from(keysWithoutQuorumSet);
         return reply;
     }
 
-    private static copyNonNullKeysTo(context: StorageRecord[], target:Set<string>) {
+    private static copyNonNullKeysTo(context: StorageRecord[], target: Set<string>) {
         // alternative: target.push(context.filter(value => value !=null).map(sr => sr.key).find(key => true))
         for (const record of context) {
             if (record != null) {
@@ -161,6 +171,7 @@ export enum QuorumResult {
 export class Result {
     quorumResult: QuorumResult;
     itemCount: number = 0;
+    lastTs: string;
     keysWithoutQuorumCount: number = 0;
     keysWithoutQuorum: string[] = [];
 }

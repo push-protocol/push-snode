@@ -182,7 +182,7 @@ export default class DbHelper {
         });
     }
 
-    static async listInbox(namespace: string, namespaceShardId: number,
+    static async listInbox(namespace: string, namespaceShardId: number, nsIndex:string,
                            storageTable: string, firstTsExcluded: string): Promise<object> {
         const pageSize = 5;
         const pageLookAhead = 3;
@@ -191,7 +191,8 @@ export default class DbHelper {
         const sql = `select skey as skey,
                      extract(epoch from ts) as ts,
                      payload as payload
-                     from ${storageTable} ${ isFirstQuery ? '' : `where ts > to_timestamp(${firstTsExcluded})` }
+                     from ${storageTable} 
+                     where namespace_id='${nsIndex}' ${ isFirstQuery ? '' : `and ts > to_timestamp(${firstTsExcluded})` }
                      order by ts
                      limit ${pageSize + pageLookAhead}`;
         log.debug(sql);

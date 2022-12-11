@@ -188,11 +188,11 @@ describe('snode-full', function () {
     });
 
     it('snode-test-list', async function () {
-        const seedDate = DateUtil.buildDateTime(2015, 1, 22);
-        const nsIndex = '1000';
-
-        // Generate data within the same month, only days are random
         const numOfRowsToGenerate = 37;
+        const seedDate = DateUtil.buildDateTime(2015, 1, 22);
+        // this is almost unique inbox, so it's empty
+        const nsIndex = '' + RandomUtil.getRandomInt(1000, 10000000000000000);
+        // Generate data within the same month, only days are random
         for (let i = 0; i < numOfRowsToGenerate; i++) {
             const key = crypto.randomUUID();
             const dataToDb = {
@@ -221,7 +221,8 @@ describe('snode-full', function () {
             totalRowsFetched += itemsLength;
             let lastTs = resp?.data?.lastTs;
             console.log('query', query, `got `, itemsLength, 'items, lastTs = ', lastTs);
-            firstTs = lastTs
+            firstTs = lastTs;
+            // await PromiseUtil.sleep(10000);
         } while ((resp?.data?.items?.length || 0) > 0)
 
         console.log('total rows fetched ', totalRowsFetched);

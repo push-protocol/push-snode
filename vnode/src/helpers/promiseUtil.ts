@@ -11,6 +11,10 @@ export default class PromiseUtil {
         return Promise.all(wrappedPromises);
     }
 
+    public static async sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
 }
 
 

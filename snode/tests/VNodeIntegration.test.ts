@@ -6,12 +6,15 @@ var _ = require('lodash');
 
 const expect = chai.expect
 import assert from 'assert-ts';
+
 const axios = require('axios');
 import EnvLoader from "../src/config/envLoader";
 import RandomUtil from "../src/helpers/randomUtil";
 import {DateTime} from "ts-luxon";
 import PromiseUtil from "../src/helpers/promiseUtil";
 import VNodeClient from "../src/client/vnodeClient";
+import DateUtil from "../src/helpers/dateUtil";
+import DbHelper from "../src/helpers/dbHelper";
 
 
 EnvLoader.loadEnvOrFail();
@@ -51,6 +54,58 @@ describe('vnode-full', function () {
             console.log(p.state);
         }
     })
+
+    it('vnode-test-list', async function () {
+        const numOfRowsToGenerate = 37;
+        const seedDate = DateUtil.buildDateTime(2015, 1, 22);
+        // this is almost unique inbox, so it's empty
+        const nsIndex = '' + RandomUtil.getRandomInt(1000, 10000000000000000);
+        // Generate data within the same month, only days are random
+        let storedKeysSet = new Set<String>();
+        for (let i = 0; i < numOfRowsToGenerate; i++) {
+            const key = crypto.randomUUID();
+            storedKeysSet.add(key);
+            const dataToDb = {
+                name: 'john' + '1',
+                surname: crypto.randomBytes(10).toString('base64'),
+                id: RandomUtil.getRandomInt(0, 100000)
+            };
+            let randomDayWithinSameMonth = RandomUtil.getRandomDateSameMonth(seedDate);
+            const ts = DateUtil.dateTimeToUnixFloat(randomDayWithinSameMonth);
+            let putResult = await vnodeClient.postRecord(VNode1Constants.apiUrl, VNode1Constants.namespace, nsIndex,
+                ts + '', key, dataToDb);
+
+        }
+
+        // Query Generated rows and count them
+        let month = DateUtil.formatYYYYMM(seedDate);
+        let resp: AxiosResponse;
+        let itemsLength;
+        let query = 0;
+        let firstTs;
+        let totalRowsFetched = 0;
+        do {
+            resp = await vnodeClient.listRecordsByMonth(VNode1Constants.apiUrl, VNode1Constants.namespace, nsIndex, month, firstTs);
+            query++;
+            itemsLength = resp?.data?.items?.length || 0;
+            totalRowsFetched += itemsLength;
+            let lastTs = resp?.data?.result?.lastTs;
+            console.log('query', query, `got `, itemsLength, 'items, lastTs = ', lastTs);
+            firstTs = lastTs
+            for (let item of resp?.data?.items || []) {
+                let success = storedKeysSet.delete(item.skey);
+                console.log(`correct key ${item.skey} , success=${success}`);
+            }
+            // await PromiseUtil.sleep(10000);
+        } while ((resp?.data?.items?.length || 0) > 0)
+
+        console.log('total rows fetched ', totalRowsFetched);
+
+        // Compare rows stored vs rows fetched back via API
+        expect(storedKeysSet.size).equals(0);
+
+
+    });
 
 });
 

@@ -1,6 +1,6 @@
 // noinspection SpellCheckingInspection
 
-import {Body, Controller, Get, HttpException, HttpStatus, Logger, Param, Post} from "@nestjs/common";
+import {Body, Controller, Get, HttpException, HttpStatus, Logger, Param, Post, Query, Req} from "@nestjs/common";
 import DbService from './loaders/dbService';
 import StrUtil from "./helpers/strUtil";
 import RandomUtil from "./helpers/randomUtil";
@@ -127,7 +127,7 @@ export class AppController {
     async listRecordsByMonth(@Param('nsName') nsName: string,
                              @Param('nsIndex') nsIndex: string,
                              @Param('month') month: string,
-                             @Param('firstTs') firstTs: string,
+                             @Query('firstTs') firstTs: string,
                              @Body() body: any): Promise<any> {
         log.debug(`listRecordsByMonthStartFromTs() nsName=${nsName}, nsIndex=${nsIndex}, month=${month}, firstTs=${firstTs}`);
         const shardId = DbService.calculateShardForNamespaceIndex(nsName, nsIndex);

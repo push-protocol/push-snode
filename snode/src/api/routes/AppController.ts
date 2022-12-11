@@ -174,7 +174,7 @@ export default (app: Router) => {
                 log.error('storage table not found');
                 return res.status(204).json(`storage table not found for date ${req.params.month}`);
             }
-            const storageValue = await DbHelper.listInbox(nsName, shardId, storageTable, firstTs);
+            const storageValue = await DbHelper.listInbox(nsName, shardId, nsIndex, storageTable, firstTs);
             log.debug(`found value: ${storageValue}`)
             log.debug('success is ' + success);
             try {
