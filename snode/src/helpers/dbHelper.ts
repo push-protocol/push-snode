@@ -9,7 +9,7 @@ import {DateTime} from "ts-luxon";
 const pg = pgPromise({});
 
 // todo switch to a config file
-export const db = pg("postgres://postgres:postgres@localhost:5432/postgres");
+export const db = pg("postgres://postgres:postgres@localhost:5432/snode1");
 const crypto = require('crypto');
 
 export default class DbHelper {
@@ -45,18 +45,20 @@ export default class DbHelper {
     }
 
 
-    public static async createNewNodestorageRecord(namespace: string, namespaceShardId: number, ts_start:any, ts_end:any, table_name:string):Promise<boolean>{
-        const sql =`
-        insert into node_storage_layout (namespace, namespace_shard_id, ts_start, ts_end, table_name) values ('${namespace}', '${namespaceShardId}', '${ts_start} 00:00:00.000000', '${ts_end} 00:00:00.000000', '${table_name}') on conflict do nothing;
+    public static async createNewNodestorageRecord(namespace: string, namespaceShardId: number, ts_start: any, ts_end: any, table_name: string): Promise<boolean> {
+        const sql = `
+        insert into node_storage_layout (namespace, namespace_shard_id, ts_start, ts_end, table_name) 
+        values ($1, $2, $3, $4, $5) on conflict do nothing;
         `
-        return db.query(sql).then(data => {
-            console.log(data)
-            return Promise.resolve(true)
-        }).
-        catch(err => {
-            console.log(err);
-            return Promise.resolve(false);
-        });
+        console.log(sql);
+        return db.result(sql, [namespace, namespaceShardId, ts_start, ts_end, table_name], r => r.rowCount)
+            .then(rowCount => {
+                console.log('inserted rowcount: ', rowCount)
+                return Promise.resolve(rowCount==1)
+            }).catch(err => {
+                console.log(err);
+                return Promise.resolve(false);
+            });
     }
 
     public static async createNewStorageTable(tableName:string):Promise<boolean>{
@@ -67,14 +69,16 @@ export default class DbHelper {
                 namespace_shard_id VARCHAR(20) NOT NULL,
                 namespace_id VARCHAR(20) NOT NULL,
                 ts TIMESTAMP NOT NULL default NOW(),
-                rowUuid VARCHAR(64) NOT NULL PRIMARY KEY,
+                skey VARCHAR(64) NOT NULL PRIMARY KEY,
                 dataSchema VARCHAR(20) NOT NULL,
                 payload JSONB
             );
 
-            DROP INDEX IF EXISTS ${tableName}_idx;
-            CREATE INDEX ${tableName}_idx ON ${tableName} USING btree (namespace ASC, namespace_shard_id ASC, namespace_id ASC, ts ASC);
+            CREATE INDEX IF NOT EXISTS 
+            ${tableName}_idx ON ${tableName} 
+            USING btree (namespace ASC, namespace_shard_id ASC, namespace_id ASC, ts ASC);
         `
+        // todo CREATE INDEX CONCURRENTLY ?
         console.log(sql)
         return db.query(sql).then(data => {
             console.log(data)
@@ -122,11 +126,11 @@ export default class DbHelper {
         });
     }
 
-    public static async findValueInTable(tableName: string, key: string):Promise<string> {
-        log.debug(`tableName is ${tableName} , key is ${key}`);
+    public static async findValueInTable(tableName: string, skey: string):Promise<string> {
+        log.debug(`tableName is ${tableName} , skey is ${skey}`);
         const sql = `select payload
                      from ${tableName}
-                     where rowuuid = '${key}'`;
+                     where skey = '${skey}'`;
         log.debug(sql);
         return db.query(sql).then(data => {
             log.debug(data);
@@ -143,13 +147,13 @@ export default class DbHelper {
     }
 
     static async putValueInTable(ns: string, shardId: number, nsIndex: string,
-                                 storageTable: string, ts:string, key: string, body: string) {
+                                 storageTable: string, ts:string, skey: string, body: string) {
         log.debug(`putValueInTable() namespace=${ns}, namespaceShardId=${shardId}
-        ,storageTable=${storageTable}, key=${key}, jsonValue=${body}`);
+        ,storageTable=${storageTable}, skey=${skey}, jsonValue=${body}`);
         const sql = `INSERT INTO ${storageTable} 
-                    (namespace, namespace_shard_id, namespace_id, ts, rowuuid, dataschema, payload)
-                    values ('${ns}',  '${shardId}', '${nsIndex}', to_timestamp(${ts}),'${key}', 'v1', '${body}')
-                    ON CONFLICT (rowUuid) DO UPDATE SET payload = '${body}'`
+                    (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload)
+                    values ('${ns}',  '${shardId}', '${nsIndex}', to_timestamp(${ts}),'${skey}', 'v1', '${body}')
+                    ON CONFLICT (skey) DO UPDATE SET payload = '${body}'`
         log.debug(sql);
         return db.none(sql).then(data => {
             log.debug(data);
@@ -167,7 +171,7 @@ export default class DbHelper {
         const pageLookAhead = 3;
         const pageSizeForSameTimestamp = pageSize * 20;
         const isFirstQuery = StrUtil.isEmpty(firstTsExcluded);
-        const sql = `select rowuuid as rowuuid,
+        const sql = `select skey as skey,
                      extract(epoch from ts) as ts,
                      payload as payload
                      from ${storageTable} ${ isFirstQuery ? '' : `where ts > to_timestamp(${firstTsExcluded})` }
@@ -199,7 +203,7 @@ export default class DbHelper {
             if (lastTsRowId == data1.length - 1) {
                 // we have more rows with same timestamp, they won't fit in pageSize+pageLookAhead rows
                 // let's peform additional select for ts = lastTs
-                const sql2 = `select rowuuid as rowuuid,
+                const sql2 = `select skey as skey,
                      extract(epoch from ts) as ts,
                      payload as payload
                      from ${storageTable}
@@ -228,7 +232,8 @@ export default class DbHelper {
 
     private static convertRowToItem(rowObj:any, namespace: string):any {
         return {
-            fqkey: namespace + ':' + rowObj.rowuuid,
+            ns: namespace,
+            skey: rowObj.skey,
             ts: rowObj.ts,
             payload: rowObj.payload
         };

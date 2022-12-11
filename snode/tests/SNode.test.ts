@@ -16,6 +16,13 @@ import DbHelper from "../src/helpers/dbHelper";
 
 const axios = require('axios');
 
+class SNode1Constants {
+    // DATA GENERATION
+    static dbUri = 'postgres://postgres:postgres@localhost:5432/postgres';
+    // API TESTS
+    static apiUrl = 'http://localhost:3000';
+    static namespace = 'feeds';
+}
 
 function patchPromiseWithState() {
     Object.defineProperty(Promise.prototype, "state", {
@@ -140,14 +147,6 @@ async function performOneTest(baseUri: string, ns: string, testCounter: number):
     return Promise.resolve(getResult.status);
 }
 
-class SNode1Constants {
-    // DATA GENERATION
-    static dbUri = 'postgres://postgres:postgres@localhost:5432/postgres';
-    // API TESTS
-    static apiUrl = 'http://localhost:3000';
-    static namespace = 'feeds';
-}
-
 describe('snode-full', function () {
 
     const pg = pgPromise({});
@@ -162,7 +161,8 @@ describe('snode-full', function () {
         this.timeout(30000);
 
         let promiseArr = [];
-        let parallelThreads = 50;
+        console.log('PARALLEL_THREADS=', process.env.PARALLEL_THREADS);
+        let parallelThreads = process.env.PARALLEL_THREADS || 50;
         for (let i = 0; i < parallelThreads; i++) {
             try {
                 promiseArr.push(performOneTest(SNode1Constants.apiUrl, SNode1Constants.namespace, i)); // TODO !!!!!!!!!

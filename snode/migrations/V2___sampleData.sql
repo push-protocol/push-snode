@@ -1,9 +1,105 @@
-INSERT INTO node_info (node_id, node_url) VALUES ('0', 'http://localhost:3000');
-INSERT INTO node_info (node_id, node_url) VALUES ('1', 'http://localhost:3000');
-INSERT INTO node_info (node_id, node_url) VALUES ('2', 'http://localhost:3000');
-INSERT INTO node_info (node_id, node_url) VALUES ('3', 'http://localhost:3000');
+-- Dummy data
 
 
+DROP TABLE IF EXISTS storage_ns_feeds_d_202208;
+CREATE TABLE IF NOT EXISTS storage_ns_feeds_d_202208
+(
+    namespace VARCHAR(20) NOT NULL,
+    namespace_shard_id VARCHAR(20) NOT NULL,
+    namespace_id VARCHAR(20) NOT NULL,
+    ts TIMESTAMP NOT NULL default NOW(),
+    skey VARCHAR(64) NOT NULL PRIMARY KEY,
+    dataSchema VARCHAR(20) NOT NULL,
+    payload JSONB
+);
+
+DROP INDEX IF EXISTS storage_table_ns_id_ts_index;
+CREATE INDEX storage_table_ns_id_ts_index ON storage_ns_feeds_d_202208 USING btree (namespace ASC, namespace_shard_id ASC, namespace_id ASC, ts ASC);
+
+comment on column storage_ns_feeds_d_202208.skey is 'unique row id that is globally unique, i.e. ALDKFJ880123';
+comment on column storage_ns_feeds_d_202208.namespace_id is 'namespace index usually related to inbox id or chat id, i.e. 991';
+comment on column storage_ns_feeds_d_202208.ts is 'we store only time series data because we provide sharding by time also, so this is a required field which reporesent the moment when data is appended';
+
+
+-- test get
+-- curl -X GET --location "http://localhost:3000/api/v1/kv/ns/feeds/nsidx/1000000/date/20220815/key/a1200bbbb"
+insert into storage_ns_feeds_d_202208 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload)
+values ('feeds', '129', '1000000', '2022-08-23 00:22:21.000000', 'a1200bbbb', 'feedv1',
+        '{"data": {"apns": {"payload": {"aps": {"category": "withappicon", "mutable-content": 1, "content-available": 1}}, "fcm_options": {"image": ""}}, "data": {"app": "", "url": "", "acta": "", "aimg": "", "amsg": "ETH at [d:$403.54]\n\nHourly Movement: [t:-0.35%]\nDaily Movement: [s:4.70%]\nWeekly Movement: [s:3.20%][timestamp: 1604556000]", "asub": "ETH Price Movement", "icon": "", "type": "1", "appbot": "0", "hidden": "0", "secret": ""}, "android": {"notification": {"icon": "@drawable/ic_stat_name", "color": "#e20880", "image": "", "default_vibrate_timings": true}}, "notification": {"body": "\nHourly Movement: -0.35%\nDaily Movement: 4.70%\nWeekly Movement: 3.20%", "title": " - ETH at $403.54"}}, "metadata": {"users": ["0x74415Bc4C4Bf4Baecc2DD372426F0a1D016Fa924", "0xD8634C39BBFd4033c0d3289C4515275102423681"], "channel": "0xD8634C39BBFd4033c0d3289C4515275102423681", "is_spam": 1, "attempts": 0, "use_push": 1, "payloadId": "19", "processed": 0, "blockchain": "ETH_TEST_KOVAN"}}');
+
+insert into node_storage_layout (namespace, namespace_shard_id, ts_start, ts_end, table_name) values ('feeds', '129', '2022-08-01 00:00:00.000000', '2022-08-31 00:00:00.000000', 'storage_ns_feeds_d_202208');
+insert into network_storage_layout (id, namespace, namespace_shard_id, node_id) values (1, 'feeds', '129', '1');
+insert into network_storage_layout (id, namespace, namespace_shard_id, node_id) values (2, 'feeds', '129', '2');
+insert into network_storage_layout (id, namespace, namespace_shard_id, node_id) values (3, 'feeds', '129', '3');
+
+-- test put - get
+-- curl -X POST --location "http://localhost:3000/api/v1/kv/ns/feeds/nsidx/1000000/ts/1661214142.000000/key/b120" -d '{"user":"Someone"}'
+-- curl -X GET --location "http://localhost:3000/api/v1/kv/ns/feeds/nsidx/1000000/date/20220815/key/b120"
+
+-- test list
+-- curl -X POST -H "Content-Type: application/json" --location "http://localhost:3000/api/v1/kv/ns/feeds/nsidx/1000000/month/202208/list?firstTs=1661214142.000000"
+
+-- 2015 sample data for 1 month
+-- feeds.1000 (maps to shard 169) for 2015-01 is stored in the table storage_ns_feeds_d_201501
+INSERT INTO node_storage_layout (namespace, namespace_shard_id, ts_start, ts_end, table_name) VALUES ('feeds', '169', '2015-01-01 00:00:00.000000', '2015-02-01 00:00:00.000000', 'storage_ns_feeds_d_201501');
+-- storage_ns_feeds_d_201501 sample data
+
+
+DROP TABLE IF EXISTS storage_ns_feeds_d_201501;
+CREATE TABLE IF NOT EXISTS storage_ns_feeds_d_201501
+(
+    namespace VARCHAR(20) NOT NULL,
+    namespace_shard_id VARCHAR(20) NOT NULL,
+    namespace_id VARCHAR(20) NOT NULL,
+    ts TIMESTAMP NOT NULL default NOW(),
+    skey VARCHAR(64) NOT NULL PRIMARY KEY,
+    dataSchema VARCHAR(20) NOT NULL,
+    payload JSONB
+);
+
+DROP INDEX IF EXISTS storage_table_ns_id_ts_index;
+CREATE INDEX storage_table_ns_id_ts_index ON storage_ns_feeds_d_201501 USING btree (namespace ASC, namespace_shard_id ASC, namespace_id ASC, ts ASC);
+
+
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-11 04:33:24.797000', '621a0ad3-c7c0-4aa8-8cb3-c74ecec7e334', 'v1', '{"id": 54998, "name": "john1", "surname": "H2H3uFM9Qht9hw=="}');
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-08 09:50:26.395000', 'ea909286-1875-4317-9224-be53ee9ceb52', 'v1', '{"id": 2561, "name": "john1", "surname": "4B6i2/pcRpeKbQ=="}');
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-23 01:10:31.292000', '629253d1-862f-4c7e-98ee-e16bdc2c4a5c', 'v1', '{"id": 41037, "name": "john1", "surname": "c9DCdVYL1dTlzQ=="}');
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-06 03:45:23.813000', '6206fbd1-362d-48e0-8faf-0d2c897803e0', 'v1', '{"id": 69776, "name": "john1", "surname": "8guzUHHcm5f+Gw=="}');
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-27 02:44:08.025000', 'f0a3e56f-1278-4363-ac1c-20e692a1f53d', 'v1', '{"id": 78150, "name": "john1", "surname": "1niaCyF+9BTsog=="}');
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-13 12:01:10.558000', 'a29bca7d-d768-43d6-b9fb-25c5974befb0', 'v1', '{"id": 51562, "name": "john1", "surname": "BZ6HCQwUlxmzOQ=="}');
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-16 09:49:32.910000', 'b354a610-ea85-410c-a607-6ca39b8b3487', 'v1', '{"id": 89530, "name": "john1", "surname": "VOVmTNEi54MJuA=="}');
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-05 00:18:28.533000', '29fe4c64-db25-4d5a-9564-4e9c1cde91c1', 'v1', '{"id": 69585, "name": "john1", "surname": "zgdpqEpSO7MWGQ=="}');
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-20 14:06:11.304000', '9cf266d8-4620-4fb6-a743-8e22bb752d60', 'v1', '{"id": 47072, "name": "john1", "surname": "+xSsUdgSeoWFOw=="}');
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-25 17:35:20.454000', 'a1883a71-21f3-4394-9081-a6fb3a665f8b', 'v1', '{"id": 88576, "name": "john1", "surname": "1IdHeYr+y1RmeA=="}');
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-18 09:45:52.483000', '0920af17-3608-47c7-8fe3-60d8567944c1', 'v1', '{"id": 49987, "name": "john1", "surname": "6evbVeXBKyHu9Q=="}');
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-30 08:40:12.577000', 'adbd5da8-f8fc-4317-9b74-3d59a23deefb', 'v1', '{"id": 79307, "name": "john1", "surname": "bfDDC6ry1OdPOQ=="}');
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-31 05:50:27.861000', '583942f9-fe1b-498a-8905-cbd8c841d21a', 'v1', '{"id": 88447, "name": "john1", "surname": "hB6FEHBw/cZK4A=="}');
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-02 10:28:44.967000', '5f6bd351-30aa-469d-9e71-25b9e257409c', 'v1', '{"id": 7686, "name": "john1", "surname": "Tn8Y12IxYITWBg=="}');
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-04 04:44:32.027000', 'bec3c921-3a5a-4a19-9a45-b3395f55f2ae', 'v1', '{"id": 41970, "name": "john1", "surname": "Bt+e7j4gooXKpg=="}');
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-25 05:28:56.843000', '27adc393-d2e7-4dd5-9a95-4e026687fa7b', 'v1', '{"id": 16903, "name": "john1", "surname": "bw/MufvPqO68gg=="}');
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-11 10:26:24.812000', 'a122571d-49fd-4931-9f6b-d2d33beb7f73', 'v1', '{"id": 86106, "name": "john1", "surname": "ZHQrA576iECgPg=="}');
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-18 23:08:45.331000', 'af1b4244-4924-41b7-901e-deaf52b9232e', 'v1', '{"id": 20350, "name": "john1", "surname": "Qa5zYltJqB/juw=="}');
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-05 20:22:59.757000', 'cd983f93-4bc1-4abf-924e-00aff5aeb93f', 'v1', '{"id": 14526, "name": "john1", "surname": "0GrbObaRHigrbQ=="}');
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-04 17:59:39.722000', '0196707d-9f37-4b9e-bd59-b86a3a5c537d', 'v1', '{"id": 29911, "name": "john1", "surname": "ZVIAPOl4kFfDHQ=="}');
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-15 06:08:00.621000', 'dbee997a-d4e0-406d-abb1-2f32246ce257', 'v1', '{"id": 57375, "name": "john1", "surname": "jV1ESDL36LV5FA=="}');
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-22 03:08:03.574000', '65bcd2cd-106e-44ab-a6f8-996a992ef317', 'v1', '{"id": 84498, "name": "john1", "surname": "tEfFh/LAqV2kww=="}');
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-08 14:12:43.243000', 'c03b15e5-b5b8-4cf4-81d6-db2a602a72cc', 'v1', '{"id": 97900, "name": "john1", "surname": "mq/+dXH/stpgzg=="}');
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-08 00:17:06.367000', 'b7eae67d-8a5c-4673-a3a7-9f2d5b298f9d', 'v1', '{"id": 37003, "name": "john1", "surname": "pN942wNcwZinaQ=="}');
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-25 03:44:25.391000', 'db1d2113-177f-44f6-9ff1-f417760aebec', 'v1', '{"id": 39130, "name": "john1", "surname": "0KmCPw6POpfTtw=="}');
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-21 04:21:37.075000', '9d1d5884-2e78-4119-9615-3241f67d6b8a', 'v1', '{"id": 96172, "name": "john1", "surname": "AIGD3WbBCNkVFA=="}');
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-27 16:39:31.701000', 'bfcfc6a7-0815-450e-86eb-9ee0afddc93f', 'v1', '{"id": 53211, "name": "john1", "surname": "9cd9yLhX0mh21g=="}');
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-01 08:37:30.793000', 'eaca82ab-7331-476c-87f7-aaf528d84e2c', 'v1', '{"id": 65603, "name": "john1", "surname": "mZFBXgTZPvhMdA=="}');
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-11 11:11:41.020000', '7717086c-0c13-4a0a-b733-376d9a27f0c1', 'v1', '{"id": 7502, "name": "john1", "surname": "uklwXe8Hc9G9KA=="}');
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-11 22:55:56.971000', '4d66a557-63ce-461a-9a77-fe09efb07f38', 'v1', '{"id": 74464, "name": "john1", "surname": "64of9/hHjJhf2Q=="}');
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-30 02:00:39.983000', '45d410dc-4c9b-4682-a261-2a5cbf70d92d', 'v1', '{"id": 41842, "name": "john1", "surname": "DvNHLuy+J3I1IQ=="}');
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-12 13:37:53.604000', '8da5f2a6-6fed-468e-acab-bf64990b4d0f', 'v1', '{"id": 37477, "name": "john1", "surname": "Zz68A8ugomb2EQ=="}');
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-17 02:35:01.191000', '710321a8-15bc-419c-a1e1-06b6f099e57d', 'v1', '{"id": 10802, "name": "john1", "surname": "pVikC5hPce4PwA=="}');
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-04 20:38:16.425000', '3ae76b6f-a20c-4ccb-b22c-6b60f880b303', 'v1', '{"id": 93255, "name": "john1", "surname": "55hxx1MilsZtHA=="}');
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-31 08:42:17.415000', 'e0c9701b-74cb-4849-9758-af4a8887d74b', 'v1', '{"id": 23802, "name": "john1", "surname": "YkU1Es+zW8FoLg=="}');
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-08 05:44:14.737000', '15890f6a-4ad5-4c7f-8cde-8f444b83099e', 'v1', '{"id": 65597, "name": "john1", "surname": "rre4yPSJ+YptvQ=="}');
+INSERT INTO storage_ns_feeds_d_201501 (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload) VALUES ('feeds', '169', '1000', '2015-01-31 13:47:36.820000', '2ee1b10e-a10d-4732-a36c-04e7920e3368', 'v1', '{"id": 57018, "name": "john1", "surname": "qi3WuyzPNZt5RA=="}');
+
+-- map all feeds shards to all nodes
 -- network_storage_layout with mapping of feeds.0-255 => node 0,1,2,3
 INSERT INTO network_storage_layout (id, namespace, namespace_shard_id, node_id) VALUES (5121, 'feeds', '0', '0');
 INSERT INTO network_storage_layout (id, namespace, namespace_shard_id, node_id) VALUES (5122, 'feeds', '0', '1');
@@ -15,6 +111,8 @@ INSERT INTO network_storage_layout (id, namespace, namespace_shard_id, node_id) 
 INSERT INTO network_storage_layout (id, namespace, namespace_shard_id, node_id) VALUES (5128, 'feeds', '1', '3');
 INSERT INTO network_storage_layout (id, namespace, namespace_shard_id, node_id) VALUES (5129, 'feeds', '2', '0');
 INSERT INTO network_storage_layout (id, namespace, namespace_shard_id, node_id) VALUES (5130, 'feeds', '2', '1');
+
+
 INSERT INTO network_storage_layout (id, namespace, namespace_shard_id, node_id) VALUES (5131, 'feeds', '2', '2');
 INSERT INTO network_storage_layout (id, namespace, namespace_shard_id, node_id) VALUES (5132, 'feeds', '2', '3');
 INSERT INTO network_storage_layout (id, namespace, namespace_shard_id, node_id) VALUES (5133, 'feeds', '3', '0');

@@ -24,9 +24,6 @@ function splitIntoNameAndIndex(nsNameWithIndex: string): string[] {
 function logRequest(req: Request) {
     log.debug('Calling %o %o with body: %o', req.method, req.url, req.body);
 }
-// curl -X GET --location "http://localhost:4000/api/v1/kv/ns/feeds/nsidx/1000000/date/20220815/key/a1200bbbb"
-// curl -X POST -H "Content-Type: application/json" --location "http://localhost:4000/api/v1/kv/ns/feeds/nsidx/1000000/ts/1661214142.000000/key/b120" -d '{"user":"Someone"}'
-// curl -X POST -H "Content-Type: application/json" --location "http://localhost:4000/api/v1/kv/ns/feeds/nsidx/1000000/month/202208/listInbox?firstTs=1661214142.000000"
 
 export default (app: Router) => {
     app.use(bodyParser.json());
@@ -112,12 +109,17 @@ export default (app: Router) => {
                 log.debug('creating new storage table');
                 const dateYYYYMM = DateUtil.formatYYYYMM(date);
                 const tableName = `storage_ns_${nsName}_d_${dateYYYYMM}`;
-                const createtable = await DbHelper.createNewStorageTable(tableName);
-                log.debug('creating node storage layout mapping')
-                const createnodelayout = await DbHelper.createNewNodestorageRecord(nsName, shardId,
+                const recordCreated = await DbHelper.createNewNodestorageRecord(nsName, shardId,
                     monthStart, monthEndExclusive, tableName);
-                log.debug(createnodelayout)
-                log.debug(createtable);
+                if (recordCreated) {
+                    log.debug('record created: ', recordCreated)
+                    // we've added a new record to node_storage_layout => we can safely try to create a table
+                    // otherwise, if many connections attempt to create a table from multiple threads
+                    // it leads to postgres deadlock sometimes
+                    const createtable = await DbHelper.createNewStorageTable(tableName);
+                    log.debug('creating node storage layout mapping')
+                    log.debug(createtable);
+                }
             }
             var storageTable = await DbHelper.findStorageTableByDate(nsName, shardId, date);
             const storageValue = await DbHelper.putValueInTable(nsName, shardId, nsIndex, storageTable, ts, key, body);
@@ -175,7 +177,7 @@ export default (app: Router) => {
             log.debug('success is ' + success);
             try {
                 // const messaging = Container.get(MessagingService);
-                return res.status(201).json(storageValue);
+                return res.status(200).json(storageValue);
             } catch (e) {
                 // log.error('🔥 error: %o', e);
                 return next(e);
