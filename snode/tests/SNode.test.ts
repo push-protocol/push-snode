@@ -9,20 +9,25 @@ var _ = require('lodash');
 
 const expect = chai.expect
 import assert from 'assert-ts';
-
+const axios = require('axios');
 import {DateTime} from "ts-luxon";
 import DateUtil from "../src/helpers/dateUtil";
 import DbHelper from "../src/helpers/dbHelper";
+import EnvLoader from "../src/config/envLoader";
 
-const axios = require('axios');
+
+EnvLoader.loadEnvOrFail();
+
 
 class SNode1Constants {
     // DATA GENERATION
-    static dbUri = 'postgres://postgres:postgres@localhost:5432/postgres';
+    static dbUri = `postgres://${EnvLoader.getPropertyOrFail('DB_USER')}:${EnvLoader.getPropertyOrFail('DB_PASS')}@${EnvLoader.getPropertyOrFail('DB_HOST')}:5432/${EnvLoader.getPropertyOrFail('DB_NAME')}`;
     // API TESTS
     static apiUrl = 'http://localhost:3000';
     static namespace = 'feeds';
 }
+
+console.log(SNode1Constants.dbUri);
 
 function patchPromiseWithState() {
     Object.defineProperty(Promise.prototype, "state", {

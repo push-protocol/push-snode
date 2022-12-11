@@ -33,7 +33,7 @@ insert into network_storage_layout (id, namespace, namespace_shard_id, node_id) 
 insert into network_storage_layout (id, namespace, namespace_shard_id, node_id) values (3, 'feeds', '129', '3');
 
 -- test put - get
--- curl -X POST --location "http://localhost:3000/api/v1/kv/ns/feeds/nsidx/1000000/ts/1661214142.000000/key/b120" -d '{"user":"Someone"}'
+-- curl -X POST -H "Content-Type: application/json" --location "http://localhost:3000/api/v1/kv/ns/feeds/nsidx/1000000/ts/1661214142.000000/key/b120" -d '{"user":"Someone"}'
 -- curl -X GET --location "http://localhost:3000/api/v1/kv/ns/feeds/nsidx/1000000/date/20220815/key/b120"
 
 -- test list

@@ -65,12 +65,14 @@ export default (app: Router) => {
                 log.error('storage table not found');
                 return res.status(401).json('storage table not found');
             }
-            const storageValue = await DbHelper.findValueInTable(storageTable, key);
-            log.debug(`found value: ${storageValue}`)
+            const storageItems = await DbHelper.findStorageItem(nsName, storageTable, key);
+            log.debug(`found value: ${storageItems}`)
             log.debug('success is ' + success);
             try {
                 // const messaging = Container.get(MessagingService);
-                return res.status(200).json(storageValue);
+                return res.status(200).json({
+                    items: storageItems
+                });
             } catch (e) {
                 // log.error('🔥 error: %o', e);
                 return next(e);

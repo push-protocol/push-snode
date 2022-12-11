@@ -17,17 +17,17 @@ export default class DbHelper {
     // maps key -> 8bit space (0..255)
     // uses first 8bit from an md5 hash
     public static calculateShardForNamespaceIndex(namespace: string, key: string): number {
-      let buf = crypto.createHash('md5').update(key).digest();
-      let i32 = buf.readUInt32LE(0);
-      const i8bits = i32 & 0xFF;
-      log.debug('calculateShardForNamespaceIndex(): ',buf, '->' , i32, '->', i8bits);
-      return i8bits;
+        let buf = crypto.createHash('md5').update(key).digest();
+        let i32 = buf.readUInt32LE(0);
+        const i8bits = i32 & 0xFF;
+        log.debug('calculateShardForNamespaceIndex(): ', buf, '->', i32, '->', i8bits);
+        return i8bits;
     }
 
-    public static async checkIfStorageTableExists():Promise<boolean>{
+    public static async checkIfStorageTableExists(): Promise<boolean> {
         const date = new Date();
         const dbdate = date.getFullYear().toString() + date.getMonth().toString();
-        var sql =`
+        var sql = `
             SELECT EXISTS(
                 SELECT FROM pg_tables 
                 WHERE schemaname='public' AND 
@@ -37,8 +37,7 @@ export default class DbHelper {
         return db.query(sql).then(data => {
             console.log(data)
             return Promise.resolve(true)
-        }).
-        catch(err => {
+        }).catch(err => {
             console.log(err);
             return Promise.resolve(false);
         });
@@ -54,14 +53,14 @@ export default class DbHelper {
         return db.result(sql, [namespace, namespaceShardId, ts_start, ts_end, table_name], r => r.rowCount)
             .then(rowCount => {
                 console.log('inserted rowcount: ', rowCount)
-                return Promise.resolve(rowCount==1)
+                return Promise.resolve(rowCount == 1)
             }).catch(err => {
                 console.log(err);
                 return Promise.resolve(false);
             });
     }
 
-    public static async createNewStorageTable(tableName:string):Promise<boolean>{
+    public static async createNewStorageTable(tableName: string): Promise<boolean> {
         const sql = `
             CREATE TABLE IF NOT EXISTS ${tableName}
             (
@@ -83,8 +82,7 @@ export default class DbHelper {
         return db.query(sql).then(data => {
             console.log(data)
             return Promise.resolve(true)
-        }).
-        catch(err => {
+        }).catch(err => {
             console.log(err);
             return Promise.resolve(false);
         });
@@ -100,14 +98,13 @@ export default class DbHelper {
             let cnt = parseInt(data[0].count);
             console.log(cnt);
             return cnt === 1
-        }).
-        catch(err => {
+        }).catch(err => {
             console.log(err);
             return Promise.resolve(false);
         });
     }
 
-    public static async findStorageTableByDate(namespace: string, namespaceShardId: number, dateYmd:DateTime):Promise<string> {
+    public static async findStorageTableByDate(namespace: string, namespaceShardId: number, dateYmd: DateTime): Promise<string> {
         log.debug(`date is ${dateYmd.toISO()}`);
         const sql = `select table_name from node_storage_layout
                      where namespace='${namespace}' and namespace_shard_id='${namespaceShardId}' 
@@ -115,18 +112,17 @@ export default class DbHelper {
         log.debug(sql);
         return db.query(sql).then(data => {
             log.debug(data);
-            if(data.length!=1) {
+            if (data.length != 1) {
                 return Promise.reject('missing table with the correct name');
             }
             return data[0].table_name;
-        }).
-        catch(err => {
+        }).catch(err => {
             log.debug(err);
             return Promise.resolve('');
         });
     }
 
-    public static async findValueInTable(tableName: string, skey: string):Promise<string> {
+    public static async findValueInTable(tableName: string, skey: string): Promise<string> {
         log.debug(`tableName is ${tableName} , skey is ${skey}`);
         const sql = `select payload
                      from ${tableName}
@@ -134,20 +130,42 @@ export default class DbHelper {
         log.debug(sql);
         return db.query(sql).then(data => {
             log.debug(data);
-            if(data.length!=1) {
+            if (data.length != 1) {
                 return Promise.reject('missing table with the correct name');
             }
-            log.debug(`data found: ${ JSON.stringify(data[0].payload)}`)
+            log.debug(`data found: ${JSON.stringify(data[0].payload)}`)
             return data[0].payload;
-        }).
-        catch(err => {
+        }).catch(err => {
             log.debug(err);
             return Promise.resolve('');
         });
     }
 
+    public static async findStorageItem(ns: string, tableName: string, skey: string): Promise<StorageRecord[]> {
+        log.debug(`tableName is ${tableName} , skey is ${skey}`);
+        const sql = `select skey as skey,
+                     extract(epoch from ts) as ts,
+                     payload as payload
+                     from ${tableName}
+                     where skey = '${skey}'`;
+        log.debug(sql);
+        return db.query(sql).then(data => {
+            log.debug(data);
+            if (data.length != 1) {
+                return Promise.reject('missing table with the correct name');
+            }
+            let row1 = data[0];
+            log.debug(`data found: ${JSON.stringify(row1.payload)}`)
+            let record = new StorageRecord(ns, row1.skey, row1.ts, row1.payload);
+            return [record];
+        }).catch(err => {
+            log.debug(err);
+            return Promise.resolve([]);
+        });
+    }
+
     static async putValueInTable(ns: string, shardId: number, nsIndex: string,
-                                 storageTable: string, ts:string, skey: string, body: string) {
+                                 storageTable: string, ts: string, skey: string, body: string) {
         log.debug(`putValueInTable() namespace=${ns}, namespaceShardId=${shardId}
         ,storageTable=${storageTable}, skey=${skey}, jsonValue=${body}`);
         const sql = `INSERT INTO ${storageTable} 
@@ -158,8 +176,7 @@ export default class DbHelper {
         return db.none(sql).then(data => {
             log.debug(data);
             return Promise.resolve();
-        }).
-        catch(err => {
+        }).catch(err => {
             log.debug(err);
             return Promise.reject(err);
         });
@@ -230,12 +247,27 @@ export default class DbHelper {
         };
     }
 
-    private static convertRowToItem(rowObj:any, namespace: string):any {
+    private static convertRowToItem(rowObj: any, namespace: string): any {
         return {
             ns: namespace,
             skey: rowObj.skey,
             ts: rowObj.ts,
             payload: rowObj.payload
         };
+    }
+}
+
+export class StorageRecord {
+    ns: string;
+    skey: string;
+    ts: string;
+    payload: any;
+
+
+    constructor(ns: string, skey: string, ts: string, payload: any) {
+        this.ns = ns;
+        this.skey = skey;
+        this.ts = ts;
+        this.payload = payload;
     }
 }
