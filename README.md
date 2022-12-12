@@ -95,7 +95,7 @@ curl -X GET --location "http://localhost:4000/api/v1/kv/ns/feeds/nsidx/2000000/d
 ```
 - list records from namespace 'feeds' at index '2000000' with month '202208'
 ```
-curl -X POST --location "http://localhost:4000/api/v1/kv/ns/feeds/nsidx/2000000/month/202208/list" -H "Content-Type: application/json"
+curl -X POST --location "http://localhost:4000/api/v1/kv/ns/feeds/nsidx/2000000/month/202208/list" -H "Content-Type: application/json"                                          
 >
-{"items":[],"result":{"itemCount":0,"keysWithoutQuorumCount":0,"keysWithoutQuorum":[],"quorumResult":"QUORUM_OK","lastTs":"0"}}
+{"items":[{"ns":"feeds","skey":"v33","ts":"1661214142.000000","payload":{"user":"Validator fan v2"}},{"ns":"feeds","skey":"b120","ts":"1661214142.000000","payload":{"user":"Validator fan"}}],"result":{"itemCount":2,"keysWithoutQuorumCount":0,"keysWithoutQuorum":[],"quorumResult":"QUORUM_OK","lastTs":"1661214142.000000"}}
 ```
