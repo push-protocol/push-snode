@@ -1,4 +1,3 @@
-
 export default class StrUtil {
 
     public static isEmpty(s:string):boolean {

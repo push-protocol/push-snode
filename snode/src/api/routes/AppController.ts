@@ -6,9 +6,9 @@ import {celebrate, Joi} from 'celebrate';
 import log from '../../loaders/logger';
 import DbHelper from '../../helpers/dbHelper';
 import {isEmpty} from "lodash";
-import StrUtil from "../../helpers/strUtil";
+import { StrUtil, DateUtil } from 'dstorage-common';
+
 import bodyParser from "body-parser";
-import DateUtil from "../../helpers/dateUtil";
 
 import {DateTime} from "ts-luxon";
 // const log = Container.get('logger');
