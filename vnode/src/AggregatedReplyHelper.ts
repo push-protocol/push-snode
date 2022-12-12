@@ -1,5 +1,5 @@
 import {Logger} from "@nestjs/common";
-import {StringCounter} from "./helpers/stringCounter";
+import {StringCounter} from "dstorage-common";
 
 const crypto = require("crypto");
 const log = new Logger('AggregatedReplyHelper');

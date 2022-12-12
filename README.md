@@ -4,14 +4,10 @@
 ## Dev setup
 ### Code
 - git clone
-- Configure common library
+- Configure common library (npm link is being used to symlink common library into node_modules)
 ```
-cd dstorage-common 
-npm link
-cd snode
-npm link dstorage-common 
-
-cd dstorage-common 
+(cd snode && npm link ../dstorage-common && ls -la node_modules | grep dstorage)
+(cd vnode && npm link ../dstorage-common && ls -la node_modules | grep dstorage)
 npm run build 
 ```
 ### Database
@@ -32,6 +28,7 @@ psql -h localhost -U postgres -c "CREATE DATABASE \"vnode1\"  WITH OWNER \"postg
 ```
 - create tables and import mock data
 ```
+export PGPASSWORD=postgres
 psql -h localhost -d snode1 -U postgres -a -f snode/migrations/V1__init.sql
 psql -h localhost -d snode1 -U postgres -a -f snode/migrations/V2___sampleData.sql
 

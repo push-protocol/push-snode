@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-import StrUtil from './strUtil';
+import { StrUtil } from 'dstorage-common';
 
 export default class EnvLoader {
 
