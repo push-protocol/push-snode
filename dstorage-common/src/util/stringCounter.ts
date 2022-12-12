@@ -13,9 +13,8 @@
  * Each value holds an additional context object, i.e. 'a' -> 1, [ incrementObject1, incrementObject2 ]
  *
  */
-import {map} from "rxjs";
 
-export class StringCounter<T> {
+export default class StringCounter<T> {
     map: Map<string, ValueHolder<T>> = new Map<string, ValueHolder<T>>();
 
     public increment(key: string, contextValue: T = null) {

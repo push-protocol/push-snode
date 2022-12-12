@@ -1,14 +1,15 @@
 import dotenv from 'dotenv';
-import { StrUtil } from 'dstorage-common';
+import StrUtil from "./strUtil";
 
 export default class EnvLoader {
 
     public static loadEnvOrFail() {
-        const envFound = dotenv.config();
-        if (envFound.error) {
-            // This error should crash whole process
-            throw new Error("⚠️  Couldn't find .env file  ⚠️");
-        }
+        // TODO figure out why this crashes , and why it works without .config() call
+        // const envFound = dotenv.config();
+        // if (envFound.error) {
+        //     // This error should crash whole process
+        //     throw new Error("⚠️  Couldn't find .env file  ⚠️");
+        // }
     }
 
     public static getPropertyOrFail(propName:string):string {

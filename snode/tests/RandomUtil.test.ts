@@ -1,7 +1,7 @@
 import chai from 'chai'
 import 'mocha'
 import DbHelper from '../src/helpers/dbHelper'
-import RandomUtil from "../src/helpers/randomUtil";
+import { RandomUtil } from "dstorage-common";
 
 chai.should()
 const crypto = require("crypto");

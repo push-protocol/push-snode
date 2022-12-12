@@ -1,6 +1,6 @@
 import {Container} from 'typedi';
 import config from '../config';
-import StrUtil from './strUtil'
+import { StrUtil } from 'dstorage-common'
 import log from '../loaders/logger';
 import pgPromise from 'pg-promise';
 

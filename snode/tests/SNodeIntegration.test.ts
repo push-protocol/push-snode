@@ -1,19 +1,19 @@
 import chai from 'chai'
-import RandomUtil from '../src/helpers/randomUtil'
+import { RandomUtil, PromiseUtil, EnvLoader } from 'dstorage-common'
 import pgPromise, {IDatabase} from 'pg-promise';
 import {AxiosResponse} from "axios";
-import PromiseUtil from "../src/helpers/promiseUtil";
+
 // import crypto from 'crypto'
 const crypto = require("crypto");
 var _ = require('lodash');
 
 const expect = chai.expect
 import assert from 'assert-ts';
+
 const axios = require('axios');
 import {DateTime} from "ts-luxon";
-import DateUtil from "../src/helpers/dateUtil";
+import {DateUtil} from "dstorage-common";
 import DbHelper from "../src/helpers/dbHelper";
-import EnvLoader from "../src/config/envLoader";
 
 
 EnvLoader.loadEnvOrFail();
@@ -50,7 +50,8 @@ async function cleanAllTablesAndInitNetworkStorageLayout(db: IDatabase<any>) {
     console.log("cleaning up table: node_storage_layout");
 
     const resultT2 = await db.result(`select string_agg(table_name, ',') as sql
-from information_schema.tables where table_name like 'storage_%';`);
+                                      from information_schema.tables
+                                      where table_name like 'storage_%';`);
     console.log(resultT2);
     if (resultT2.rowCount > 0 && resultT2.rows[0].sql != null) {
         let truncateStorageTablesSql = resultT2.rows[0].sql;
@@ -64,9 +65,9 @@ from information_schema.tables where table_name like 'storage_%';`);
     const maxNodeId = 3;
     const maxShardId = 255;
     const namespaceArr = ['feeds'];
-    let sql = `INSERT INTO network_storage_layout 
-                  (namespace, namespace_shard_id, node_id) 
-                  VALUES `;
+    let sql = `INSERT INTO network_storage_layout
+                   (namespace, namespace_shard_id, node_id)
+               VALUES `;
     let first = true;
     for (let namespace of namespaceArr) {
         for (let shardId = 0; shardId <= maxShardId; shardId++) {
@@ -230,7 +231,8 @@ describe('snode-full', function () {
         // Compare rows in DB (storageTable) vs rows fetched via API
         const shardId = DbHelper.calculateShardForNamespaceIndex(SNode1Constants.namespace, nsIndex);
         const storageTable = await DbHelper.findStorageTableByDate(SNode1Constants.namespace, shardId, seedDate);
-        const rowCount = await snodeDb.one(`SELECT count(*) as count FROM ${storageTable}`).then(value => Number.parseInt(value.count));
+        const rowCount = await snodeDb.one(`SELECT count(*) as count
+                                            FROM ${storageTable}`).then(value => Number.parseInt(value.count));
         console.log(`${storageTable} contains ${rowCount} rows`);
         expect(rowCount).equals(totalRowsFetched);
     });
