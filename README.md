@@ -5,11 +5,19 @@
 ### Code
 - git clone
 - Configure common library (npm link is being used to symlink common library into node_modules)
+
 ```
+(cd dstorage-common && npm i)
+(cd dstorage-common && npm run build) 
+
+(cd snode && npm i)
 (cd snode && npm link ../dstorage-common && ls -la node_modules | grep dstorage)
+
+(cd vnode && npm i)
 (cd vnode && npm link ../dstorage-common && ls -la node_modules | grep dstorage)
-npm run build 
 ```
+Note: after every npm i, please reapply npm link; after every dstorage-common chage - re-run npm build
+
 ### Database
 - install psql command line tool (required for import, you can use any tool, the following steps are for MacOs only)
 ```
@@ -98,4 +106,10 @@ curl -X GET --location "http://localhost:4000/api/v1/kv/ns/feeds/nsidx/2000000/d
 curl -X POST --location "http://localhost:4000/api/v1/kv/ns/feeds/nsidx/2000000/month/202208/list" -H "Content-Type: application/json"                                          
 >
 {"items":[{"ns":"feeds","skey":"v33","ts":"1661214142.000000","payload":{"user":"Validator fan v2"}},{"ns":"feeds","skey":"b120","ts":"1661214142.000000","payload":{"user":"Validator fan"}}],"result":{"itemCount":2,"keysWithoutQuorumCount":0,"keysWithoutQuorum":[],"quorumResult":"QUORUM_OK","lastTs":"1661214142.000000"}}
+```
+- list records from namespace 'feeds' at index '2000000' with month '202208' starting from (>) timestamp '1661214142.000000'
+```
+curl -X POST --location "http://localhost:4000/api/v1/kv/ns/feeds/nsidx/2000000/month/202208/list?firstTs=1661214142.000000" -H "Content-Type: application/json"                                          
+>
+{"items":[{"ns":"feeds","skey":"v33","ts":"1661214202.000000","payload":{"user":"Validator fan v2"}}],"result":{"itemCount":1,"keysWithoutQuorumCount":0,"keysWithoutQuorum":[],"quorumResult":"QUORUM_OK","lastTs":"1661214202.000000"}}
 ```
