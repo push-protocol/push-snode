@@ -10,3 +10,86 @@ services:
       - '5432:5432'
     volumes:
       - ./docker_postgres_init.sql:/docker-entrypoint-initdb.d/docker_postgres_init.sql
+
+  vnode:
+    image: vnodeimage
+    environment:
+      - "NODE_ENV='development'"
+      - "PORT=4011"
+      - "RUNNING_ON_MACHINE=mac"
+      - "LOG_LEVEL='debug'"
+      - "SERVER_ENV=DEV"
+      - "DB_HOST=localhost"
+      - "DB_NAME=postgres@vnode"
+      - "DB_USER=postgres"
+      - "DB_PASS=postgres"
+      - "VNODE_READ_QUORUM=2"
+      - "VNODE_WRITE_QUORUM=2"
+
+    ports:
+      - '4011:4011'
+
+
+  snode1:
+    image: snodeimage
+    environment:
+      - "NODE_ENV='development'"
+      - "PORT=4010"
+      - "RUNNING_ON_MACHINE=mac"
+      - "LOG_LEVEL='debug'"
+      - "SERVER_ENV=DEV"
+      - "DB_HOST=localhost"
+      - "DB_NAME=snode1"
+      - "DB_USER=postgres"
+      - "DB_PASS=postgres"
+
+    ports:
+      - '4010:4010'
+
+  snode2:
+      image: snodeimage
+      environment:
+        - "NODE_ENV='development'"
+        - "PORT=4020"
+        - "RUNNING_ON_MACHINE=mac"
+        - "LOG_LEVEL='debug'"
+        - "SERVER_ENV=DEV"
+        - "DB_HOST=localhost"
+        - "DB_NAME=snode2"
+        - "DB_USER=postgres"
+        - "DB_PASS=postgres"
+
+      ports:
+        - '4020:4020'
+    
+  snode3:
+      image: snodeimage
+      environment:
+        - "NODE_ENV='development'"
+        - "PORT=4030"
+        - "RUNNING_ON_MACHINE=mac"
+        - "LOG_LEVEL='debug'"
+        - "SERVER_ENV=DEV"
+        - "DB_HOST=localhost"
+        - "DB_NAME=snode3"
+        - "DB_USER=postgres"
+        - "DB_PASS=postgres"
+
+      ports:
+        - '4030:4030'
+      
+  snode4:
+      image: snodeimage
+      environment:
+        - "NODE_ENV='development'"
+        - "PORT=4040"
+        - "RUNNING_ON_MACHINE=mac"
+        - "LOG_LEVEL='debug'"
+        - "SERVER_ENV=DEV"
+        - "DB_HOST=localhost"
+        - "DB_NAME=snode4"
+        - "DB_USER=postgres"
+        - "DB_PASS=postgres"
+
+      ports:
+        - '4040:4040'
