@@ -13,6 +13,8 @@ services:
 
   vnode:
     image: vnodeimage
+    depends_on:
+      - db
     environment:
       - "NODE_ENV='development'"
       - "PORT=4011"
@@ -32,6 +34,8 @@ services:
 
   snode1:
     image: snodeimage
+    depends_on:
+      - vnode
     environment:
       - "NODE_ENV='development'"
       - "PORT=4010"
@@ -48,6 +52,8 @@ services:
 
   snode2:
       image: snodeimage
+      depends_on:
+        - snode1
       environment:
         - "NODE_ENV='development'"
         - "PORT=4020"
@@ -64,6 +70,8 @@ services:
     
   snode3:
       image: snodeimage
+      depends_on:
+        - snode2
       environment:
         - "NODE_ENV='development'"
         - "PORT=4030"
@@ -80,6 +88,8 @@ services:
       
   snode4:
       image: snodeimage
+      depends_on:
+        - snode3
       environment:
         - "NODE_ENV='development'"
         - "PORT=4040"

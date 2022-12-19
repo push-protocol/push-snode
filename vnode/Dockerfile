@@ -11,6 +11,6 @@ COPY vnode/package*.json vnode/.env ./vnode/
 WORKDIR ./vnode
 RUN npm install
 COPY ./vnode .
-RUN npm link ../dstorage-common && ls -la node_modules | grep dstorage
+RUN npm link ../dstorage-common
 EXPOSE 4001
 CMD ["npm", "start"]

@@ -11,6 +11,6 @@ COPY snode/package*.json snode/.env ./snode/
 WORKDIR ./snode
 RUN npm install
 COPY ./snode .
-RUN npm link ../dstorage-common && ls -la node_modules | grep dstorage
+RUN npm link ../dstorage-common
 EXPOSE 4001
 CMD ["npm", "start"]
