@@ -7,9 +7,8 @@ import pgPromise from 'pg-promise';
 import {DateTime} from "ts-luxon";
 
 const pg = pgPromise({});
-
 // todo switch to a config file
-export const db = pg("postgres://postgres:postgres@localhost:5432/snode1");
+export const db = pg(`postgres://${process.env.DB_USER}:${process.env.DB_PASS}@${process.env.DB_HOST}:5432/${process.env.DB_NAME}`);
 const crypto = require('crypto');
 
 export default class DbHelper {
