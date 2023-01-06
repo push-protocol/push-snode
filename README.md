@@ -17,13 +17,11 @@
 ```
 
 ### Generate Docker images for storage-node and validator-node
-
+In the root folder run the following commands
 ```bash 
-cd snode 
 docker build -t snodeimage -f snode/Dockerfile . 
 ```
 ```bash
-cd vnode
 docker build -t vnodeimage -f vnode/Dockerfile . 
 ```
 ### Running the Docker containers
