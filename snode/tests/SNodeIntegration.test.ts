@@ -23,7 +23,7 @@ class SNode1Constants {
     // DATA GENERATION
     static dbUri = `postgres://${EnvLoader.getPropertyOrFail('DB_USER')}:${EnvLoader.getPropertyOrFail('DB_PASS')}@${EnvLoader.getPropertyOrFail('DB_HOST')}:5432/${EnvLoader.getPropertyOrFail('DB_NAME')}`;
     // API TESTS
-    static apiUrl = 'http://localhost:3000';
+    static apiUrl = `http://${EnvLoader.getPropertyOrFail('DB_NAME')}:${EnvLoader.getPropertyOrFail('PORT')}`;
     static namespace = 'feeds';
 }
 

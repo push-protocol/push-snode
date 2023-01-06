@@ -11,34 +11,34 @@ services:
     volumes:
       - ./docker_postgres_init.sql:/docker-entrypoint-initdb.d/docker_postgres_init.sql
 
-  vnode:
+  vnode1:
     image: vnodeimage
     depends_on:
       - db
     environment:
       - "NODE_ENV='development'"
-      - "PORT=4011"
+      - "PORT=4000"
       - "RUNNING_ON_MACHINE=mac"
       - "LOG_LEVEL='debug'"
       - "SERVER_ENV=DEV"
       - "DB_HOST=db"
-      - "DB_NAME=postgres@vnode"
+      - "DB_NAME=vnode1"
       - "DB_USER=postgres"
       - "DB_PASS=postgres"
       - "VNODE_READ_QUORUM=2"
       - "VNODE_WRITE_QUORUM=2"
 
     ports:
-      - '4011:4011'
+      - '4000:4000'
 
 
   snode1:
     image: snodeimage
     depends_on:
-      - vnode
+      - vnode1
     environment:
       - "NODE_ENV='development'"
-      - "PORT=4010"
+      - "PORT=3000"
       - "RUNNING_ON_MACHINE=mac"
       - "LOG_LEVEL='debug'"
       - "SERVER_ENV=DEV"
@@ -48,7 +48,7 @@ services:
       - "DB_PASS=postgres"
 
     ports:
-      - '4010:4010'
+      - '3000:3000'
 
   snode2:
       image: snodeimage
@@ -56,7 +56,7 @@ services:
         - snode1
       environment:
         - "NODE_ENV='development'"
-        - "PORT=4020"
+        - "PORT=3001"
         - "RUNNING_ON_MACHINE=mac"
         - "LOG_LEVEL='debug'"
         - "SERVER_ENV=DEV"
@@ -66,7 +66,7 @@ services:
         - "DB_PASS=postgres"
 
       ports:
-        - '4020:4020'
+        - '3001:3001'
     
   snode3:
       image: snodeimage
@@ -74,7 +74,7 @@ services:
         - snode2
       environment:
         - "NODE_ENV='development'"
-        - "PORT=4030"
+        - "PORT=3002"
         - "RUNNING_ON_MACHINE=mac"
         - "LOG_LEVEL='debug'"
         - "SERVER_ENV=DEV"
@@ -84,7 +84,7 @@ services:
         - "DB_PASS=postgres"
 
       ports:
-        - '4030:4030'
+        - '3002:3002'
       
   snode4:
       image: snodeimage
@@ -92,7 +92,7 @@ services:
         - snode3
       environment:
         - "NODE_ENV='development'"
-        - "PORT=4040"
+        - "PORT=3003"
         - "RUNNING_ON_MACHINE=mac"
         - "LOG_LEVEL='debug'"
         - "SERVER_ENV=DEV"
@@ -102,4 +102,4 @@ services:
         - "DB_PASS=postgres"
 
       ports:
-        - '4040:4040'
+        - '3003:3003'
