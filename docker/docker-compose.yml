@@ -31,8 +31,8 @@ services:
       - "DB_NAME=vnode1"
       - "DB_USER=postgres"
       - "DB_PASS=postgres"
-      - "VNODE_READ_QUORUM=2"
-      - "VNODE_WRITE_QUORUM=2"
+      - "VNODE_READ_QUORUM=3"
+      - "VNODE_WRITE_QUORUM=4"
 
     ports:
       - '4000:4000'

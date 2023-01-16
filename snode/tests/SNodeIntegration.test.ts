@@ -1,5 +1,5 @@
 import chai from 'chai'
-import { RandomUtil, PromiseUtil, EnvLoader } from 'dstorage-common'
+import {RandomUtil, PromiseUtil, EnvLoader} from 'dstorage-common'
 import pgPromise, {IDatabase} from 'pg-promise';
 import {AxiosResponse} from "axios";
 
@@ -20,10 +20,10 @@ EnvLoader.loadEnvOrFail();
 
 
 class SNode1Constants {
-    // DATA GENERATION
-    static dbUri = `postgres://${EnvLoader.getPropertyOrFail('DB_USER')}:${EnvLoader.getPropertyOrFail('DB_PASS')}@${EnvLoader.getPropertyOrFail('DB_HOST')}:5432/${EnvLoader.getPropertyOrFail('DB_NAME')}`;
-    // API TESTS
-    static apiUrl = `http://${EnvLoader.getPropertyOrFail('DB_NAME')}:${EnvLoader.getPropertyOrFail('PORT')}`;
+    // DATA GENERATION/POST CHECKS POINTS TO S1 DATABASE
+    static dbUri = `postgres://${EnvLoader.getPropertyOrFail('TEST_SNODE1_DB_USER')}:${EnvLoader.getPropertyOrFail('TEST_SNODE1_DB_PASS')}@${EnvLoader.getPropertyOrFail('TEST_SNODE1_DB_HOST')}:5432/${EnvLoader.getPropertyOrFail('TEST_SNODE1_DB_NAME')}`;
+    // API TESTS POINT TO S1 API
+    static apiUrl = EnvLoader.getPropertyOrFail('TEST_SNODE1_API_URL');
     static namespace = 'feeds';
 }
 
@@ -232,7 +232,9 @@ describe('snode-full', function () {
         const shardId = DbHelper.calculateShardForNamespaceIndex(SNode1Constants.namespace, nsIndex);
         const storageTable = await DbHelper.findStorageTableByDate(SNode1Constants.namespace, shardId, seedDate);
         const rowCount = await snodeDb.one(`SELECT count(*) as count
-                                            FROM ${storageTable}`).then(value => Number.parseInt(value.count));
+                                            FROM ${storageTable}
+                                            WHERE namespace_id='${nsIndex}'`)
+            .then(value => Number.parseInt(value.count));
         console.log(`${storageTable} contains ${rowCount} rows`);
         expect(rowCount).equals(totalRowsFetched);
     });

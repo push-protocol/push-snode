@@ -17,7 +17,7 @@ EnvLoader.loadEnvOrFail();
 
 class VNode1Constants {
     // API TESTS
-    static apiUrl = `http://${EnvLoader.getPropertyOrFail('DB_NAME')}:${EnvLoader.getPropertyOrFail('PORT')}`;
+    static apiUrl = EnvLoader.getPropertyOrFail('TEST_VNODE1_API_URL');
     static namespace = 'feeds';
 }
 
