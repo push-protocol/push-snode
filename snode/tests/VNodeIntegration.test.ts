@@ -78,7 +78,7 @@ describe('vnode-full', function () {
         let resp: AxiosResponse;
         let itemsLength;
         let query = 0;
-        let firstTs;
+        let firstTs = null;
         let totalRowsFetched = 0;
         do {
             resp = await vnodeClient.listRecordsByMonth(VNode1Constants.apiUrl, VNode1Constants.namespace, nsIndex, month, firstTs);
