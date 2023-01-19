@@ -17,7 +17,7 @@ EnvLoader.loadEnvOrFail();
 
 class VNode1Constants {
     // API TESTS
-    static apiUrl = 'http://localhost:4000';
+    static apiUrl = EnvLoader.getPropertyOrFail('TEST_VNODE1_API_URL');
     static namespace = 'feeds';
 }
 
@@ -78,7 +78,7 @@ describe('vnode-full', function () {
         let resp: AxiosResponse;
         let itemsLength;
         let query = 0;
-        let firstTs;
+        let firstTs = null;
         let totalRowsFetched = 0;
         do {
             resp = await vnodeClient.listRecordsByMonth(VNode1Constants.apiUrl, VNode1Constants.namespace, nsIndex, month, firstTs);

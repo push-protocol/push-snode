@@ -10,3 +10,106 @@ services:
       - '5432:5432'
     volumes:
       - ./docker_postgres_init.sql:/docker-entrypoint-initdb.d/docker_postgres_init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  vnode1:
+    image: vnodeimage
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - "NODE_ENV='development'"
+      - "PORT=4000"
+      - "RUNNING_ON_MACHINE=mac"
+      - "LOG_LEVEL='debug'"
+      - "SERVER_ENV=DEV"
+      - "DB_HOST=db"
+      - "DB_NAME=vnode1"
+      - "DB_USER=postgres"
+      - "DB_PASS=postgres"
+      - "VNODE_READ_QUORUM=3"
+      - "VNODE_WRITE_QUORUM=4"
+
+    ports:
+      - '4000:4000'
+
+
+  snode1:
+    image: snodeimage
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - "NODE_ENV='development'"
+      - "PORT=3000"
+      - "RUNNING_ON_MACHINE=mac"
+      - "LOG_LEVEL='debug'"
+      - "SERVER_ENV=DEV"
+      - "DB_HOST=db"
+      - "DB_NAME=snode1"
+      - "DB_USER=postgres"
+      - "DB_PASS=postgres"
+
+    ports:
+      - '3000:3000'
+
+  snode2:
+      image: snodeimage
+      depends_on:
+        db:
+          condition: service_healthy
+      environment:
+        - "NODE_ENV='development'"
+        - "PORT=3001"
+        - "RUNNING_ON_MACHINE=mac"
+        - "LOG_LEVEL='debug'"
+        - "SERVER_ENV=DEV"
+        - "DB_HOST=db"
+        - "DB_NAME=snode2"
+        - "DB_USER=postgres"
+        - "DB_PASS=postgres"
+
+      ports:
+        - '3001:3001'
+    
+  snode3:
+      image: snodeimage
+      depends_on:
+        db:
+          condition: service_healthy
+      environment:
+        - "NODE_ENV='development'"
+        - "PORT=3002"
+        - "RUNNING_ON_MACHINE=mac"
+        - "LOG_LEVEL='debug'"
+        - "SERVER_ENV=DEV"
+        - "DB_HOST=db"
+        - "DB_NAME=snode3"
+        - "DB_USER=postgres"
+        - "DB_PASS=postgres"
+
+      ports:
+        - '3002:3002'
+      
+  snode4:
+      image: snodeimage
+      depends_on:
+        db:
+          condition: service_healthy
+      environment:
+        - "NODE_ENV='development'"
+        - "PORT=3003"
+        - "RUNNING_ON_MACHINE=mac"
+        - "LOG_LEVEL='debug'"
+        - "SERVER_ENV=DEV"
+        - "DB_HOST=db"
+        - "DB_NAME=snode4"
+        - "DB_USER=postgres"
+        - "DB_PASS=postgres"
+
+      ports:
+        - '3003:3003'

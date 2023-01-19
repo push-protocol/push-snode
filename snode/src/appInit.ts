@@ -31,6 +31,38 @@ async function startServer(logLevel = null) {
   const app = express();
   const server = require("http").createServer(app);
 
+  // const Pool = require("pg").Pool;
+
+  // const credentials = {
+  //   user: "postgres",
+  //   host: "db",
+  //   database: "snode1",
+  //   password: "postgres",
+  //   port: 5432,
+  // };
+
+  // let retries = 5;
+
+  // async function connect() {
+    
+  //   const pool = new Pool(credentials);
+  //   const client = await pool.connect();
+  //   console.log("Connected to database");
+  //   client.release();
+  // }
+
+  // while (retries) {
+  //   try {
+  //     await connect();
+  //     break;
+  //   } catch (err) {
+  //     console.log(err);
+  //     retries -= 1;
+  //     console.log(`retries left: ${retries}`);
+  //     // wait 5 seconds
+  //     await new Promise((res) => setTimeout(res, 5000));
+  //   }}
+
 
 
   /**
