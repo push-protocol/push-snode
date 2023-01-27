@@ -3,7 +3,7 @@ pragma solidity >=0.7.0 <0.9.0;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-contract DStorage {
+contract DStorageV1 {
     // pubKey -> NodeInfo
     mapping(address => NodeInfo) pubKeyToNodeMap;
     // storage layout: 'feeds' -> '0x25' -> ['node1','node2','node3']
@@ -84,7 +84,7 @@ contract DStorage {
         require(_amount <= token.balanceOf(msg.sender), "Insufficient balance");
         require(subscribers[msg.sender].isStaked == true, "Already staked");
         token.transferFrom(msg.sender, address(this), _amount);
-        subscribers[msg.sender].walledId = msg.sender;
+        subscribers[msg.sender].walletId = msg.sender;
         subscribers[msg.sender].stakedAmount = _amount;
         subscribers[msg.sender].isStaked = true;
         emit AmountStaked(msg.sender, _amount);
