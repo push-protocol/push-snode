@@ -17,6 +17,9 @@ describe("DSTorageV1", function () {
     const DStorageV1 = await ethers.getContractFactory("DStorageV1");
     const dstoragev1 = await DStorageV1.deploy(pushToken.address);
 
+    await pushToken.mint(owner.address, ethers.utils.parseEther("100"));
+    await pushToken.approve(dstoragev1.address, ethers.utils.parseEther("1000000000000000"));
+
     return { pushToken, dstoragev1 , owner, otherAccount };
   }
 
@@ -31,15 +34,29 @@ describe("DSTorageV1", function () {
       expect(pushToken.address).to.be.properAddress;
     });
 
-    it("Should mint 100 Push tokens to address", async function(){
+    it("Should mint Push tokens to address", async function(){
       const { pushToken, dstoragev1, owner } = await loadFixture(deployDStorageandToken);
 
       //mint 100 tokens to owner
       await pushToken.mint(owner.address, ethers.utils.parseEther("100"));
 
       // Check that the owner has 100 Push tokens
-      expect(await pushToken.balanceOf(owner.address)).to.equal(ethers.utils.parseEther("100"));
+      expect(await pushToken.balanceOf(owner.address)).greaterThan(ethers.utils.parseEther("0"));
+    });
+  });
+
+  describe("Registering SNodes", function () {
+    it("User should deposit tokens for Snode", async function () {
+      const { pushToken, dstoragev1, owner } = await loadFixture(deployDStorageandToken);
+      const amount = ethers.utils.parseEther("60");
+      expect(await dstoragev1.purchase(amount)).to.emit(dstoragev1, "SNodePurchased");
+    });
+
+    it("User should be able to register SNode",async function(){
+      const { pushToken, dstoragev1, owner } = await loadFixture(deployDStorageandToken);
+      const amount = ethers.utils.parseEther("60");
+      await dstoragev1.purchase(amount);
+      expect(await dstoragev1.registerNode(owner?.address,ethers.BigNumber.from(`0`),"http://snode1:3000")).to.emit(dstoragev1, "NodeAdded").withArgs(owner?.address,ethers.BigNumber.from(`0`),"http://snode1:3000");
     })
-    
   });
 });

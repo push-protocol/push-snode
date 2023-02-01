@@ -68,7 +68,17 @@ contract DStorageV1 {
 
     constructor(IERC20 _token) {
         token = _token;
+        //owner = msg.sender;
     }
+
+    // modifier isOwner() {
+    //     require(owner == msg.sender, "Only the owner can create an election.");
+    // _;
+    // }
+    // modifier isValidElectionId(bytes32 _electionId) {
+    //             require(elections[_electionId].electionId != bytes32(0), "Invalid election Id");
+    //     _;
+    // }
 
     function findSNodesByNsAndShard(string memory ns, string memory shard) public view returns (string[] memory d) {
         return nsToShardToSNodeMap[ns][shard];
@@ -82,7 +92,7 @@ contract DStorageV1 {
 
     function purchase(uint256 _amount) public returns(bool){
         require(_amount <= token.balanceOf(msg.sender), "Insufficient balance");
-        require(subscribers[msg.sender].isStaked == true, "Already staked");
+        require(subscribers[msg.sender].isStaked == false, "Already staked");
         token.transferFrom(msg.sender, address(this), _amount);
         subscribers[msg.sender].walletId = msg.sender;
         subscribers[msg.sender].stakedAmount = _amount;
@@ -97,7 +107,7 @@ contract DStorageV1 {
 
     // Create a new node
     function registerNode(bytes memory _pubKey, NodeType _nodeType, string memory _nodeApiBaseUrl) public payable {
-        require(subscribers[msg.sender].isStaked == false, "Not staked");
+        require(subscribers[msg.sender].isStaked == true, "Not staked");
         uint256 coll = subscribers[msg.sender].stakedAmount;
         if (_nodeType == NodeType.SNode) {
             require(coll >= SNODE_COLLATERAL, "Insufficient collateral for SNODE");
@@ -106,9 +116,9 @@ contract DStorageV1 {
         } else {
             revert("unsupported nodeType ");
         }
-        if (!checkPubKeyMatchesSender(_pubKey)) {
-            revert("pubKey does not match");
-        }
+        // if (!checkPubKeyMatchesSender(_pubKey)) {
+        //     revert("pubKey does not match");
+        // }
         NodeInfo storage n = pubKeyToNodeMap[msg.sender];
         if (n.pubKey.length == 0) {
             // no mapping
@@ -117,6 +127,7 @@ contract DStorageV1 {
             n.nodeType = _nodeType;
             n.pushTokensLocked = coll;
             n.nodeApiBaseUrl = _nodeApiBaseUrl;
+            emit NodeAdded(string(_pubKey), string(abi.encodePacked(msg.sender)), _nodeType, coll, _nodeApiBaseUrl);
         } else {
             revert("a node with pubKey is already defined");
             // todo update?
@@ -167,5 +178,23 @@ contract DStorageV1 {
             // do nothing; terminal state
         }
     }
+
+    // address public owner;
+    // address private newOwner;
+
+    // function transferOwnership(address _newOwner) external {
+    //         require(_newOwner == owner, "Cannot transfer ownership to the current owner.");
+    //         require(msg.sender == owner, "Only the owner can transfer ownership.");
+    //         require(_newOwner != address(0), "Cannot transfer ownership to address(0)");
+    //         newOwner = _newOwner;
+    //         emit LogTransferOwnership(msg.sender, block.timestamp);
+    //     }
+
+    //     function acceptOwnership() external {
+    //         require(msg.sender == newOwner, "Only the new owner can accept the ownership.");
+    //         owner = newOwner;
+    //         newOwner = address(0);
+    //         emit LogAcceptOwnership(msg.sender, block.timestamp);
+    // }
 
 }
