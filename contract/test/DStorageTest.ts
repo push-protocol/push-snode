@@ -1,5 +1,7 @@
 import { time, loadFixture } from "@nomicfoundation/hardhat-network-helpers";
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
+import "@nomicfoundation/hardhat-chai-matchers";
+import "@nomiclabs/hardhat-ethers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
@@ -46,17 +48,28 @@ describe("DSTorageV1", function () {
   });
 
   describe("Registering SNodes", function () {
-    it("User should deposit tokens for Snode", async function () {
+    it("User should be able to register SNode if collateral is sufficient",async function(){
       const { pushToken, dstoragev1, owner } = await loadFixture(deployDStorageandToken);
-      const amount = ethers.utils.parseEther("60");
-      expect(await dstoragev1.purchase(amount)).to.emit(dstoragev1, "SNodePurchased");
-    });
+      expect(await dstoragev1.registerNode(owner?.address,1,"http://snode1:3000",80)).to.emit(dstoragev1, "NodeAdded").withArgs(owner?.address,'SNode',"http://snode1:3000");
+    })
 
-    it("User should be able to register SNode",async function(){
+    it("User should be not able to register SNode if collateral is not sufficient",async function(){
       const { pushToken, dstoragev1, owner } = await loadFixture(deployDStorageandToken);
-      const amount = ethers.utils.parseEther("60");
-      await dstoragev1.purchase(amount);
-      expect(await dstoragev1.registerNode(owner?.address,ethers.BigNumber.from(`0`),"http://snode1:3000")).to.emit(dstoragev1, "NodeAdded").withArgs(owner?.address,ethers.BigNumber.from(`0`),"http://snode1:3000");
+      await expect(dstoragev1.registerNode(owner?.address,1,"http://snode1:3000",50)).to.be.revertedWith('Insufficient collateral for SNODE');
     })
   });
+
+  describe("Registering VNodes", function () {
+
+    it("User should be able to register VNode",async function(){
+      const { pushToken, dstoragev1, owner } = await loadFixture(deployDStorageandToken);
+      expect(await dstoragev1.registerNode(owner?.address,0,"http://vnode1:4000",100)).to.emit(dstoragev1, "NodeAdded").withArgs(owner?.address,0,"http://vnode1:4000");
+    })
+
+    it("User should not be able to register VNode if collateral is insufficient",async function(){
+      const { pushToken, dstoragev1, owner } = await loadFixture(deployDStorageandToken);
+      await expect(dstoragev1.registerNode(owner?.address,0,"http://vnode1:4000",60)).to.emit(dstoragev1, "NodeAdded").to.be.revertedWith('Insufficient collateral for VNODE');
+    })
+  });
+
 });

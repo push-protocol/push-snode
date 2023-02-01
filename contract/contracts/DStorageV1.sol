@@ -11,9 +11,6 @@ contract DStorageV1 {
     // storage layout: 'feeds' -> ['0x25','0x26']
     mapping(string => string[]) nsToShard; // todo not used yet
 
-    // subscription for API users
-    mapping(address => Subscriber) subscribers;
-
     IERC20 public token;
 
     uint public constant TIME_1_DAY = 1 days;
@@ -49,11 +46,11 @@ contract DStorageV1 {
         Ban
     }
 
-    struct Subscriber {
-        address walletId;
-        uint256 stakedAmount;
-        bool isStaked;
-    }
+    // struct Subscriber {
+    //     address walletId;
+    //     uint256 stakedAmount;
+    //     bool isStaked;
+    // }
 
     enum NodeType {
         VNode, // validator
@@ -90,25 +87,13 @@ contract DStorageV1 {
         return true;
     }
 
-    function purchase(uint256 _amount) public returns(bool){
-        require(_amount <= token.balanceOf(msg.sender), "Insufficient balance");
-        require(subscribers[msg.sender].isStaked == false, "Already staked");
-        token.transferFrom(msg.sender, address(this), _amount);
-        subscribers[msg.sender].walletId = msg.sender;
-        subscribers[msg.sender].stakedAmount = _amount;
-        subscribers[msg.sender].isStaked = true;
-        emit AmountStaked(msg.sender, _amount);
-        return true;
-    }
-
     function checkPubKeyMatchesSender(bytes memory pubkey) private view returns (bool){
         return (uint256(keccak256(pubkey)) & 0x00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF) == uint256(uint160(msg.sender));
     }
 
     // Create a new node
-    function registerNode(bytes memory _pubKey, NodeType _nodeType, string memory _nodeApiBaseUrl) public payable {
-        require(subscribers[msg.sender].isStaked == true, "Not staked");
-        uint256 coll = subscribers[msg.sender].stakedAmount;
+    function registerNode(bytes memory _pubKey, NodeType _nodeType, string memory _nodeApiBaseUrl, uint256 _coll) public payable {
+        uint256 coll = _coll;
         if (_nodeType == NodeType.SNode) {
             require(coll >= SNODE_COLLATERAL, "Insufficient collateral for SNODE");
         } else if (_nodeType == NodeType.VNode) {
