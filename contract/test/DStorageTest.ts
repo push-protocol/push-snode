@@ -11,7 +11,7 @@ describe("DSTorageV1", function () {
   // and reset Hardhat Network to that snapshot in every test.
   async function deployDStorageandToken() {
     // Contracts are deployed using the first signer/account by default
-    const [owner, otherAccount] = await ethers.getSigners();
+    const [owner, otherAccount, thirdAccount] = await ethers.getSigners();
 
     const PushToken = await ethers.getContractFactory("PushToken");
     const pushToken = await PushToken.deploy();
@@ -22,7 +22,7 @@ describe("DSTorageV1", function () {
     await pushToken.mint(owner.address, ethers.utils.parseEther("100"));
     await pushToken.approve(dstoragev1.address, ethers.utils.parseEther("1000000000000000"));
 
-    return { pushToken, dstoragev1 , owner, otherAccount };
+    return { pushToken, dstoragev1 , owner, otherAccount, thirdAccount };
   }
 
   describe("Deployment", function () {
@@ -88,7 +88,7 @@ describe("DSTorageV1", function () {
     });
   });
 
-  describe("Managing contract ownership", function (){
+  describe("Transfer contract ownership", function (){
     it("Transfer ownership if the new owner is different", async function (){
       const { pushToken, dstoragev1, owner, otherAccount } = await loadFixture(deployDStorageandToken);
       console.log("Old Owner : ",await dstoragev1.owner());
@@ -106,6 +106,24 @@ describe("DSTorageV1", function () {
       await expect(dstoragev1.transferOwnership(ethers.constants.AddressZero)).to.be.revertedWith('Cannot transfer ownership to address(0)');
     })
 
+    it("Transfer is only possible by the owner", async function (){
+      const { pushToken, dstoragev1, owner, otherAccount } = await loadFixture(deployDStorageandToken);
+      await expect(dstoragev1.connect(otherAccount).transferOwnership(otherAccount.address)).to.be.revertedWith('Only the owner can transfer ownership.');
+    });
+  });
+
+  describe("Accepting ownership", function (){
+    it("Accepting ownership is only possible by the new owner", async function (){
+      const { pushToken, dstoragev1, owner, otherAccount } = await loadFixture(deployDStorageandToken);
+      await expect(dstoragev1.transferOwnership(otherAccount.address)).to.emit(dstoragev1, "LogTransferOwnership");
+      await expect(dstoragev1.connect(otherAccount).acceptOwnership()).to.emit(dstoragev1, "LogAcceptOwnership");
+    });
+
+    it("Accepting ownership is not possible by any other address", async function (){
+      const { pushToken, dstoragev1, owner, otherAccount, thirdAccount } = await loadFixture(deployDStorageandToken);
+      await expect(dstoragev1.transferOwnership(otherAccount.address)).to.emit(dstoragev1, "LogTransferOwnership");
+      await expect(dstoragev1.connect(thirdAccount).acceptOwnership()).to.be.revertedWith('Only the new owner can accept the ownership.');
+    });
   });
 
 });
