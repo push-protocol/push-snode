@@ -50,12 +50,19 @@ describe("DSTorageV1", function () {
   describe("Registering SNodes", function () {
     it("User should be able to register SNode if collateral is sufficient",async function(){
       const { pushToken, dstoragev1, owner } = await loadFixture(deployDStorageandToken);
-      expect(await dstoragev1.registerNode(owner?.address,1,"http://snode1:3000",80)).to.emit(dstoragev1, "NodeAdded").withArgs(owner?.address,'SNode',"http://snode1:3000");
+      expect(await dstoragev1.registerNode(owner?.address,1,"http://snode1:3000",60)).to.emit(dstoragev1, "NodeAdded").withArgs(owner?.address,'SNode',"http://snode1:3000");
     })
 
     it("User should be not able to register SNode if collateral is not sufficient",async function(){
       const { pushToken, dstoragev1, owner } = await loadFixture(deployDStorageandToken);
       await expect(dstoragev1.registerNode(owner?.address,1,"http://snode1:3000",50)).to.be.revertedWith('Insufficient collateral for SNODE');
+    })
+    it("Registering Snodes not possible with same pubkey", async function(){
+      const { pushToken, dstoragev1, owner } = await loadFixture(deployDStorageandToken);
+      console.log("Deploying a SNode from : ",owner?.address);
+      expect(await dstoragev1.registerNode(owner?.address,1,"http://snode1:3000",60)).to.emit(dstoragev1, "NodeAdded").withArgs(owner?.address,'SNode',"http://snode1:3000");
+      console.log("Trying to deploy another SNode from : ",owner?.address);
+      await expect(dstoragev1.registerNode(owner?.address,1,"http://snode1:3000",60)).to.emit(dstoragev1, "NodeAdded").to.be.revertedWith('a node with pubKey is already defined');
     })
   });
 
@@ -70,6 +77,35 @@ describe("DSTorageV1", function () {
       const { pushToken, dstoragev1, owner } = await loadFixture(deployDStorageandToken);
       await expect(dstoragev1.registerNode(owner?.address,0,"http://vnode1:4000",60)).to.emit(dstoragev1, "NodeAdded").to.be.revertedWith('Insufficient collateral for VNODE');
     })
+
+    it("Registering Vnodes not possible with same pubkey", async function(){
+      const { pushToken, dstoragev1, owner } = await loadFixture(deployDStorageandToken);
+      console.log("Deploying a SNode from : ",owner?.address);
+      expect(await dstoragev1.registerNode(owner?.address,0,"http://vnode1:4000",100)).to.emit(dstoragev1, "NodeAdded").withArgs(owner?.address,'VNode',"http://vnode1:4000");
+      console.log("Trying to deploy another SNode from : ",owner?.address);
+      await expect(dstoragev1.registerNode(owner?.address,0,"http://vnode1:4000",100)).to.emit(dstoragev1, "NodeAdded").to.be.revertedWith('a node with pubKey is already defined');
+
+    });
+  });
+
+  describe("Managing contract ownership", function (){
+    it("Transfer ownership if the new owner is different", async function (){
+      const { pushToken, dstoragev1, owner, otherAccount } = await loadFixture(deployDStorageandToken);
+      console.log("Old Owner : ",await dstoragev1.owner());
+      await expect(dstoragev1.transferOwnership(otherAccount.address)).to.emit(dstoragev1, "LogTransferOwnership");
+      console.log("Ownership to be transferred to : ",await dstoragev1.newOwner());
+    });
+
+    it("Transfer ownership is not possible if the new owner is same as old owner", async function (){
+      const { pushToken, dstoragev1, owner, otherAccount } = await loadFixture(deployDStorageandToken);
+      await expect(dstoragev1.transferOwnership(owner.address)).to.be.revertedWith('Cannot transfer ownership to the current owner.');
+    });
+
+    it("Transfer ownership is not possible if the new owner is zero address", async function (){
+      const { pushToken, dstoragev1, owner, otherAccount } = await loadFixture(deployDStorageandToken);
+      await expect(dstoragev1.transferOwnership(ethers.constants.AddressZero)).to.be.revertedWith('Cannot transfer ownership to address(0)');
+    })
+
   });
 
 });

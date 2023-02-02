@@ -18,6 +18,9 @@ contract DStorageV1 {
     uint256 public SNODE_COLLATERAL = 60;
     uint256 public VNODE_COLLATERAL = 100;
 
+    address public owner;
+    address public newOwner;
+
     struct NodeInfo {
         bytes pubKey;         // custom public key (non-eth)
         address walletId;       // eth wallet // todo decide to store only pubKey or walletId
@@ -46,12 +49,6 @@ contract DStorageV1 {
         Ban
     }
 
-    // struct Subscriber {
-    //     address walletId;
-    //     uint256 stakedAmount;
-    //     bool isStaked;
-    // }
-
     enum NodeType {
         VNode, // validator
         SNode, // storage
@@ -62,20 +59,13 @@ contract DStorageV1 {
     event SNodesByNsAndShard(string ns, string shard, string[] value);
     event NodeSlashed(string indexed pubKey, VoteAction voteAction);
     event AmountStaked(address indexed walletId, uint256 amount);
+    event LogTransferOwnership(address indexed oldOwner, uint256 timestamp);
+    event LogAcceptOwnership(address indexed newOwner, uint256 timestamp);
 
     constructor(IERC20 _token) {
         token = _token;
-        //owner = msg.sender;
+        owner = msg.sender;
     }
-
-    // modifier isOwner() {
-    //     require(owner == msg.sender, "Only the owner can create an election.");
-    // _;
-    // }
-    // modifier isValidElectionId(bytes32 _electionId) {
-    //             require(elections[_electionId].electionId != bytes32(0), "Invalid election Id");
-    //     _;
-    // }
 
     function findSNodesByNsAndShard(string memory ns, string memory shard) public view returns (string[] memory d) {
         return nsToShardToSNodeMap[ns][shard];
@@ -164,22 +154,28 @@ contract DStorageV1 {
         }
     }
 
-    // address public owner;
-    // address private newOwner;
-
-    // function transferOwnership(address _newOwner) external {
-    //         require(_newOwner == owner, "Cannot transfer ownership to the current owner.");
-    //         require(msg.sender == owner, "Only the owner can transfer ownership.");
-    //         require(_newOwner != address(0), "Cannot transfer ownership to address(0)");
-    //         newOwner = _newOwner;
-    //         emit LogTransferOwnership(msg.sender, block.timestamp);
-    //     }
-
-    //     function acceptOwnership() external {
-    //         require(msg.sender == newOwner, "Only the new owner can accept the ownership.");
-    //         owner = newOwner;
-    //         newOwner = address(0);
-    //         emit LogAcceptOwnership(msg.sender, block.timestamp);
+    // modifier isOwner() {
+    //     require(owner == msg.sender, "Only the owner can create an election.");
+    // _;
     // }
+    // modifier isValidElectionId(bytes32 _electionId) {
+    //             require(elections[_electionId].electionId != bytes32(0), "Invalid election Id");
+    //     _;
+    // }
+
+    function transferOwnership(address _newOwner) external {
+            require(_newOwner != owner, "Cannot transfer ownership to the current owner.");
+            require(msg.sender == owner, "Only the owner can transfer ownership.");
+            require(_newOwner != address(0), "Cannot transfer ownership to address(0)");
+            newOwner = _newOwner;
+            emit LogTransferOwnership(msg.sender, block.timestamp);
+        }
+
+        function acceptOwnership() external {
+            require(msg.sender == newOwner, "Only the new owner can accept the ownership.");
+            owner = newOwner;
+            newOwner = address(0);
+            emit LogAcceptOwnership(msg.sender, block.timestamp);
+    }
 
 }
