@@ -1,8 +1,6 @@
 //SPDX-LIcense-Identifier: MIT
 pragma solidity >=0.7.0 <0.9.0;
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-
 contract DStorageV1 {
     // pubKey -> NodeInfo
     mapping(address => NodeInfo) pubKeyToNodeMap;
@@ -11,12 +9,8 @@ contract DStorageV1 {
     // storage layout: 'feeds' -> ['0x25','0x26']
     mapping(string => string[]) nsToShard; // todo not used yet
 
-    IERC20 public token;
-
-    uint public constant TIME_1_DAY = 1 days;
-
-    uint256 public SNODE_COLLATERAL = 60;
-    uint256 public VNODE_COLLATERAL = 100;
+    uint256 public SNODE_COLLATERAL;
+    uint256 public VNODE_COLLATERAL;
 
     address public owner;
     address public newOwner;
@@ -62,8 +56,13 @@ contract DStorageV1 {
     event LogTransferOwnership(address indexed oldOwner, uint256 timestamp);
     event LogAcceptOwnership(address indexed newOwner, uint256 timestamp);
 
-    constructor(IERC20 _token) {
-        token = _token;
+    // constructor() {
+    //     owner = msg.sender;
+    // }
+
+    function initialize() public {
+        SNODE_COLLATERAL=60;
+        VNODE_COLLATERAL=100;
         owner = msg.sender;
     }
 
