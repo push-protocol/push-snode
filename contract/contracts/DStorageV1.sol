@@ -1,8 +1,6 @@
 //SPDX-LIcense-Identifier: MIT
 pragma solidity >=0.7.0 <0.9.0;
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-
 contract DStorageV1 {
     // pubKey -> NodeInfo
     mapping(address => NodeInfo) pubKeyToNodeMap;
@@ -11,15 +9,11 @@ contract DStorageV1 {
     // storage layout: 'feeds' -> ['0x25','0x26']
     mapping(string => string[]) nsToShard; // todo not used yet
 
-    // subscription for API users
-    mapping(address => Subscriber) subscribers;
+    uint256 public SNODE_COLLATERAL;
+    uint256 public VNODE_COLLATERAL;
 
-    IERC20 public token;
-
-    uint public constant TIME_1_DAY = 1 days;
-
-    uint256 public SNODE_COLLATERAL = 60;
-    uint256 public VNODE_COLLATERAL = 100;
+    address public owner;
+    address public newOwner;
 
     struct NodeInfo {
         bytes pubKey;         // custom public key (non-eth)
@@ -49,12 +43,6 @@ contract DStorageV1 {
         Ban
     }
 
-    struct Subscriber {
-        address walletId;
-        uint256 stakedAmount;
-        bool isStaked;
-    }
-
     enum NodeType {
         VNode, // validator
         SNode, // storage
@@ -65,9 +53,17 @@ contract DStorageV1 {
     event SNodesByNsAndShard(string ns, string shard, string[] value);
     event NodeSlashed(string indexed pubKey, VoteAction voteAction);
     event AmountStaked(address indexed walletId, uint256 amount);
+    event LogTransferOwnership(address indexed oldOwner, uint256 timestamp);
+    event LogAcceptOwnership(address indexed newOwner, uint256 timestamp);
 
-    constructor(IERC20 _token) {
-        token = _token;
+    // constructor() {
+    //     owner = msg.sender;
+    // }
+
+    function initialize() public {
+        SNODE_COLLATERAL=60;
+        VNODE_COLLATERAL=100;
+        owner = msg.sender;
     }
 
     function findSNodesByNsAndShard(string memory ns, string memory shard) public view returns (string[] memory d) {
@@ -80,25 +76,13 @@ contract DStorageV1 {
         return true;
     }
 
-    function purchase(uint256 _amount) public returns(bool){
-        require(_amount <= token.balanceOf(msg.sender), "Insufficient balance");
-        require(subscribers[msg.sender].isStaked == true, "Already staked");
-        token.transferFrom(msg.sender, address(this), _amount);
-        subscribers[msg.sender].walletId = msg.sender;
-        subscribers[msg.sender].stakedAmount = _amount;
-        subscribers[msg.sender].isStaked = true;
-        emit AmountStaked(msg.sender, _amount);
-        return true;
-    }
-
     function checkPubKeyMatchesSender(bytes memory pubkey) private view returns (bool){
         return (uint256(keccak256(pubkey)) & 0x00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF) == uint256(uint160(msg.sender));
     }
 
     // Create a new node
-    function registerNode(bytes memory _pubKey, NodeType _nodeType, string memory _nodeApiBaseUrl) public payable {
-        require(subscribers[msg.sender].isStaked == false, "Not staked");
-        uint256 coll = subscribers[msg.sender].stakedAmount;
+    function registerNode(bytes memory _pubKey, NodeType _nodeType, string memory _nodeApiBaseUrl, uint256 _coll) public payable {
+        uint256 coll = _coll;
         if (_nodeType == NodeType.SNode) {
             require(coll >= SNODE_COLLATERAL, "Insufficient collateral for SNODE");
         } else if (_nodeType == NodeType.VNode) {
@@ -106,9 +90,9 @@ contract DStorageV1 {
         } else {
             revert("unsupported nodeType ");
         }
-        if (!checkPubKeyMatchesSender(_pubKey)) {
-            revert("pubKey does not match");
-        }
+        // if (!checkPubKeyMatchesSender(_pubKey)) {
+        //     revert("pubKey does not match");
+        // }
         NodeInfo storage n = pubKeyToNodeMap[msg.sender];
         if (n.pubKey.length == 0) {
             // no mapping
@@ -117,6 +101,7 @@ contract DStorageV1 {
             n.nodeType = _nodeType;
             n.pushTokensLocked = coll;
             n.nodeApiBaseUrl = _nodeApiBaseUrl;
+            emit NodeAdded(string(_pubKey), string(abi.encodePacked(msg.sender)), _nodeType, coll, _nodeApiBaseUrl);
         } else {
             revert("a node with pubKey is already defined");
             // todo update?
@@ -166,6 +151,30 @@ contract DStorageV1 {
         } else if (targetNode.slashResult == SlashResult.Ban) {
             // do nothing; terminal state
         }
+    }
+
+    // modifier isOwner() {
+    //     require(owner == msg.sender, "Only the owner can create an election.");
+    // _;
+    // }
+    // modifier isValidElectionId(bytes32 _electionId) {
+    //             require(elections[_electionId].electionId != bytes32(0), "Invalid election Id");
+    //     _;
+    // }
+
+    function transferOwnership(address _newOwner) external {
+            require(_newOwner != owner, "Cannot transfer ownership to the current owner.");
+            require(msg.sender == owner, "Only the owner can transfer ownership.");
+            require(_newOwner != address(0), "Cannot transfer ownership to address(0)");
+            newOwner = _newOwner;
+            emit LogTransferOwnership(msg.sender, block.timestamp);
+        }
+
+        function acceptOwnership() external {
+            require(msg.sender == newOwner, "Only the new owner can accept the ownership.");
+            owner = newOwner;
+            newOwner = address(0);
+            emit LogAcceptOwnership(msg.sender, block.timestamp);
     }
 
 }
