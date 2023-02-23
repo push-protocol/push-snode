@@ -15,7 +15,7 @@ export default class SNodeClient {
         if (firstTs != null) {
             url += `?firstTs=${firstTs}`
         }
-        let resp = await axios.post(url, {timeout: 3000});
+        let resp = await axios.post(url, null,{timeout: 3000});
         console.log('listRecordsByMonth', url, resp.status, resp.data);
         return resp;
     }
