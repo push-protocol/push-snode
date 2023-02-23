@@ -21,9 +21,9 @@ EnvLoader.loadEnvOrFail();
 
 class SNode1Constants {
     // DATA GENERATION/POST CHECKS POINTS TO S1 DATABASE
-    static dbUri = `postgres://${EnvLoader.getPropertyOrFail('TEST_SNODE1_DB_USER')}:${EnvLoader.getPropertyOrFail('TEST_SNODE1_DB_PASS')}@${EnvLoader.getPropertyOrFail('TEST_SNODE1_DB_HOST')}:5432/${EnvLoader.getPropertyOrFail('TEST_SNODE1_DB_NAME')}`;
+    static dbUri = `postgres://${EnvLoader.getPropertyOrFail('TEST_SNODE_DB_USER')}:${EnvLoader.getPropertyOrFail('TEST_SNODE_DB_PASS')}@${EnvLoader.getPropertyOrFail('TEST_SNODE_DB_HOST')}:5432/${EnvLoader.getPropertyOrFail('TEST_SNODE_DB_NAME')}`;
     // API TESTS POINT TO S1 API
-    static apiUrl = EnvLoader.getPropertyOrFail('TEST_SNODE1_API_URL');
+    static apiUrl = EnvLoader.getPropertyOrFail('TEST_SNODE_API_URL');
     static namespace = 'feeds';
 }
 

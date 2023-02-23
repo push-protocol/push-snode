@@ -9,18 +9,40 @@ services:
     ports:
       - '5432:5432'
     volumes:
+      - ../snode/migrations/V1__init.sql:/snode/migrations/V1__init.sql
+      - ../snode/migrations/V2___sampleData.sql:/snode/migrations/V2___sampleData.sql
+      - ../vnode/migrations/V1__init.sql:/vnode/migrations/V1__init.sql
+      - ../vnode/migrations/V2___sampleData.sql:/vnode/migrations/V2___sampleData.sql
+      - ./dstorage_populate.sh:/dstorage_populate.sh
       - ./docker_postgres_init.sql:/docker-entrypoint-initdb.d/docker_postgres_init.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
+      
+
+  dbsetup:
+    image: postgres:14
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ../snode/migrations/V1__init.sql:/snode/migrations/V1__init.sql
+      - ../snode/migrations/V2___sampleData.sql:/snode/migrations/V2___sampleData.sql
+      - ../vnode/migrations/V1__init.sql:/vnode/migrations/V1__init.sql
+      - ../vnode/migrations/V2___sampleData.sql:/vnode/migrations/V2___sampleData.sql
+      - ./dstorage_populate.sh:/dstorage_populate.sh
+    command: sh -c "/dstorage_populate.sh"
 
   vnode1:
     image: vnodeimage
     depends_on:
       db:
         condition: service_healthy
+      dbsetup:
+        condition: service_completed_successfully
     environment:
       - "NODE_ENV='development'"
       - "PORT=4000"
@@ -43,6 +65,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      dbsetup:
+        condition: service_completed_successfully
     environment:
       - "NODE_ENV='development'"
       - "PORT=3000"
@@ -53,6 +77,12 @@ services:
       - "DB_NAME=snode1"
       - "DB_USER=postgres"
       - "DB_PASS=postgres"
+      - "TEST_VNODE1_API_URL=http://vnode1:4000" 
+      - "TEST_SNODE_API_URL=http://snode1:3000" 
+      - "TEST_SNODE_DB_USER=postgres"
+      - "TEST_SNODE_DB_PASS=postgres" 
+      - "TEST_SNODE_DB_HOST=db" 
+      - "TEST_SNODE_DB_NAME=snode1"
 
     ports:
       - '3000:3000'
@@ -62,6 +92,8 @@ services:
       depends_on:
         db:
           condition: service_healthy
+        dbsetup:
+          condition: service_completed_successfully
       environment:
         - "NODE_ENV='development'"
         - "PORT=3001"
@@ -72,6 +104,12 @@ services:
         - "DB_NAME=snode2"
         - "DB_USER=postgres"
         - "DB_PASS=postgres"
+        - "TEST_VNODE1_API_URL=http://vnode1:4000" 
+        - "TEST_SNODE_API_URL=http://snode2:3001" 
+        - "TEST_SNODE_DB_USER=postgres"
+        - "TEST_SNODE_DB_PASS=postgres" 
+        - "TEST_SNODE_DB_HOST=db" 
+        - "TEST_SNODE_DB_NAME=snode2"
 
       ports:
         - '3001:3001'
@@ -81,6 +119,8 @@ services:
       depends_on:
         db:
           condition: service_healthy
+        dbsetup:
+          condition: service_completed_successfully
       environment:
         - "NODE_ENV='development'"
         - "PORT=3002"
@@ -91,6 +131,12 @@ services:
         - "DB_NAME=snode3"
         - "DB_USER=postgres"
         - "DB_PASS=postgres"
+        - "TEST_VNODE1_API_URL=http://vnode1:4000"
+        - "TEST_SNODE_API_URL=http://snode3:3002"
+        - "TEST_SNODE_DB_USER=postgres"
+        - "TEST_SNODE_DB_PASS=postgres"
+        - "TEST_SNODE_DB_HOST=db"
+        - "TEST_SNODE_DB_NAME=snode3"
 
       ports:
         - '3002:3002'
@@ -100,6 +146,8 @@ services:
       depends_on:
         db:
           condition: service_healthy
+        dbsetup:
+          condition: service_completed_successfully
       environment:
         - "NODE_ENV='development'"
         - "PORT=3003"
@@ -110,6 +158,12 @@ services:
         - "DB_NAME=snode4"
         - "DB_USER=postgres"
         - "DB_PASS=postgres"
+        - "TEST_VNODE1_API_URL=http://vnode1:4000"
+        - "TEST_SNODE_API_URL=http://snode4:3003"
+        - "TEST_SNODE_DB_USER=postgres"
+        - "TEST_SNODE_DB_PASS=postgres"
+        - "TEST_SNODE_DB_HOST=db"
+        - "TEST_SNODE_DB_NAME=snode4"
 
       ports:
         - '3003:3003'
