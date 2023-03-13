@@ -1,7 +1,6 @@
 //SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.17;
 
-import "./DStorageV1.sol";
 
 // a mock interface of a PUSH token; only bare minimum is needed
 interface IPush {
@@ -122,7 +121,8 @@ contract DStorageV1 is Ownable {
     // node colleciton
     address[] nodes;
     mapping(address => NodeInfo) pubKeyToNodeMap;
-
+    uint256 totalStaked;      // push tokens owned by this contract; which have an owner
+    uint256 totalPenalties;   // push tokens owned by this contract; comes from penalties
 
     struct NodeInfo {
         address ownerWallet;
@@ -130,7 +130,6 @@ contract DStorageV1 is Ownable {
         NodeType nodeType;
         uint256 pushTokensLocked;
         string nodeApiBaseUrl; // rest api url for invocation
-        Vote[] votes;
         NodeCounters counters;
         NodeStatus status;
     }
@@ -221,6 +220,7 @@ contract DStorageV1 is Ownable {
         pubKeyToNodeMap[_nodeWallet] = n;
         // take collateral
         pushToken.transferFrom(msg.sender, address(this), coll);
+        totalStaked += coll;
         // post actions
         MIN_NODES_FOR_REPORT = (uint32)(1 + (nodes.length / 2));
         emit NodeAdded(msg.sender, _nodeWallet, _nodeType, coll, _nodeApiBaseUrl);
@@ -252,17 +252,10 @@ contract DStorageV1 is Ownable {
         if (targetNode.nodeWallet == address(0)) {
             revert("a node with _targetPubKey does not exists");
         }
-        Vote storage v = targetNode.votes.push();
-        v.ts = block.timestamp;
-        for(uint256 i=0;i<_nodeIdsReported.length;i++) {
-            v.voters.push(_nodeIdsReported[i]);
-        }
-        v.target = _vm.target;
-        v.voteAction = _vm.vote;
         NodeCounters memory counters = targetNode.counters;
         NodeStatus ns = targetNode.status;
         // 2 check count
-        if (v.voteAction == VoteAction.Report) {
+        if (_vm.vote == VoteAction.Report) {
             targetNode.counters.reportCounter = ++counters.reportCounter;
         } else {
             revert("unsupported");
@@ -294,16 +287,22 @@ contract DStorageV1 is Ownable {
         NodeInfo storage node = pubKeyToNodeMap[_nodeWallet];
         uint256 currentAmount = node.pushTokensLocked;
         uint256 newAmount = (currentAmount * (100 - _percentage)) / 100;
+        uint256 delta = currentAmount - newAmount;
         node.pushTokensLocked = newAmount;
+        totalStaked -= delta;
+        totalPenalties += delta;
     }
 
     function unstake(address _nodeWallet) private {
         require(_nodeWallet != address(0));
         NodeInfo storage node = pubKeyToNodeMap[_nodeWallet];
-        pushToken.transfer(node.ownerWallet, node.pushTokensLocked);
+        uint256 delta = node.pushTokensLocked;
+        pushToken.transfer(node.ownerWallet, delta);
+        node.pushTokensLocked = 0;
+        totalStaked -= delta;
     }
 
-    function getNodeInfo(address _nodeWallet) public returns (NodeInfo memory) {
+    function getNodeInfo(address _nodeWallet) public view returns (NodeInfo memory) {
         return pubKeyToNodeMap[_nodeWallet];
     }
 
