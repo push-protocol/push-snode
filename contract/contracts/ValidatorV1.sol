@@ -1,8 +1,18 @@
+//SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.17;
+
+import "./DStorageV1.sol";
 
 // a mock interface of a PUSH token; only bare minimum is needed
 interface IPush {
+    // allow spender to spend rawAmount on behalf of the caller
+    function approve(address spender, uint rawAmount) external returns (bool);
+    // checks allowance limit set by approve
+    function allowance(address account, address spender) external view returns (uint);
+    // transfer allowed tokens (for src)
     function transferFrom(address src, address dst, uint rawAmount) external returns (bool);
+    // transfer allowed tokens (for current contract)
+    function transfer(address dst, uint rawAmount) external returns (bool);
 }
 
 contract Ownable {
@@ -35,7 +45,7 @@ contract Ownable {
 
 library SigUtil {
 
-    function getMessageHash(address _to, uint _amount, string memory _message,
+    function getMessageHash(address _to, uint _amount, bytes memory _message,
         uint _nonce) public pure returns (bytes32) {
         return keccak256(abi.encodePacked(_to, _amount, _message, _nonce));
     }
@@ -84,7 +94,7 @@ library SigUtil {
     }
 
     // todo remove nonce, remove amount
-    function verify(address _signer, address _to, uint _amount, string memory _message,
+    function verify(address _signer, address _to, uint _amount, bytes memory _message,
         uint _nonce, bytes memory signature) public pure returns (bool) {
         bytes32 messageHash = getMessageHash(_to, _amount, _message, _nonce);
         bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
@@ -94,16 +104,24 @@ library SigUtil {
 
 
 contract DStorageV1 is Ownable {
-    address private collateralWallet; // all PUSH tokens are staked here
+
+    uint256 public VNODE_COLLATERAL_IN_PUSH = 100; // todo check the amount
+
+    uint32 public REPORT_COUNT_TO_SLASH = 2;
+    uint32 public SLASH_COLL_PERCENTAGE = 1;
+
+    uint32 public SLASH_COUNT_TO_BAN = 2;
+    uint32 public BAN_COLL_PERCENTAGE = 10;
+
+    uint32 public MIN_NODES_FOR_REPORT = 2; // todo update this on node join; should be 51%
+
+
+    // token storages
+    IPush pushToken;
 
     // node colleciton
     address[] nodes;
     mapping(address => NodeInfo) pubKeyToNodeMap;
-
-    uint32 public MIN_NODES_FOR_REPORT = 2;
-    uint32 public SLASH_PERCENTAGE = 1;
-    uint32 public BAN_PERCENTAGE = 10;
-    uint256 public VNODE_COLLATERAL = 100;
 
 
     struct NodeInfo {
@@ -125,16 +143,16 @@ contract DStorageV1 is Ownable {
 
     struct Vote {
         uint256 ts;
-        address[] voter; // this is not the node which decided to vote, this is the one who reported
+        address[] voters; // this is not the node which decided to vote, this is the one who reported
         // a message, signed by X other nodes
         address target;
         VoteAction voteAction;
     }
 
     enum NodeStatus {
-        OK,          // this node operates just fine (DEFAULT VALUE)
-        Reported,    // he have a few malicious reports
-        Slashed,     // we already slashed this node at least once (normally we will take -2% of collateral tokens)
+        OK, // this node operates just fine (DEFAULT VALUE)
+        Reported, // he have a few malicious reports
+        Slashed, // we already slashed this node at least once (normally we will take -2% of collateral tokens)
         Banned       // we banned the node and unstaked it's tokens (normally we will take -10% of collateral tokens)
     }
 
@@ -151,17 +169,14 @@ contract DStorageV1 is Ownable {
     }
 
     event NodeAdded(address indexed ownerWallet, address indexed nodeWallet, NodeType nodeType, uint256 pushTokensLocked, string nodeApiBaseUrl);
-    event SNodesByNsAndShard(string ns, string shard, string[] value);
-    event NodeSlashed(string indexed pubKey, VoteAction voteAction);
-    event AmountStaked(address indexed walletId, uint256 amount);
-
-    /* METHODS */
-
+    event NodeStatusChanged(address indexed nodeWallet, NodeStatus nodeStatus, uint256 pushTokensLocked);
 
     struct VoteMessage {
         VoteAction vote;
         address target;
     }
+
+    /* METHODS */
 
     function decodeVoteMessage(bytes memory data) private pure returns (VoteMessage memory) {
         (VoteAction vote, address target) = abi.decode(data, (VoteAction, address));
@@ -171,40 +186,44 @@ contract DStorageV1 is Ownable {
         return result;
     }
 
-    constructor() {
+    constructor(address _pushToken) {
+        require(_pushToken != address(0));
         owner = msg.sender;
-        collateralWallet = msg.sender;
+        pushToken = IPush(_pushToken);
     }
 
     // Registers a new validator node
     // Locks PUSH tokens ($_token) with $_collateral amount.
     // A node will run from a _nodeWallet
-    function registerNodeAndStake(address _token, uint256 _collateral,
+    function registerNodeAndStake(uint256 _pushTokensLocked,
         NodeType _nodeType, string memory _nodeApiBaseUrl, address _nodeWallet) public {
-        uint256 coll = _collateral;
-        if (_nodeType == NodeType.SNode) {
-            require(coll >= SNODE_COLLATERAL, "Insufficient collateral for SNODE");
-        } else if (_nodeType == NodeType.VNode) {
-            require(coll >= VNODE_COLLATERAL, "Insufficient collateral for VNODE");
+        uint256 coll = _pushTokensLocked;
+        if (_nodeType == NodeType.VNode) {
+            require(coll >= VNODE_COLLATERAL_IN_PUSH, "Insufficient collateral for VNODE");
         } else {
             revert("unsupported nodeType ");
         }
-        NodeInfo storage n = pubKeyToNodeMap[_nodeWallet];
-        if (n.nodeWallet.length == 0) {
-            // no mapping
-            IPush token = IPush(_token);
-            token.transferFrom(msg.sender, collateralWallet, coll);
-            n.ownerWallet = msg.sender;
-            n.nodeWallet = _nodeWallet;
-            n.nodeType = _nodeType;
-            n.pushTokensLocked = coll;
-            n.nodeApiBaseUrl = _nodeApiBaseUrl;
-            nodes.push(_nodeWallet);
-            MIN_NODES_FOR_REPORT = 1 + (nodes.length / 2);
-            emit NodeAdded(msg.sender, _nodeWallet, _nodeType, coll, _nodeApiBaseUrl);
-        } else {
+        NodeInfo storage old = pubKeyToNodeMap[_nodeWallet];
+        if (old.ownerWallet != address(0)) {
             revert("a node with pubKey is already defined");
         }
+        // check that collateral is allowed to spend
+        uint256 allowed = pushToken.allowance(msg.sender, address(this));
+        require(allowed >= _pushTokensLocked, "_pushTokensLocked cannot be transferred, check allowance");
+        // new mapping
+        NodeInfo memory n;
+        n.ownerWallet = msg.sender;
+        n.nodeWallet = _nodeWallet;
+        n.nodeType = _nodeType;
+        n.pushTokensLocked = coll;
+        n.nodeApiBaseUrl = _nodeApiBaseUrl;
+        nodes.push(_nodeWallet);
+        pubKeyToNodeMap[_nodeWallet] = n;
+        // take collateral
+        pushToken.transferFrom(msg.sender, address(this), coll);
+        // post actions
+        MIN_NODES_FOR_REPORT = (uint32)(1 + (nodes.length / 2));
+        emit NodeAdded(msg.sender, _nodeWallet, _nodeType, coll, _nodeApiBaseUrl);
     }
 
 
@@ -212,63 +231,89 @@ contract DStorageV1 is Ownable {
     // N attesters can request to report malicious activity for a specific node
     // lifecycle: report x 2 -> slash x 2 -> ban
     // if all prerequisites match - the contract will execute
-    function reportNode(address[] memory nodeIdsReported, bytes memory _signedMessageByAllNodes,
-        string[] memory signatures, address _target) external {
-        for (int i = 0; i < signatures.length; i++) {
-            bool valid = SigUtil.verify(0, 0, 0, _signedMessageByAllNodes, 0, signatures[i]);
+    function reportNode(address[] memory _nodeIdsReported, bytes memory _signedMessageByAllNodes,
+        bytes[] memory _signatures, address _target) external {
+        for (uint i = 0; i < _signatures.length; i++) {
+            bool valid = SigUtil.verify(_nodeIdsReported[i], address(0), 0, _signedMessageByAllNodes, 0, _signatures[i]);
             require(valid, "invalid signature");
         }
-        require(signatures.length >= MIN_NODES_FOR_REPORT, "not enough signatures for a message");
+        require(_signatures.length >= MIN_NODES_FOR_REPORT, "not enough signatures for a message");
         VoteMessage memory vm = decodeVoteMessage(_signedMessageByAllNodes);
-        doReportNode(vm);
+        doReportNode(_nodeIdsReported, vm);
     }
 
     // Complain on an existing node; also slashes if the # of complains meet the required threshold
-    function doReportNode(VoteMessage memory vm) private {
-        // 1 store
+    function doReportNode(address[] memory _nodeIdsReported, VoteMessage memory _vm) private {
         NodeInfo storage voterNode = pubKeyToNodeMap[msg.sender];
         if (voterNode.nodeWallet == address(0)) {
             revert("a node with _voterPubKey does not exists");
         }
-        NodeInfo storage targetNode = pubKeyToNodeMap[vm.target];
+        NodeInfo storage targetNode = pubKeyToNodeMap[_vm.target];
         if (targetNode.nodeWallet == address(0)) {
             revert("a node with _targetPubKey does not exists");
         }
-        Vote memory v;
+        Vote storage v = targetNode.votes.push();
         v.ts = block.timestamp;
-        v.voter = msg.sender;
-        v.target = vm.target;
-        v.voteAction = vm.vote;
-        targetNode.votes.push(v);
-        // 2 check count
-        int slash = 0;
-        int ban = 0;
-        for (uint i = 0; i < targetNode.votes.length; i++) {
-            Vote memory vt = targetNode.votes[i];
-            if (vt.voteAction == VoteAction.Report) {
-                slash++;
-            }
-            if (vt.voteAction == VoteAction.Ban) {
-                ban++;
-            }
+        for(uint256 i=0;i<_nodeIdsReported.length;i++) {
+            v.voters.push(_nodeIdsReported[i]);
         }
-        NodeStatus memory slashResult = NodeStatus.OK;
-        if (targetNode.status == NodeStatus.OK) {
-            if (ban > 0 || slash > 3) {
-                slashResult = NodeStatus.Ban;
-            } else if (slash > 0) {
-                slashResult = NodeStatus.Slash;
+        v.target = _vm.target;
+        v.voteAction = _vm.vote;
+        NodeCounters memory counters = targetNode.counters;
+        NodeStatus ns = targetNode.status;
+        // 2 check count
+        if (v.voteAction == VoteAction.Report) {
+            targetNode.counters.reportCounter = ++counters.reportCounter;
+        } else {
+            revert("unsupported");
+        }
+        if (ns == NodeStatus.OK) {
+            if (counters.reportCounter > REPORT_COUNT_TO_SLASH) {
+                // do Slash
+                targetNode.status = NodeStatus.Slashed;
+                targetNode.counters.reportCounter = 0;
+                doSlash(targetNode);
             }
-        } else if (targetNode.status == NodeStatus.Slash) {
-            if (ban > 0 || slash > 3) {
-                slashResult = NodeStatus.Ban;
+        } else if (ns == NodeStatus.Slashed) {
+            if (counters.slashCounter > SLASH_COUNT_TO_BAN) {
+                // do Ban
+                targetNode.status = NodeStatus.Banned;
+                targetNode.counters.slashCounter = 0;
+                doBan(targetNode);
             }
-        } else if (targetNode.status == NodeStatus.Ban) {
+        } else if (ns == NodeStatus.Banned) {
             // do nothing; terminal state
         }
-        if (slashResult != NodeStatus.OK) {
-            // TODO
-        }
+    }
+
+
+    function reduceCollateral(address _nodeWallet, uint32 _percentage) private {
+        require(_nodeWallet != address(0));
+        require(_percentage >= 0 && _percentage <= 100, "percentage should be in [0, 100]");
+        // reduce only pushTokensLocked; we do not transfer any tokens; it will affect only 'unstake'
+        NodeInfo storage node = pubKeyToNodeMap[_nodeWallet];
+        uint256 currentAmount = node.pushTokensLocked;
+        uint256 newAmount = (currentAmount * (100 - _percentage)) / 100;
+        node.pushTokensLocked = newAmount;
+    }
+
+    function unstake(address _nodeWallet) private {
+        require(_nodeWallet != address(0));
+        NodeInfo storage node = pubKeyToNodeMap[_nodeWallet];
+        pushToken.transfer(node.ownerWallet, node.pushTokensLocked);
+    }
+
+    function getNodeInfo(address _nodeWallet) public returns (NodeInfo memory) {
+        return pubKeyToNodeMap[_nodeWallet];
+    }
+
+    function doSlash(NodeInfo storage targetNode) private {
+        reduceCollateral(targetNode.nodeWallet, SLASH_COLL_PERCENTAGE);
+    }
+
+    function doBan(NodeInfo storage targetNode) private {
+        reduceCollateral(targetNode.nodeWallet, BAN_COLL_PERCENTAGE);
+        unstake(targetNode.nodeWallet);
     }
 
 }
