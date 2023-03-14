@@ -45,11 +45,11 @@ contract Ownable {
 library SigUtil {
 
     function getMessageHash(address _to, uint _amount, bytes memory _message,
-        uint _nonce) public pure returns (bytes32) {
+        uint _nonce) internal pure returns (bytes32) {
         return keccak256(abi.encodePacked(_to, _amount, _message, _nonce));
     }
 
-    function getEthSignedMessageHash(bytes32 _messageHash) public pure returns (bytes32) {
+    function getEthSignedMessageHash(bytes32 _messageHash) internal pure returns (bytes32) {
         /*
         Signature is produced by signing a keccak256 hash with the following format:
         "\x19Ethereum Signed Message\n" + len(msg) + msg
@@ -62,13 +62,13 @@ library SigUtil {
 
     function recoverSigner(
         bytes32 _ethSignedMessageHash,
-        bytes memory _signature) public pure returns (address) {
+        bytes memory _signature) internal pure returns (address) {
         (bytes32 r, bytes32 s, uint8 v) = splitSignature(_signature);
 
         return ecrecover(_ethSignedMessageHash, v, r, s);
     }
 
-    function splitSignature(bytes memory sig) public pure returns (bytes32 r, bytes32 s, uint8 v) {
+    function splitSignature(bytes memory sig) internal pure returns (bytes32 r, bytes32 s, uint8 v) {
         require(sig.length == 65, "invalid signature length");
 
         assembly {
@@ -94,7 +94,7 @@ library SigUtil {
 
     // todo remove nonce, remove amount
     function verify(address _signer, address _to, uint _amount, bytes memory _message,
-        uint _nonce, bytes memory signature) public pure returns (bool) {
+        uint _nonce, bytes memory signature) internal pure returns (bool) {
         bytes32 messageHash = getMessageHash(_to, _amount, _message, _nonce);
         bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
         return recoverSigner(ethSignedMessageHash, signature) == _signer;
@@ -102,10 +102,12 @@ library SigUtil {
 }
 
 
-contract DStorageV1 is Ownable {
+contract ValidatorV1 is Ownable {
 
     uint256 public VNODE_COLLATERAL_IN_PUSH = 100; // todo check the amount
 
+    // X REPORTS -> SLASH , PUNISH $SLASH_COLL_PERCENTAGE
+    // X SLASHES -> BAN, PUNISH $BAN_COLL_PERCENTAGE
     uint32 public REPORT_COUNT_TO_SLASH = 2;
     uint32 public SLASH_COLL_PERCENTAGE = 1;
 
@@ -279,8 +281,10 @@ contract DStorageV1 is Ownable {
         }
     }
 
-
-    function reduceCollateral(address _nodeWallet, uint32 _percentage) private {
+    /*
+     Returns remaining collateral
+    */
+    function reduceCollateral(address _nodeWallet, uint32 _percentage) private returns (uint256) {
         require(_nodeWallet != address(0));
         require(_percentage >= 0 && _percentage <= 100, "percentage should be in [0, 100]");
         // reduce only pushTokensLocked; we do not transfer any tokens; it will affect only 'unstake'
@@ -291,15 +295,20 @@ contract DStorageV1 is Ownable {
         node.pushTokensLocked = newAmount;
         totalStaked -= delta;
         totalPenalties += delta;
+        return newAmount;
     }
 
-    function unstake(address _nodeWallet) private {
+    /*
+    Returns unstaked amount
+    */
+    function unstake(address _nodeWallet) private returns (uint256){
         require(_nodeWallet != address(0));
         NodeInfo storage node = pubKeyToNodeMap[_nodeWallet];
         uint256 delta = node.pushTokensLocked;
         pushToken.transfer(node.ownerWallet, delta);
         node.pushTokensLocked = 0;
         totalStaked -= delta;
+        return delta;
     }
 
     function getNodeInfo(address _nodeWallet) public view returns (NodeInfo memory) {
@@ -307,12 +316,14 @@ contract DStorageV1 is Ownable {
     }
 
     function doSlash(NodeInfo storage targetNode) private {
-        reduceCollateral(targetNode.nodeWallet, SLASH_COLL_PERCENTAGE);
+        uint256 coll = reduceCollateral(targetNode.nodeWallet, SLASH_COLL_PERCENTAGE);
+        emit NodeStatusChanged(targetNode.nodeWallet, NodeStatus.Slashed, coll);
     }
 
     function doBan(NodeInfo storage targetNode) private {
         reduceCollateral(targetNode.nodeWallet, BAN_COLL_PERCENTAGE);
-        unstake(targetNode.nodeWallet);
+        uint256 delta = unstake(targetNode.nodeWallet);
+        emit NodeStatusChanged(targetNode.nodeWallet, NodeStatus.Banned, delta);
     }
 
 }
