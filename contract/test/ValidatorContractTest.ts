@@ -20,7 +20,7 @@ export class State1 {
     thirdAccount: SignerWithAddress;
 }
 
-async function chain1(): Promise<State1> {
+async function buildState1(): Promise<State1> {
     // Contracts are deployed using the first signer/account by default
     const [owner, node1Wallet, node2Wallet, otherAccount, thirdAccount] = await ethers.getSigners();
 
@@ -48,95 +48,97 @@ describe("ValidatorTest", function () {
 
     it("Deploy Validator contract and Push Contract", async function () {
         console.log("ValidatorTest");
-        let s = await chain1(); //await loadFixture(chain1);
-        expect(s.pushContract.address).to.be.properAddress;
-        expect(s.valContract.address).to.be.properAddress;
-        console.log(`push contract at `, s.pushContract.address);
-        console.log(`validator contract at `, s.valContract.address);
+        let {pushContract, valContract} = await buildState1(); //await loadFixture(chain1);
+        expect(pushContract.address).to.be.properAddress;
+        expect(valContract.address).to.be.properAddress;
+        console.log(`push contract at `, pushContract.address);
+        console.log(`validator contract at `, valContract.address);
     });
 
     it("Register 1 Node, insufficient collateral", async function () {
-        const s = await chain1();
-        await expect(s.valContract.registerNodeAndStake(50, 0,
-            "http://snode1:3000", s.node1Wallet.address))
+        const {valContract, node1Wallet} = await buildState1();
+        await expect(valContract.registerNodeAndStake(50, 0,
+            "http://snode1:3000", node1Wallet.address))
             .to.be.revertedWith('Insufficient collateral for VNODE');
     })
 
     it("Register 1 Node, but not a duplicate public key", async function () {
-        const s = await chain1(); //await loadFixture(chain1);
+        const {valContract, owner, node1Wallet, node2Wallet} = await buildState1(); //await loadFixture(chain1);
         {
-            let t1 = s.valContract.registerNodeAndStake(100, 0,
-                "http://snode1:3000", s.node1Wallet.address);
-            await expect(t1).to.emit(s.valContract, "NodeAdded")
-                .withArgs(s.owner.address, s.node1Wallet.address, 0, 100, "http://snode1:3000");
-            let nodeInfo = await s.valContract.getNodeInfo(s.node1Wallet.address);
+            let t1 = valContract.registerNodeAndStake(100, 0,
+                "http://snode1:3000", node1Wallet.address);
+            await expect(t1).to.emit(valContract, "NodeAdded")
+                .withArgs(owner.address, node1Wallet.address, 0, 100, "http://snode1:3000");
+            let nodeInfo = await valContract.getNodeInfo(node1Wallet.address);
             expect(nodeInfo.status).to.be.equal(0);
             console.log('nodeInfo:', nodeInfo);
         }
         {
-            let t1 = s.valContract.registerNodeAndStake(100, 0,
-                "http://snode1:3000", s.node1Wallet.address);
+            let t1 = valContract.registerNodeAndStake(100, 0,
+                "http://snode1:3000", node1Wallet.address);
             await expect(t1).to.be.revertedWith("a node with pubKey is already defined");
         }
     })
 
     it("Register 2 Nodes", async function () {
-        const s = await chain1(); //await loadFixture(chain1);
+        const {valContract, owner, node1Wallet, node2Wallet} = await buildState1();
         {
-            let t1 = s.valContract.registerNodeAndStake(100, 0,
-                "http://snode1:3000", s.node1Wallet.address);
-            await expect(t1).to.emit(s.valContract, "NodeAdded")
-                .withArgs(s.owner.address, s.node1Wallet.address, 0, 100, "http://snode1:3000");
-            let nodeInfo = await s.valContract.getNodeInfo(s.node1Wallet.address);
+            let t1 = valContract.registerNodeAndStake(100, 0,
+                "http://snode1:3000", node1Wallet.address);
+            await expect(t1).to.emit(valContract, "NodeAdded")
+                .withArgs(owner.address, node1Wallet.address, 0, 100, "http://snode1:3000");
+            let nodeInfo = await valContract.getNodeInfo(node1Wallet.address);
             expect(nodeInfo.status).to.be.equal(0);
             console.log('nodeInfo:', nodeInfo);
         }
         {
-            let t1 = s.valContract.registerNodeAndStake(200, 0,
-                "http://snode2:3000", s.node2Wallet.address);
-            await expect(t1).to.emit(s.valContract, "NodeAdded")
-                .withArgs(s.owner.address, s.node2Wallet.address, 0, 200, "http://snode2:3000");
-            let nodeInfo = await s.valContract.getNodeInfo(s.node1Wallet.address);
+            let t1 = valContract.registerNodeAndStake(200, 0,
+                "http://snode2:3000", node2Wallet.address);
+            await expect(t1).to.emit(valContract, "NodeAdded")
+                .withArgs(owner.address, node2Wallet.address, 0, 200, "http://snode2:3000");
+            let nodeInfo = await valContract.getNodeInfo(node1Wallet.address);
             expect(nodeInfo.status).to.be.equal(0);
             console.log('nodeInfo:', nodeInfo);
         }
     })
 });
-/*
-describe("Transfer contract ownership", function (){
-    it("Transfer ownership if the new owner is different", async function (){
-        const { pushToken, valContract, owner, otherAccount } = await loadFixture(chain1);
-        console.log("Old Owner : ",await valContract.owner());
-        await expect(valContract.transferOwnership(otherAccount.address)).to.emit(valContract, "LogTransferOwnership");
-        console.log("Ownership to be transferred to : ",await valContract.newOwner());
+describe("Transfer contract ownership", function () {
+
+    it("Transfer ownership if the new owner is different", async function () {
+        const {valContract, otherAccount} = await loadFixture(buildState1);
+        console.log("Old Owner : ", await valContract.owner());
+        await expect(valContract.transferOwnership(otherAccount.address))
+            .to.emit(valContract, "LogTransferOwnership");
+        console.log("Ownership to be transferred to : ", await valContract.newOwner());
     });
 
-    it("Transfer ownership is not possible if the new owner is same as old owner", async function (){
-        const { pushToken, valContract, owner, otherAccount } = await loadFixture(chain1);
-        await expect(valContract.transferOwnership(owner.address)).to.be.revertedWith('Cannot transfer ownership to the current owner.');
+    it("Transfer ownership is not possible if the new owner is same as old owner", async function () {
+        const {valContract, otherAccount, owner} = await loadFixture(buildState1);
+        await expect(valContract.transferOwnership(owner.address))
+            .to.be.revertedWith('Cannot transfer ownership to the current owner.');
     });
 
-    it("Transfer ownership is not possible if the new owner is zero address", async function (){
-        const { pushToken, valContract, owner, otherAccount } = await loadFixture(chain1);
-        await expect(valContract.transferOwnership(ethers.constants.AddressZero)).to.be.revertedWith('Cannot transfer ownership to address(0)');
+    it("Transfer ownership is not possible if the new owner is zero address", async function () {
+        const {valContract, otherAccount, owner} = await loadFixture(buildState1);
+        await expect(valContract.transferOwnership(ethers.constants.AddressZero))
+            .to.be.revertedWith('Cannot transfer ownership to address(0)');
     })
 
-    it("Transfer is only possible by the owner", async function (){
-        const { pushToken, valContract, owner, otherAccount } = await loadFixture(chain1);
-        await expect(valContract.connect(otherAccount).transferOwnership(otherAccount.address)).to.be.revertedWith('Only the owner can transfer ownership.');
+    it("Transfer is only possible by the owner", async function () {
+        const {valContract, otherAccount, owner} = await loadFixture(buildState1);
+        await expect(valContract.connect(otherAccount).transferOwnership(otherAccount.address))
+            .to.be.revertedWith('Only the owner can transfer ownership.');
     });
-});*/
 
-describe("Accepting ownership", function (){
-    it("Accepting ownership is only possible by the new owner", async function (){
-        const { valContract, otherAccount } = await loadFixture(chain1);
+    it("Accepting ownership is only possible by the new owner", async function () {
+        const {valContract, otherAccount} = await loadFixture(buildState1);
         await expect(valContract.transferOwnership(otherAccount.address))
             .to.emit(valContract, "LogTransferOwnership");
         await expect(valContract.connect(otherAccount).acceptOwnership())
             .to.emit(valContract, "LogAcceptOwnership");
     });
-    it("Accepting ownership is not possible by any other address", async function (){
-        const { pushContract, valContract, owner, otherAccount, thirdAccount } = await loadFixture(chain1);
+    it("Accepting ownership is not possible by any other address", async function () {
+        const {pushContract, valContract, owner, otherAccount, thirdAccount} = await loadFixture(buildState1);
         await expect(valContract.transferOwnership(otherAccount.address))
             .to.emit(valContract, "LogTransferOwnership");
         await expect(valContract.connect(thirdAccount).acceptOwnership())
