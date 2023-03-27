@@ -12,6 +12,8 @@ interface IPush {
     function transferFrom(address src, address dst, uint rawAmount) external returns (bool);
     // transfer allowed tokens (for current contract)
     function transfer(address dst, uint rawAmount) external returns (bool);
+
+    function balanceOf(address account) external view returns (uint256);
 }
 
 contract Ownable {
