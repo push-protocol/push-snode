@@ -262,30 +262,21 @@ contract ValidatorV1 is Ownable {
         return doReportNode(vm, targetNode);
     }
 
+    // note: reading storage value multiple times which is sub-optimal, but the code looks much simpler
     function doReportNode(VoteMessage memory _vm, NodeInfo storage targetNode) private returns (uint8){
-        NodeCounters memory counters = targetNode.counters;
         NodeStatus ns = targetNode.status;
         // 2 check count
         if (_vm.vote == VoteAction.Report) {
-            targetNode.counters.reportCounter = ++counters.reportCounter;
+            doReport(targetNode);
         } else {
             revert("unsupported");
         }
-        if (ns == NodeStatus.OK) {
-            if (counters.reportCounter >= REPORT_COUNT_TO_SLASH) {
-                // do Slash
-                targetNode.status = NodeStatus.Slashed;
-                targetNode.counters.reportCounter = 0;
-                targetNode.counters.slashCounter = ++counters.slashCounter;
+        if (ns == NodeStatus.OK || ns == NodeStatus.Slashed) {
+            if (targetNode.counters.reportCounter >= REPORT_COUNT_TO_SLASH) {
                 doSlash(targetNode);
-                return 1;
             }
-        } else if (ns == NodeStatus.Slashed) {
-            if (counters.slashCounter >= SLASH_COUNT_TO_BAN) {
-                // do Ban
-                targetNode.status = NodeStatus.Banned;
+            if (targetNode.counters.slashCounter >= SLASH_COUNT_TO_BAN) {
                 doBan(targetNode);
-                return 1;
             }
         } else if (ns == NodeStatus.Banned) {
             // do nothing; terminal state
@@ -327,15 +318,24 @@ contract ValidatorV1 is Ownable {
         return nodeMap[_nodeWallet];
     }
 
+    function doReport(NodeInfo storage targetNode) private {
+        targetNode.counters.reportCounter++;
+        emit NodeStatusChanged(targetNode.nodeWallet, NodeStatus.Reported, targetNode.pushTokensLocked);
+    }
+
     function doSlash(NodeInfo storage targetNode) private {
+        targetNode.status = NodeStatus.Slashed;
+        targetNode.counters.reportCounter = 0;
+        targetNode.counters.slashCounter++;
         uint256 coll = reduceCollateral(targetNode.nodeWallet, SLASH_COLL_PERCENTAGE);
         emit NodeStatusChanged(targetNode.nodeWallet, NodeStatus.Slashed, coll);
     }
 
     function doBan(NodeInfo storage targetNode) private {
+        targetNode.status = NodeStatus.Banned;
         reduceCollateral(targetNode.nodeWallet, BAN_COLL_PERCENTAGE);
         uint256 delta = unstake(targetNode.nodeWallet);
-        emit NodeStatusChanged(targetNode.nodeWallet, NodeStatus.Banned, delta);
+        emit NodeStatusChanged(targetNode.nodeWallet, NodeStatus.Banned, 0);
     }
 
 }

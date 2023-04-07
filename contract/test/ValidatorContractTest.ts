@@ -7,6 +7,9 @@ import {expect} from "chai";
 import {ethers} from "hardhat";
 import {PushToken, ValidatorV1} from "../typechain-types";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
+import {TestHelper as t} from "./TestHelper";
+import {NodeStatus, ValidatorContractHelper} from "./ValidatorContractHelper";
+import {BigNumber} from "ethers";
 
 
 export class State1 {
@@ -150,26 +153,65 @@ describe("Validator Test1", function () {
     })
 });
 
-class ContractHelper {
-    static utils = ethers.utils;
 
+describe("testEquals", function () {
+    it("testhasfields", async function () {
+        const object1 = {
+            field1: 'value1',
+            field2: 'value2',
+            field3: 'value3',
+        };
 
-    static getMessageHashAsInContract(message: string) {
-        let utils = ethers.utils;
-        return utils.keccak256(utils.arrayify(message));
-    }
+        const object2 = {
+            field1: 'value1',
+            field2: 'value2',
+        };
 
-    static async sign(wallet: SignerWithAddress, message: string): Promise<string> {
-        const hash = ContractHelper.getMessageHashAsInContract(message);
-        return await wallet.signMessage(ethers.utils.arrayify(hash));
-    }
+        expect(t.hasAllFields(
+            {
+                field1: 'value1',
+                field2: 'value2',
+                field3: 'value3',
+            },
+            {
+                field1: 'value1',
+                field2: 'value2',
+            }, false)).to.be.true;
 
-    static encodeVoteDataToHex(voteAction: number, targetWallet: string): string {
-        let abi = ethers.utils.defaultAbiCoder;
-        return abi.encode(["uint8", "address"], [voteAction, targetWallet]);
-    }
-}
+        expect(t.hasAllFields({
+            field1: 'value1',
+            field2: 'value2',
+            field3: 'value3',
+        }, {
+            field1: 'value_',
+            field2: 'value2',
+        }, true)).to.be.false;
 
+        expect(t.hasAllFields(
+            {
+                field1: 'value1',
+                field2: 'value2',
+            },
+            {
+                field1: 'value1',
+                field2: 'value2',
+                field3: 'value3',
+            },
+            true)).to.be.false;
+
+        expect(t.hasAllFields(
+            {
+                field1: 'value1',
+                field2: 'value2',
+            },
+            {
+                field1: 'value1',
+                field2: 'value2',
+                field3: 'value3',
+            },
+            false)).to.be.false;
+    });
+});
 
 describe("report tests", function () {
 
@@ -177,25 +219,18 @@ describe("report tests", function () {
         const {valContract, pushContract, owner, node1Wallet, node2Wallet} = await State1.build(); //await loadFixture(chain1);
 
         let message = "0xAA";
-        let node1Signature = await ContractHelper.sign(node1Wallet, message);
+        let node1Signature = await ValidatorContractHelper.sign(node1Wallet, message);
         let signatures = [node1Signature];
         console.log(`voteData=${message}, signatures=${signatures}`);
         // simulate a read only method - just to get method output
         let result1 = await valContract.callStatic.reportNode(message, signatures);
         console.log(`result=${result1}`);
         expect(result1).to.be.equal(0);
-        // let result = await valContract // .connect(node1Wallet)
-        //     .reportNode(
-        //         message,
-        //         signers,
-        //         signatures);
-
     })
 
 
-    it("report-tc2", async function () {
+    it("report-tc2 / register 2 nodes / report / report / slash / report / report / ban", async function () {
         // register node1, node2
-        // node1 reports on node2 - 2 times
         const {valContract, pushContract, owner, node1Wallet, node2Wallet} = await State1.build(); //await loadFixture(chain1);
         {
             let t1 = valContract.registerNodeAndStake(100, 0,
@@ -216,34 +251,98 @@ describe("report tests", function () {
         }
         expect(await pushContract.balanceOf(valContract.address)).to.be.equal(300);
         {
-            let reportThatNode2IsBad = ContractHelper.encodeVoteDataToHex(0, node2Wallet.address);
-            let node1Signature = await ContractHelper.sign(node1Wallet, reportThatNode2IsBad);
+            let reportThatNode2IsBad = ValidatorContractHelper.encodeVoteDataToHex(0, node2Wallet.address);
+            let node1Signature = await ValidatorContractHelper.sign(node1Wallet, reportThatNode2IsBad);
             let signers = [node1Wallet.address];
             let signatures = [node1Signature];
             console.log(`voteData=${reportThatNode2IsBad}, signers=${signers}, signatures=${signatures}`);
 
             let contractAsNode1 = valContract.connect(node1Wallet);
             {
-                let trans1 = await contractAsNode1.reportNode(reportThatNode2IsBad, [node1Signature]);
-                expect((await trans1.wait(1)).status).to.be.equal(1);
+                // node1 reports on node2 (1st report)
+                let tx = await contractAsNode1.reportNode(reportThatNode2IsBad, [node1Signature]);
+                await t.expectTransaction(tx);
 
                 let nodeInfo = await valContract.getNodeInfo(node2Wallet.address);
                 expect(nodeInfo.counters.reportCounter).to.be.equal(1);
-                console.log(nodeInfo);
+
+                let bn:BigNumber = BigNumber.from(1);
+                expect(bn instanceof BigNumber).to.be.true;
+
+                await t.expectEvent(tx, 0, {
+                    nodeWallet: node2Wallet.address,
+                    nodeStatus: NodeStatus.Reported,
+                    pushTokensLocked: 200
+                });
             }
             {
-                let trans1 = await contractAsNode1.reportNode(reportThatNode2IsBad, [node1Signature]);
-                expect((await trans1.wait(1)).status).to.be.equal(1);
+                // node1 reports on node2 (2nd report - slash occurs - NodeStatusChanged event )
+                let tx = await contractAsNode1.reportNode(reportThatNode2IsBad, [node1Signature]);
+                await t.expectTransaction(tx);
+
                 let nodeInfo = await valContract.getNodeInfo(node2Wallet.address);
                 console.log(nodeInfo);
                 expect(nodeInfo.status).to.be.equal(2); // slashed
                 expect(nodeInfo.pushTokensLocked).to.be.equal(198); // -1%
                 expect(nodeInfo.counters.reportCounter).to.be.equal(0);
                 expect(nodeInfo.counters.slashCounter).to.be.equal(1);
-                await expect(trans1).to.emit(valContract, "NodeStatusChanged");
+
+                await t.expectEvent(tx, 0, {
+                    nodeWallet: node2Wallet.address,
+                    nodeStatus: NodeStatus.Reported,
+                    pushTokensLocked: 200
+                });
+
+                await t.expectEvent(tx, 1, {
+                    nodeWallet: node2Wallet.address,
+                    nodeStatus: NodeStatus.Slashed,
+                    pushTokensLocked: 198
+                });
+            }
+            {
+                // node1 reports on node2 (3rd - NodeStatusChanged event)
+                let tx = await contractAsNode1.reportNode(reportThatNode2IsBad, [node1Signature]);
+                await t.expectTransaction(tx);
+
+                let nodeInfo = await valContract.getNodeInfo(node2Wallet.address);
+                expect(nodeInfo.counters.reportCounter).to.be.equal(1);
+                console.log(nodeInfo);
+
+                await t.expectEvent(tx, 0, {
+                    nodeWallet: node2Wallet.address,
+                    nodeStatus: NodeStatus.Reported,
+                    pushTokensLocked: 198
+                });
+            }
+            {
+                // node1 reports on node2 (4th - 2nd slash occurs - NodeStatusChanged event
+                // and then ban occurs - NodeStatusChanged event)
+                let tx = await contractAsNode1.reportNode(reportThatNode2IsBad, [node1Signature]);
+                await t.expectTransaction(tx);
+                let nodeInfo = await valContract.getNodeInfo(node2Wallet.address);
+                console.log('4th report');
+                console.log(nodeInfo);
+                expect(nodeInfo.status).to.be.equal(3); // banned
+                expect(nodeInfo.pushTokensLocked).to.be.equal(0); // because we unstaked automatically
+                expect(nodeInfo.counters.reportCounter).to.be.equal(0);
+                expect(nodeInfo.counters.slashCounter).to.be.equal(2);
+                console.log('events ', (await tx.wait(1)).events);
+                await t.expectEvent(tx, 0, {
+                    nodeWallet: node2Wallet.address,
+                    nodeStatus: NodeStatus.Reported,
+                    pushTokensLocked: 198
+                });
+                await t.expectEvent(tx, 1, {
+                    nodeWallet: node2Wallet.address,
+                    nodeStatus: NodeStatus.Slashed,
+                    pushTokensLocked: 196
+                });
+                await t.expectEvent(tx, 2, {
+                    nodeWallet: node2Wallet.address,
+                    nodeStatus: NodeStatus.Banned,
+                    pushTokensLocked: 0
+                });
             }
         }
-
-        // todo test unregister node
     })
 });
