@@ -35,7 +35,9 @@ export class State1 {
 
         await pushContract.mint(owner.address, ethers.utils.parseEther("100"));
         // owner can spend 1000000000000000
-        await pushContract./*connect(owner).*/approve(valContract.address, ethers.utils.parseEther("1000000000000000"));
+        await pushContract
+            .connect(owner)
+            .approve(valContract.address, ethers.utils.parseEther("1000000000000000"));
 
         return <State1>{
             pushContract: pushContract,
@@ -260,7 +262,7 @@ describe("Validator Tests :: A node reports on other node", function () {
             {
                 // node1 reports on node2 (1st report)
                 let tx = await contractAsNode1.reportNode(reportThatNode2IsBad, [node1Signature]);
-                await t.expectTransaction(tx);
+                await t.confirmTransaction(tx);
 
                 let nodeInfo = await valContract.getNodeInfo(node2Wallet.address);
                 expect(nodeInfo.counters.reportCounter).to.be.equal(1);
@@ -277,7 +279,7 @@ describe("Validator Tests :: A node reports on other node", function () {
             {
                 // node1 reports on node2 (2nd report - slash occurs - NodeStatusChanged event )
                 let tx = await contractAsNode1.reportNode(reportThatNode2IsBad, [node1Signature]);
-                await t.expectTransaction(tx);
+                await t.confirmTransaction(tx);
 
                 let nodeInfo = await valContract.getNodeInfo(node2Wallet.address);
                 console.log(nodeInfo);
@@ -301,7 +303,7 @@ describe("Validator Tests :: A node reports on other node", function () {
             {
                 // node1 reports on node2 (3rd - NodeStatusChanged event)
                 let tx = await contractAsNode1.reportNode(reportThatNode2IsBad, [node1Signature]);
-                await t.expectTransaction(tx);
+                await t.confirmTransaction(tx);
 
                 let nodeInfo = await valContract.getNodeInfo(node2Wallet.address);
                 expect(nodeInfo.counters.reportCounter).to.be.equal(1);
@@ -317,7 +319,7 @@ describe("Validator Tests :: A node reports on other node", function () {
                 // node1 reports on node2 (4th - 2nd slash occurs - NodeStatusChanged event
                 // and then ban occurs - NodeStatusChanged event)
                 let tx = await contractAsNode1.reportNode(reportThatNode2IsBad, [node1Signature]);
-                await t.expectTransaction(tx);
+                await t.confirmTransaction(tx);
                 let nodeInfo = await valContract.getNodeInfo(node2Wallet.address);
                 console.log('4th report');
                 console.log(nodeInfo);
@@ -349,58 +351,69 @@ describe("Validator Tests :: A node reports on other node", function () {
 
 describe("Validator Tests :: Test unstake", function () {
 
-    it("unstake1", async function () {
+    it("unstake-test-1 :: register 1 node / unstake to bad address / unstake to owner address", async function () {
         const {valContract, pushContract, owner, node1Wallet, node2Wallet} = await State1.build(); //await loadFixture(chain1);
+        // register 1 node (+ check all amounts before and after)
         {
-            // let ownerBalanceBefore = await pushContract.balanceOf(owner.address);
-            // let node1BalanceBefore = await pushContract.balanceOf(node1Wallet.address);
+            let ownerBalanceBefore = await pushContract.balanceOf(owner.address);
+            let valContractBalanceBefore = await pushContract.balanceOf(valContract.address);
+            let valContractAllowanceForOwner = await pushContract.allowance(owner.address, valContract.address);
+            console.log(`before registerNodeAndStake: owner=${ownerBalanceBefore}, valContract=${valContractBalanceBefore}, valContractAllowanceForOwner=${valContractAllowanceForOwner}`);
+            expect(valContractAllowanceForOwner).to.be.greaterThan(100);
 
-            let t1 = valContract.connect(owner).registerNodeAndStake(100, 0,
+            let tx = await valContract
+                .connect(owner)
+                .registerNodeAndStake(100, 0,
                 "http://snode1:3000", node1Wallet.address);
+            await t.confirmTransaction(tx);
 
-            // let ownerBalanceAfter = await pushContract.balanceOf(owner.address);
-            // let node1BalanceAfter = await pushContract.balanceOf(node1Wallet.address);
-            // expect((node1BalanceAfter.sub(node1BalanceBefore))).to.be.equal(100);
-            // expect((ownerBalanceAfter.sub(ownerBalanceBefore))).to.be.equal(-100);
+            let ownerBalanceAfter = await pushContract.balanceOf(owner.address);
+            let valContractBalanceAfter = await pushContract.balanceOf(valContract.address);
+            console.log(`after registerNodeAndStake:  owner=${ownerBalanceAfter}, valContract=${valContractBalanceAfter}`);
+            expect((valContractBalanceAfter.sub(valContractBalanceBefore))).to.be.equal(100);
+            expect((ownerBalanceAfter.sub(ownerBalanceBefore))).to.be.equal(-100);
 
-            await expect(t1)
+            await expect(tx)
                 .to.emit(valContract, "NodeAdded")
                 .withArgs(owner.address, node1Wallet.address, 0, 100, "http://snode1:3000");
             let nodeInfo = await valContract.getNodeInfo(node1Wallet.address);
             expect(nodeInfo.status).to.be.equal(0);
         }
         expect(await pushContract.balanceOf(valContract.address)).to.be.equal(100);
-
         // non-owner calls unstake
         {
-            let t1 = valContract.connect(node2Wallet)
+            let tx = valContract
+                .connect(node2Wallet)
                 .unstakeNode(node1Wallet.address);
-            await expect(t1).revertedWith('only owner can unstake a node');
-
-            // await expect(t1).re
-            //     .to.emit(valContract, "NodeStatusChanged")
-            //     .withArgs(node1Wallet.address, NodeStatus.Unstaked, 0);
+            await expect(tx).revertedWith('only owner can unstake a node');
         }
         // owner calls unstake
         {
             let ni1 = await valContract.getNodeInfo(node1Wallet.address);
             expect(ni1.status).to.be.equal(0);
             expect(ni1.nodeTokens).to.be.equal(100);
+
+
             let ownerBalanceBefore = await pushContract.balanceOf(owner.address);
-            // await pushContract.approve(owner.address, ethers.utils.parseEther("1000000000000000"));
+            let valContractBalanceBefore = await pushContract.balanceOf(valContract.address);
+            console.log(`before unstake: owner=${ownerBalanceBefore}, valContract=${valContractBalanceBefore}`);
 
-
-            let t1 = valContract/*.connect(owner)*/
+            let tx = await valContract
+                .connect(owner)
                 .unstakeNode(node1Wallet.address);
+            await t.confirmTransaction(tx);
 
             let nodeInfo = await valContract.getNodeInfo(node1Wallet.address);
             expect(nodeInfo.status).to.be.equal(NodeStatus.Unstaked);
             expect(nodeInfo.nodeTokens).to.be.equal(0);
 
             let ownerBalanceAfter = await pushContract.balanceOf(owner.address);
-            expect((ownerBalanceAfter.sub(ownerBalanceBefore))).to.be.equal(100);
+            let valContractBalanceAfter = await pushContract.balanceOf(valContract.address); // todo !!!!
+            console.log(`after unstake: owner=${ownerBalanceAfter}, valContract=${valContractBalanceAfter}`);
+            expect((valContractBalanceAfter.sub(valContractBalanceBefore))).to.be.equal(-100);
+            expect((ownerBalanceAfter.sub(ownerBalanceBefore))).to.be.equal(+100);
 
-            await expect(t1)
+            await expect(tx)
                 .to.emit(valContract, "NodeStatusChanged")
                 .withArgs(node1Wallet.address, NodeStatus.Unstaked, 0);
         }

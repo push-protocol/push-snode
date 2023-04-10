@@ -38,7 +38,7 @@ export class TestHelper {
         return true;
     }
 
-    static async expectTransaction(tx: ContractTransaction) {
+    static async confirmTransaction(tx: ContractTransaction) {
         expect((await tx.wait(1)).status).to.be.equal(1);
     }
 
@@ -60,7 +60,7 @@ export class TestHelper {
     }
 
     static async expectEventEx(tx: ContractTransaction, eventName:string, index:number, sample: any) {
-        await TestHelper.expectTransaction(tx);
+        await TestHelper.confirmTransaction(tx);
         const receipt = await tx.wait();
         let fileteredEvents = receipt.events.filter((event) => event.event === eventName /*&& event.address === contract.address*/);
         for (let i = 0; i < fileteredEvents.length; i++) {
