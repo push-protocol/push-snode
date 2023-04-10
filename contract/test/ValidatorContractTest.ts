@@ -34,7 +34,8 @@ export class State1 {
         const valContract = await valFactory.deploy(pushContract.address);
 
         await pushContract.mint(owner.address, ethers.utils.parseEther("100"));
-        await pushContract.approve(valContract.address, ethers.utils.parseEther("1000000000000000"));
+        // owner can spend 1000000000000000
+        await pushContract./*connect(owner).*/approve(valContract.address, ethers.utils.parseEther("1000000000000000"));
 
         return <State1>{
             pushContract: pushContract,
@@ -351,17 +352,58 @@ describe("Validator Tests :: Test unstake", function () {
     it("unstake1", async function () {
         const {valContract, pushContract, owner, node1Wallet, node2Wallet} = await State1.build(); //await loadFixture(chain1);
         {
-            let t1 = valContract.registerNodeAndStake(100, 0,
+            // let ownerBalanceBefore = await pushContract.balanceOf(owner.address);
+            // let node1BalanceBefore = await pushContract.balanceOf(node1Wallet.address);
+
+            let t1 = valContract.connect(owner).registerNodeAndStake(100, 0,
                 "http://snode1:3000", node1Wallet.address);
-            await expect(t1).to.emit(valContract, "NodeAdded")
+
+            // let ownerBalanceAfter = await pushContract.balanceOf(owner.address);
+            // let node1BalanceAfter = await pushContract.balanceOf(node1Wallet.address);
+            // expect((node1BalanceAfter.sub(node1BalanceBefore))).to.be.equal(100);
+            // expect((ownerBalanceAfter.sub(ownerBalanceBefore))).to.be.equal(-100);
+
+            await expect(t1)
+                .to.emit(valContract, "NodeAdded")
                 .withArgs(owner.address, node1Wallet.address, 0, 100, "http://snode1:3000");
             let nodeInfo = await valContract.getNodeInfo(node1Wallet.address);
             expect(nodeInfo.status).to.be.equal(0);
         }
         expect(await pushContract.balanceOf(valContract.address)).to.be.equal(100);
 
+        // non-owner calls unstake
+        {
+            let t1 = valContract.connect(node2Wallet)
+                .unstakeNode(node1Wallet.address);
+            await expect(t1).revertedWith('only owner can unstake a node');
+
+            // await expect(t1).re
+            //     .to.emit(valContract, "NodeStatusChanged")
+            //     .withArgs(node1Wallet.address, NodeStatus.Unstaked, 0);
+        }
         // owner calls unstake
-        valContract.uns
+        {
+            let ni1 = await valContract.getNodeInfo(node1Wallet.address);
+            expect(ni1.status).to.be.equal(0);
+            expect(ni1.nodeTokens).to.be.equal(100);
+            let ownerBalanceBefore = await pushContract.balanceOf(owner.address);
+            // await pushContract.approve(owner.address, ethers.utils.parseEther("1000000000000000"));
+
+
+            let t1 = valContract/*.connect(owner)*/
+                .unstakeNode(node1Wallet.address);
+
+            let nodeInfo = await valContract.getNodeInfo(node1Wallet.address);
+            expect(nodeInfo.status).to.be.equal(NodeStatus.Unstaked);
+            expect(nodeInfo.nodeTokens).to.be.equal(0);
+
+            let ownerBalanceAfter = await pushContract.balanceOf(owner.address);
+            expect((ownerBalanceAfter.sub(ownerBalanceBefore))).to.be.equal(100);
+
+            await expect(t1)
+                .to.emit(valContract, "NodeStatusChanged")
+                .withArgs(node1Wallet.address, NodeStatus.Unstaked, 0);
+        }
 
     })
 });

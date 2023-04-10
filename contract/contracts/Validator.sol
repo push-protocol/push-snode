@@ -309,6 +309,7 @@ contract ValidatorV1 is Ownable {
         require(node.nodeWallet != address(0), "node does not exists");
         require(node.ownerWallet == msg.sender, "only owner can unstake a node");
         doUnstake(node);
+        node.status = NodeStatus.Unstaked;
         emit NodeStatusChanged(node.nodeWallet, NodeStatus.Unstaked, 0);
     }
 
@@ -341,9 +342,9 @@ contract ValidatorV1 is Ownable {
     }
 
     function doBan(NodeInfo storage targetNode) private {
-        targetNode.status = NodeStatus.BannedAndUnstaked;
         reduceCollateral(targetNode.nodeWallet, BAN_COLL_PERCENTAGE);
         doUnstake(targetNode);
+        targetNode.status = NodeStatus.BannedAndUnstaked;
         emit NodeStatusChanged(targetNode.nodeWallet, NodeStatus.BannedAndUnstaked, 0);
     }
 
