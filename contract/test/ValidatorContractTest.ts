@@ -93,7 +93,6 @@ describe("Validator Transfer contract ownership", function () {
     });
 });
 
-
 describe("Validator Test1", function () {
 
     it("Deploy Validator contract and Push Contract", async function () {
@@ -153,8 +152,7 @@ describe("Validator Test1", function () {
     })
 });
 
-
-describe("testEquals", function () {
+describe("Tests for TestHelper", function () {
     it("testhasfields", async function () {
         const object1 = {
             field1: 'value1',
@@ -213,7 +211,7 @@ describe("testEquals", function () {
     });
 });
 
-describe("report tests", function () {
+describe("Validator Tests :: A node reports on other node", function () {
 
     it("report-tc1", async function () {
         const {valContract, pushContract, owner, node1Wallet, node2Wallet} = await State1.build(); //await loadFixture(chain1);
@@ -269,10 +267,10 @@ describe("report tests", function () {
                 let bn:BigNumber = BigNumber.from(1);
                 expect(bn instanceof BigNumber).to.be.true;
 
-                await t.expectEvent(tx, 0, {
+                await t.expectEventFirst(tx, {
                     nodeWallet: node2Wallet.address,
                     nodeStatus: NodeStatus.Reported,
-                    pushTokensLocked: 200
+                    nodeTokens: 200
                 });
             }
             {
@@ -283,20 +281,20 @@ describe("report tests", function () {
                 let nodeInfo = await valContract.getNodeInfo(node2Wallet.address);
                 console.log(nodeInfo);
                 expect(nodeInfo.status).to.be.equal(2); // slashed
-                expect(nodeInfo.pushTokensLocked).to.be.equal(198); // -1%
+                expect(nodeInfo.nodeTokens).to.be.equal(198); // -1%
                 expect(nodeInfo.counters.reportCounter).to.be.equal(0);
                 expect(nodeInfo.counters.slashCounter).to.be.equal(1);
 
                 await t.expectEvent(tx, 0, {
                     nodeWallet: node2Wallet.address,
                     nodeStatus: NodeStatus.Reported,
-                    pushTokensLocked: 200
+                    nodeTokens: 200
                 });
 
                 await t.expectEvent(tx, 1, {
                     nodeWallet: node2Wallet.address,
                     nodeStatus: NodeStatus.Slashed,
-                    pushTokensLocked: 198
+                    nodeTokens: 198
                 });
             }
             {
@@ -308,10 +306,10 @@ describe("report tests", function () {
                 expect(nodeInfo.counters.reportCounter).to.be.equal(1);
                 console.log(nodeInfo);
 
-                await t.expectEvent(tx, 0, {
+                await t.expectEventFirst(tx, {
                     nodeWallet: node2Wallet.address,
                     nodeStatus: NodeStatus.Reported,
-                    pushTokensLocked: 198
+                    nodeTokens: 198
                 });
             }
             {
@@ -323,26 +321,47 @@ describe("report tests", function () {
                 console.log('4th report');
                 console.log(nodeInfo);
                 expect(nodeInfo.status).to.be.equal(3); // banned
-                expect(nodeInfo.pushTokensLocked).to.be.equal(0); // because we unstaked automatically
+                expect(nodeInfo.nodeTokens).to.be.equal(0); // because we unstaked automatically
                 expect(nodeInfo.counters.reportCounter).to.be.equal(0);
                 expect(nodeInfo.counters.slashCounter).to.be.equal(2);
                 console.log('events ', (await tx.wait(1)).events);
                 await t.expectEvent(tx, 0, {
                     nodeWallet: node2Wallet.address,
                     nodeStatus: NodeStatus.Reported,
-                    pushTokensLocked: 198
+                    nodeTokens: 198
                 });
                 await t.expectEvent(tx, 1, {
                     nodeWallet: node2Wallet.address,
                     nodeStatus: NodeStatus.Slashed,
-                    pushTokensLocked: 196
+                    nodeTokens: 196
                 });
                 await t.expectEvent(tx, 2, {
                     nodeWallet: node2Wallet.address,
-                    nodeStatus: NodeStatus.Banned,
-                    pushTokensLocked: 0
+                    nodeStatus: NodeStatus.BannedAndUnstaked,
+                    nodeTokens: 0
                 });
             }
         }
+    })
+});
+
+
+describe("Validator Tests :: Test unstake", function () {
+
+    it("unstake1", async function () {
+        const {valContract, pushContract, owner, node1Wallet, node2Wallet} = await State1.build(); //await loadFixture(chain1);
+        {
+            let t1 = valContract.registerNodeAndStake(100, 0,
+                "http://snode1:3000", node1Wallet.address);
+            await expect(t1).to.emit(valContract, "NodeAdded")
+                .withArgs(owner.address, node1Wallet.address, 0, 100, "http://snode1:3000");
+            let nodeInfo = await valContract.getNodeInfo(node1Wallet.address);
+            expect(nodeInfo.status).to.be.equal(0);
+        }
+        expect(await pushContract.balanceOf(valContract.address)).to.be.equal(100);
+
+        // owner calls unstake
+        valContract.uns
+
     })
 });

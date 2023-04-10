@@ -130,7 +130,7 @@ contract ValidatorV1 is Ownable {
         address ownerWallet;
         address nodeWallet;       // eth wallet
         NodeType nodeType;
-        uint256 pushTokensLocked;
+        uint256 nodeTokens;
         string nodeApiBaseUrl; // rest api url for invocation
         NodeCounters counters;
         NodeStatus status;
@@ -153,7 +153,8 @@ contract ValidatorV1 is Ownable {
         OK, // this node operates just fine (DEFAULT VALUE)
         Reported, // he have a few malicious reports
         Slashed, // we already slashed this node at least once (normally we will take -2% of collateral tokens)
-        Banned       // we banned the node and unstaked it's tokens (normally we will take -10% of collateral tokens)
+        BannedAndUnstaked,   // we banned the node and unstaked it's tokens (normally we will take -10% of collateral tokens)
+        Unstaked
     }
 
     enum VoteAction {
@@ -168,8 +169,9 @@ contract ValidatorV1 is Ownable {
         DNode  // delivery
     }
 
-    event NodeAdded(address indexed ownerWallet, address indexed nodeWallet, NodeType nodeType, uint256 pushTokensLocked, string nodeApiBaseUrl);
-    event NodeStatusChanged(address indexed nodeWallet, NodeStatus nodeStatus, uint256 pushTokensLocked);
+    event NodeAdded(address indexed ownerWallet, address indexed nodeWallet, NodeType nodeType, uint256 nodeTokens, string nodeApiBaseUrl);
+    event NodeStatusChanged(address indexed nodeWallet, NodeStatus nodeStatus, uint256 nodeTokens);
+
 
     struct VoteMessage {
         VoteAction vote;
@@ -195,9 +197,9 @@ contract ValidatorV1 is Ownable {
     // Registers a new validator node
     // Locks PUSH tokens ($_token) with $_collateral amount.
     // A node will run from a _nodeWallet
-    function registerNodeAndStake(uint256 _pushTokensLocked,
+    function registerNodeAndStake(uint256 _nodeTokens,
         NodeType _nodeType, string memory _nodeApiBaseUrl, address _nodeWallet) public {
-        uint256 coll = _pushTokensLocked;
+        uint256 coll = _nodeTokens;
         if (_nodeType == NodeType.VNode) {
             require(coll >= VNODE_COLLATERAL_IN_PUSH, "Insufficient collateral for VNODE");
         } else {
@@ -209,13 +211,13 @@ contract ValidatorV1 is Ownable {
         }
         // check that collateral is allowed to spend
         uint256 allowed = pushToken.allowance(msg.sender, address(this));
-        require(allowed >= _pushTokensLocked, "_pushTokensLocked cannot be transferred, check allowance");
+        require(allowed >= _nodeTokens, "_nodeTokens cannot be transferred, check allowance");
         // new mapping
         NodeInfo memory n;
         n.ownerWallet = msg.sender;
         n.nodeWallet = _nodeWallet;
         n.nodeType = _nodeType;
-        n.pushTokensLocked = coll;
+        n.nodeTokens = coll;
         n.nodeApiBaseUrl = _nodeApiBaseUrl;
         nodes.push(_nodeWallet);
         nodeMap[_nodeWallet] = n;
@@ -278,7 +280,7 @@ contract ValidatorV1 is Ownable {
             if (targetNode.counters.slashCounter >= SLASH_COUNT_TO_BAN) {
                 doBan(targetNode);
             }
-        } else if (ns == NodeStatus.Banned) {
+        } else if (ns == NodeStatus.BannedAndUnstaked) {
             // do nothing; terminal state
         }
         return 0;
@@ -290,26 +292,33 @@ contract ValidatorV1 is Ownable {
     function reduceCollateral(address _nodeWallet, uint32 _percentage) private returns (uint256) {
         require(_nodeWallet != address(0));
         require(_percentage >= 0 && _percentage <= 100, "percentage should be in [0, 100]");
-        // reduce only pushTokensLocked; we do not transfer any tokens; it will affect only 'unstake'
+        // reduce only nodeTokens; we do not transfer any tokens; it will affect only 'unstake'
         NodeInfo storage node = nodeMap[_nodeWallet];
-        uint256 currentAmount = node.pushTokensLocked;
+        uint256 currentAmount = node.nodeTokens;
         uint256 newAmount = (currentAmount * (100 - _percentage)) / 100;
         uint256 delta = currentAmount - newAmount;
-        node.pushTokensLocked = newAmount;
+        node.nodeTokens = newAmount;
         totalStaked -= delta;
         totalPenalties += delta;
         return newAmount;
     }
 
+
+    function unstakeNode(address _nodeWallet) external {
+        NodeInfo storage node = nodeMap[_nodeWallet];
+        require(node.nodeWallet != address(0), "node does not exists");
+        require(node.ownerWallet == msg.sender, "only owner can unstake a node");
+        doUnstake(node);
+        emit NodeStatusChanged(node.nodeWallet, NodeStatus.Unstaked, 0);
+    }
+
     /*
     Returns unstaked amount
     */
-    function unstake(address _nodeWallet) private returns (uint256){
-        require(_nodeWallet != address(0));
-        NodeInfo storage node = nodeMap[_nodeWallet];
-        uint256 delta = node.pushTokensLocked;
-        pushToken.transfer(node.ownerWallet, delta);
-        node.pushTokensLocked = 0;
+    function doUnstake(NodeInfo storage targetNode) private returns (uint256){
+        uint256 delta = targetNode.nodeTokens;
+        pushToken.transfer(targetNode.ownerWallet, delta);
+        targetNode.nodeTokens = 0;
         totalStaked -= delta;
         return delta;
     }
@@ -320,7 +329,7 @@ contract ValidatorV1 is Ownable {
 
     function doReport(NodeInfo storage targetNode) private {
         targetNode.counters.reportCounter++;
-        emit NodeStatusChanged(targetNode.nodeWallet, NodeStatus.Reported, targetNode.pushTokensLocked);
+        emit NodeStatusChanged(targetNode.nodeWallet, NodeStatus.Reported, targetNode.nodeTokens);
     }
 
     function doSlash(NodeInfo storage targetNode) private {
@@ -332,10 +341,10 @@ contract ValidatorV1 is Ownable {
     }
 
     function doBan(NodeInfo storage targetNode) private {
-        targetNode.status = NodeStatus.Banned;
+        targetNode.status = NodeStatus.BannedAndUnstaked;
         reduceCollateral(targetNode.nodeWallet, BAN_COLL_PERCENTAGE);
-        uint256 delta = unstake(targetNode.nodeWallet);
-        emit NodeStatusChanged(targetNode.nodeWallet, NodeStatus.Banned, 0);
+        doUnstake(targetNode);
+        emit NodeStatusChanged(targetNode.nodeWallet, NodeStatus.BannedAndUnstaked, 0);
     }
 
 }

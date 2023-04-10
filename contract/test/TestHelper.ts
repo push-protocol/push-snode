@@ -52,7 +52,14 @@ export class TestHelper {
      * Expects that contract transaction (tx) contains a specified event (sample) at specified index (index)
      */
     static async expectEvent(tx: ContractTransaction, index:number, sample: any) {
-        let eventName = "NodeStatusChanged";
+        return TestHelper.expectEventEx(tx, "NodeStatusChanged", index, sample);
+    }
+
+    static async expectEventFirst(tx: ContractTransaction, sample: any) {
+        return TestHelper.expectEventEx(tx, "NodeStatusChanged", 0, sample);
+    }
+
+    static async expectEventEx(tx: ContractTransaction, eventName:string, index:number, sample: any) {
         await TestHelper.expectTransaction(tx);
         const receipt = await tx.wait();
         let fileteredEvents = receipt.events.filter((event) => event.event === eventName /*&& event.address === contract.address*/);
