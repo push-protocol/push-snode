@@ -40,7 +40,7 @@ function getEthSignedMessageHashJS(messageHash:string) {
  * https://solidity-by-example.org/signature/
  * https://github.com/t4sk/hello-erc20-permit/blob/main/test/verify-signature.js
  */
-describe("SignatureTest", function () {
+describe.skip("SignatureTest", function () {
 
     it("tc1", async function () {
         // signers

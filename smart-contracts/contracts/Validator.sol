@@ -222,7 +222,7 @@ contract ValidatorV1 is Ownable {
         nodes.push(_nodeWallet);
         nodeMap[_nodeWallet] = n;
         // take collateral
-        pushToken.transferFrom(msg.sender, address(this), coll);
+        require(pushToken.transferFrom(msg.sender, address(this), coll), "failed to transfer tokens to contract");
         totalStaked += coll;
         // post actions
         //        MIN_NODES_FOR_REPORT = (uint32)(1 + (nodes.length / 2));
@@ -318,7 +318,7 @@ contract ValidatorV1 is Ownable {
     */
     function doUnstake(NodeInfo storage targetNode) private returns (uint256){
         uint256 delta = targetNode.nodeTokens;
-        pushToken.transfer(targetNode.ownerWallet, delta);
+        require(pushToken.transfer(targetNode.ownerWallet, delta), "failed to trasfer funds back to owner");
         targetNode.nodeTokens = 0;
         totalStaked -= delta;
         return delta;

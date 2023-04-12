@@ -10,6 +10,7 @@ import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {TestHelper as t} from "./TestHelper";
 import {NodeStatus, ValidatorContractHelper} from "./ValidatorContractHelper";
 import {BigNumber} from "ethers";
+import {JsonRpcClient} from "hardhat/internal/hardhat-network/jsonrpc/client";
 
 
 export class State1 {
@@ -420,3 +421,5 @@ describe("Validator Tests :: Test unstake", function () {
 
     })
 });
+
+
