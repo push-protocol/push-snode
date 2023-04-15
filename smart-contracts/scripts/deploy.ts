@@ -1,27 +1,31 @@
-import { ethers } from "hardhat";
+import {ethers} from "hardhat";
+import {config as loadEnvVariables} from "dotenv";
+
 
 async function main() {
+    loadEnvVariables();
 
-  require("dotenv").config();
+    // deploy token
+    const [owner] = await ethers.getSigners();
+    const pushTokenFactory = await ethers.getContractFactory("PushToken");
+    const pushToken = await pushTokenFactory.deploy();
+    await pushToken.deployed();
+    console.log("PushToken contract: ", pushToken.address);
 
-  const PushToken = await ethers.getContractFactory("PushToken");
-  const pushToken = await PushToken.deploy();
+    // deploy
+    const pushTokenAddr = process.env.TOKEN_ADDRESS ?? pushToken?.address;
+    const validatorV1Factory = await ethers.getContractFactory("ValidatorV1");
+    const validator = await validatorV1Factory.deploy(pushTokenAddr);
+    await validator.deployed();
+    console.log("Validator contract ", validator.address);
 
-  await pushToken.deployed();
-
-  const TokenAddress = process.env.TOKEN_ADDRESS;
-  const DStorageV1 = await ethers.getContractFactory("DStorageV1");
-  const dstoragev1 = await DStorageV1.deploy( pushToken?.address || TokenAddress || "0x0");
-
-  await dstoragev1.deployed();
-
-  console.log("PushToken contract is deployed to:", pushToken.address);
-  console.log(`DStorageV1 contract is deployed to ${dstoragev1.address}`);
+    // give 10k to owner
+    await pushToken.mint(owner.address, ethers.utils.parseEther("10000"));
+    console.log("owner ", owner.address);
+    console.log("owner balance ", await pushToken.balanceOf(owner.address));
 }
 
-// We recommend this pattern to be able to use async/await everywhere
-// and properly handle errors.
 main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
+    console.error(error);
+    process.exitCode = 1;
 });
