@@ -153,6 +153,10 @@ describe("Validator Test1", function () {
             expect(nodeInfo.status).to.be.equal(0);
         }
         expect(await pushContract.balanceOf(valContract.address)).to.be.equal(300);
+        {
+            let t2 = await valContract.getNodes();
+            console.log(t2);
+        }
     })
 });
 

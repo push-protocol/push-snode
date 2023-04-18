@@ -328,6 +328,10 @@ contract ValidatorV1 is Ownable {
         return nodeMap[_nodeWallet];
     }
 
+    function getNodes() public view returns (address[] memory) {
+        return nodes;
+    }
+
     function doReport(NodeInfo storage targetNode) private {
         targetNode.counters.reportCounter++;
         emit NodeStatusChanged(targetNode.nodeWallet, NodeStatus.Reported, targetNode.nodeTokens);
