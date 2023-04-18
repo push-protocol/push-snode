@@ -15,7 +15,7 @@ async function main() {
     info("PushToken contract: ", pushToken.address);
 
     // deploy
-    const pushTokenAddr = process.env.TOKEN_ADDRESS ?? pushToken?.address;
+    const pushTokenAddr = process.env.PUSH_TOKEN_ADDRESS ?? pushToken?.address;
     const validatorV1Factory = await ethers.getContractFactory("ValidatorV1");
     const validator = await validatorV1Factory.deploy(pushTokenAddr);
     await validator.deployed();

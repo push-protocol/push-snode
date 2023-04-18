@@ -10,12 +10,12 @@ async function main() {
     loadEnvVariables();
 
     const [owner, node1, node2, node3] = await ethers.getSigners();
-    const pushAddr = process.env.PUSH_ADDRESS ?? process.exit(1);
+    const pushAddr = process.env.PUSH_TOKEN_ADDRESS ?? process.exit(1);
     const validatorAddr = process.env.VALIDATOR_ADDRESS ?? process.exit(1);
     info("pushAddr is ", pushAddr);
     info("validatorAddr is ", validatorAddr);
 
-    await registerNode(pushAddr, validatorAddr,owner,  node1.address,100,  "http://localhost:4001");
+    await registerNode(pushAddr, validatorAddr, owner,  node1.address,100,  "http://localhost:4001");
     await registerNode(pushAddr, validatorAddr, owner, node2.address,200,  "http://localhost:4002");
     await registerNode(pushAddr, validatorAddr, owner, node3.address, 300, "http://localhost:4003");
 }
