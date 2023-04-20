@@ -36,8 +36,8 @@ const config: HardhatUserConfig = {
 export default config;
 
 /* TASKS */
-const pushTokenAddr = process.env.PUSH_TOKEN_ADDRESS;
-const validatorCtAddr = process.env.VALIDATOR_CT_ADDRESS;
+const pushTokenAddr = process.env.VALIDATOR_PUSH_TOKEN_ADDRESS;
+const validatorCtAddr = process.env.VALIDATOR_CONTRACT_ADDRESS;
 
 
 /**
@@ -94,12 +94,13 @@ task("v:balanceForValidatorContract", "prints validator contract balance  @ PUSH
 
 task("v:getNodes", "shows validator nodes registered")
     .setAction(async (taskArgs, hre) => {
-        const validatorCt = await hre.ethers.getContractAt("ValidatorV1", process.env.VALIDATOR_CT_ADDRESS);
+        const validatorCt = await hre.ethers.getContractAt("ValidatorV1", validatorCtAddr);
         log(`showing validator nodes registered in ${validatorCtAddr}`);
         log(await validatorCt.getNodes());
     });
 
-task("v:registerNodeWithRandomWallet", "register a node on behalf of owner (he should own @PUSH tokens)")
+task("v:registerNodeWithRandomWallet", "register a node on behalf of owner " +
+    "(he should own @PUSH tokens and approve them for spending by Validator contract)")
     .addPositionalParam("nodeUrl")
     .setAction(async (taskArgs, hre) => {
         const nodeUrl = taskArgs.nodeUrl;

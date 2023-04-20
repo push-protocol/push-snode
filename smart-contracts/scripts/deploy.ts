@@ -12,14 +12,14 @@ async function main() {
     const pushToken = await pushTokenFactory.deploy();
     await pushToken.deployed();
 
-    info("PushToken contract: ", pushToken.address);
+    info("VALIDATOR_PUSH_TOKEN_ADDRESS=", pushToken.address);
 
     // deploy
     const pushTokenAddr = process.env.PUSH_TOKEN_ADDRESS ?? pushToken?.address;
     const validatorV1Factory = await ethers.getContractFactory("ValidatorV1");
     const validator = await validatorV1Factory.deploy(pushTokenAddr);
     await validator.deployed();
-    info("Validator contract ", validator.address);
+    info("VALIDATOR_CONTRACT_ADDRESS=", validator.address);
 
     // give 10k to owner
     await pushToken.mint(owner.address, ethers.utils.parseEther("10000"));

@@ -10,8 +10,8 @@ async function main() {
     loadEnvVariables();
 
     const [owner, node1, node2, node3] = await ethers.getSigners();
-    const pushAddr = process.env.PUSH_TOKEN_ADDRESS ?? process.exit(1);
-    const validatorAddr = process.env.VALIDATOR_ADDRESS ?? process.exit(1);
+    const pushAddr = process.env.VALIDATOR_PUSH_TOKEN_ADDRESS ?? process.exit(1);
+    const validatorAddr = process.env.VALIDATOR_CONTRACT_ADDRESS ?? process.exit(1);
     info("pushAddr is ", pushAddr);
     info("validatorAddr is ", validatorAddr);
 
