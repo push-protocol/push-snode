@@ -1,49 +1,10 @@
 //SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.17;
 
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 
-// a mock interface of a PUSH token; only bare minimum is needed
-interface IPush {
-    // allow spender to spend rawAmount on behalf of the caller
-    function approve(address spender, uint rawAmount) external returns (bool);
-    // checks allowance limit set by approve
-    function allowance(address account, address spender) external view returns (uint);
-    // transfer allowed tokens (for src)
-    function transferFrom(address src, address dst, uint rawAmount) external returns (bool);
-    // transfer allowed tokens (for current contract)
-    function transfer(address dst, uint rawAmount) external returns (bool);
-
-    function balanceOf(address account) external view returns (uint256);
-}
-
-contract Ownable {
-    address public owner;
-    address public newOwner;
-
-    function transferOwnership(address _newOwner) external {
-        require(_newOwner != owner, "Cannot transfer ownership to the current owner.");
-        require(msg.sender == owner, "Only the owner can transfer ownership.");
-        require(_newOwner != address(0), "Cannot transfer ownership to address(0)");
-        newOwner = _newOwner;
-        emit LogTransferOwnership(msg.sender, block.timestamp);
-    }
-
-    function acceptOwnership() external {
-        require(msg.sender == newOwner, "Only the new owner can accept the ownership.");
-        owner = newOwner;
-        newOwner = address(0);
-        emit LogAcceptOwnership(msg.sender, block.timestamp);
-    }
-
-    event LogTransferOwnership(address indexed oldOwner, uint256 timestamp);
-    event LogAcceptOwnership(address indexed newOwner, uint256 timestamp);
-
-    modifier isOwner() {
-        require(owner == msg.sender, "Only the owner can call a method");
-        _;
-    }
-}
-
+// a lib that abstracts privKey signature and pubKey+signature checks
 library SigUtil {
 
     function getMessageHash(bytes memory _message) internal pure returns (bytes32) {
@@ -101,24 +62,33 @@ library SigUtil {
     }
 }
 
+/*
+Validator smart contract
 
-contract ValidatorV1 is Ownable {
+Enables a network of Validators
+*/
+contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
 
-    uint256 public VNODE_COLLATERAL_IN_PUSH = 100; // todo check the amount
+    string public protocolVersion = "1.0";
 
-    // X REPORTS -> SLASH , PUNISH $SLASH_COLL_PERCENTAGE
-    // X SLASHES -> BAN, PUNISH $BAN_COLL_PERCENTAGE
+    // contract-wide constants
+    uint256 public VNODE_COLLATERAL_IN_PUSH = 100;
     uint32 public REPORT_COUNT_TO_SLASH = 2;
     uint32 public SLASH_COLL_PERCENTAGE = 1;
-
     uint32 public SLASH_COUNT_TO_BAN = 2;
     uint32 public BAN_COLL_PERCENTAGE = 10;
+    uint32 public MIN_NODES_FOR_REPORT = 1; // todo update this on node join?
 
-    uint32 public MIN_NODES_FOR_REPORT = 1; // todo update this on node join; should be 51%
-
+    // backend-wide
+    // how many attesters should sign the message block, after validator proposes a block
+    uint32 public attestersRequired = 1;
+    // how many networkRandom objects are required to compute a random value
+    uint32 public nodeRandomMinCount = 1;
+    // how many nodes should see the emitter of that networkRandom ; so that we could count on this network random
+    uint32 public nodeRandomFilterPingsRequired = 1;
 
     // token storages
-    IPush pushToken;
+    IERC20 pushToken;
 
     // node colleciton
     address[] nodes;
@@ -190,8 +160,7 @@ contract ValidatorV1 is Ownable {
 
     constructor(address _pushToken) {
         require(_pushToken != address(0));
-        owner = msg.sender;
-        pushToken = IPush(_pushToken);
+        pushToken = IERC20(_pushToken);
     }
 
     // Registers a new validator node
