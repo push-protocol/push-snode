@@ -3,64 +3,7 @@ pragma solidity ^0.8.17;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
-
-// a lib that abstracts privKey signature and pubKey+signature checks
-library SigUtil {
-
-    function getMessageHash(bytes memory _message) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked(_message));
-    }
-
-    function getEthSignedMessageHash(bytes32 _messageHash) internal pure returns (bytes32) {
-        /*
-        Signature is produced by signing a keccak256 hash with the following format:
-        "\x19Ethereum Signed Message\n" + len(msg) + msg
-        */
-        return
-        keccak256(
-            abi.encodePacked("\x19Ethereum Signed Message:\n32", _messageHash)
-        );
-    }
-
-    function recoverSigner(
-        bytes32 _ethSignedMessageHash,
-        bytes memory _signature) internal pure returns (address) {
-        (bytes32 r, bytes32 s, uint8 v) = splitSignature(_signature);
-
-        return ecrecover(_ethSignedMessageHash, v, r, s);
-    }
-
-    function splitSignature(bytes memory sig) internal pure returns (bytes32 r, bytes32 s, uint8 v) {
-        require(sig.length == 65, "invalid signature length");
-
-        assembly {
-        /*
-        First 32 bytes stores the length of the signature
-
-        add(sig, 32) = pointer of sig + 32
-        effectively, skips first 32 bytes of signature
-
-        mload(p) loads next 32 bytes starting at the memory address p into memory
-        */
-
-        // first 32 bytes, after the length prefix
-            r := mload(add(sig, 32))
-        // second 32 bytes
-            s := mload(add(sig, 64))
-        // final byte (first byte of the next 32 bytes)
-            v := byte(0, mload(add(sig, 96)))
-        }
-
-        // implicitly return (r, s, v)
-    }
-
-    function recoverSignerEx(bytes memory _message, bytes memory _signature
-    ) internal pure returns (address) {
-        bytes32 messageHash = getMessageHash(_message);
-        bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
-        return recoverSigner(ethSignedMessageHash, _signature);
-    }
-}
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 /*
 Validator smart contract
@@ -69,23 +12,23 @@ Enables a network of Validators
 */
 contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
 
-    string public protocolVersion = "1.0";
+    uint16 private protocolVersion;
 
-    // contract-wide constants
-    uint256 public VNODE_COLLATERAL_IN_PUSH = 100;
-    uint32 public REPORT_COUNT_TO_SLASH = 2;
-    uint32 public SLASH_COLL_PERCENTAGE = 1;
-    uint32 public SLASH_COUNT_TO_BAN = 2;
-    uint32 public BAN_COLL_PERCENTAGE = 10;
-    uint32 public MIN_NODES_FOR_REPORT = 1; // todo update this on node join?
+    // contract-wide variables
+    uint256 public vnodeCollateralInPushTokens;
+    uint32 public REPORT_COUNT_TO_SLASH;
+    uint32 public SLASH_COLL_PERCENTAGE;
+    uint32 public SLASH_COUNT_TO_BAN;
+    uint32 public BAN_COLL_PERCENTAGE;
+    uint32 public MIN_NODES_FOR_REPORT;
 
-    // backend-wide
+    // backend-wide variables
     // how many attesters should sign the message block, after validator proposes a block
-    uint32 public attestersRequired = 1;
+    uint32 public attestersRequired;
     // how many networkRandom objects are required to compute a random value
-    uint32 public nodeRandomMinCount = 1;
+    uint32 public nodeRandomMinCount;
     // how many nodes should see the emitter of that networkRandom ; so that we could count on this network random
-    uint32 public nodeRandomFilterPingsRequired = 1;
+    uint32 public nodeRandomFilterPingsRequired;
 
     // token storages
     IERC20 pushToken;
@@ -123,7 +66,7 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         OK, // this node operates just fine (DEFAULT VALUE)
         Reported, // he have a few malicious reports
         Slashed, // we already slashed this node at least once (normally we will take -2% of collateral tokens)
-        BannedAndUnstaked,   // we banned the node and unstaked it's tokens (normally we will take -10% of collateral tokens)
+        BannedAndUnstaked, // we banned the node and unstaked it's tokens (normally we will take -10% of collateral tokens)
         Unstaked
     }
 
@@ -158,9 +101,39 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         return result;
     }
 
-    constructor(address _pushToken) {
-        require(_pushToken != address(0));
-        pushToken = IERC20(_pushToken);
+    // an empty constructor; constructor is replaced with initialize()
+    constructor() {
+    }
+
+    // called only once when a proxy gets deployed; for updates use reinitializer
+    function initialize(
+        uint16 protocolVersion_,
+        address pushToken_,
+        uint32 attestersRequired_,
+        uint32 nodeRandomMinCount_,
+        uint32 nodeRandomFilterPingsRequired_
+    ) initializer public {
+        // init libraries
+        __UUPSUpgradeable_init();
+        __Ownable_init_unchained();
+        // init state
+        protocolVersion = protocolVersion_;
+        require(pushToken_ != address(0));
+        pushToken = IERC20(pushToken_);
+        require(attestersRequired_ > 0, "invalid attesters amount");
+        attestersRequired = attestersRequired_;
+        require(nodeRandomMinCount_ > 0, "invalid nodeRandomMinCount amount");
+        nodeRandomMinCount = nodeRandomMinCount_;
+        require(nodeRandomFilterPingsRequired_ > 0, "invalid nodeRandomFilterPingsRequired amount");
+        nodeRandomFilterPingsRequired = nodeRandomFilterPingsRequired_;
+
+        vnodeCollateralInPushTokens = 100;
+        REPORT_COUNT_TO_SLASH = 2;
+        SLASH_COLL_PERCENTAGE = 1;
+        SLASH_COUNT_TO_BAN = 2;
+        BAN_COLL_PERCENTAGE = 10;
+        MIN_NODES_FOR_REPORT = 1;
+        // todo update this on node join
     }
 
     // Registers a new validator node
@@ -170,7 +143,7 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         NodeType _nodeType, string memory _nodeApiBaseUrl, address _nodeWallet) public {
         uint256 coll = _nodeTokens;
         if (_nodeType == NodeType.VNode) {
-            require(coll >= VNODE_COLLATERAL_IN_PUSH, "Insufficient collateral for VNODE");
+            require(coll >= vnodeCollateralInPushTokens, "Insufficient collateral for VNODE");
         } else {
             revert("unsupported nodeType ");
         }
@@ -321,4 +294,78 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         emit NodeStatusChanged(targetNode.nodeWallet, NodeStatus.BannedAndUnstaked, 0);
     }
 
+
+    /*****************/
+    /* UUPS required */
+    /*****************/
+
+    function _authorizeUpgrade(address) internal override onlyOwner {}
+
+    function getProtocolVersion() public view returns (uint16) {
+        return protocolVersion;
+    }
+
+    function getCodeVersion() public pure returns (uint16){
+        return 2;
+    }
+
+}
+
+
+// a lib that abstracts privKey signature and pubKey+signature checks
+library SigUtil {
+
+    function getMessageHash(bytes memory _message) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked(_message));
+    }
+
+    function getEthSignedMessageHash(bytes32 _messageHash) internal pure returns (bytes32) {
+        /*
+        Signature is produced by signing a keccak256 hash with the following format:
+        "\x19Ethereum Signed Message\n" + len(msg) + msg
+        */
+        return
+        keccak256(
+            abi.encodePacked("\x19Ethereum Signed Message:\n32", _messageHash)
+        );
+    }
+
+    function recoverSigner(
+        bytes32 _ethSignedMessageHash,
+        bytes memory _signature) internal pure returns (address) {
+        (bytes32 r, bytes32 s, uint8 v) = splitSignature(_signature);
+
+        return ecrecover(_ethSignedMessageHash, v, r, s);
+    }
+
+    function splitSignature(bytes memory sig) internal pure returns (bytes32 r, bytes32 s, uint8 v) {
+        require(sig.length == 65, "invalid signature length");
+
+        assembly {
+        /*
+        First 32 bytes stores the length of the signature
+
+        add(sig, 32) = pointer of sig + 32
+        effectively, skips first 32 bytes of signature
+
+        mload(p) loads next 32 bytes starting at the memory address p into memory
+        */
+
+        // first 32 bytes, after the length prefix
+            r := mload(add(sig, 32))
+        // second 32 bytes
+            s := mload(add(sig, 64))
+        // final byte (first byte of the next 32 bytes)
+            v := byte(0, mload(add(sig, 96)))
+        }
+
+        // implicitly return (r, s, v)
+    }
+
+    function recoverSignerEx(bytes memory _message, bytes memory _signature
+    ) internal pure returns (address) {
+        bytes32 messageHash = getMessageHash(_message);
+        bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
+        return recoverSigner(ethSignedMessageHash, _signature);
+    }
 }

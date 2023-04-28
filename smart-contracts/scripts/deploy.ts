@@ -1,5 +1,6 @@
 import {ethers} from "hardhat";
 import {config as loadEnvVariables} from "dotenv";
+import {task} from "hardhat/config";
 
 let info = console.log;
 

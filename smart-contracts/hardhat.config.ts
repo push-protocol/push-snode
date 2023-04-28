@@ -39,7 +39,6 @@ export default config;
 const pushTokenAddr = process.env.VALIDATOR_PUSH_TOKEN_ADDRESS;
 const validatorCtAddr = process.env.VALIDATOR_CONTRACT_ADDRESS;
 
-
 /**
  *
  * @param pushAddr push smart contract (deployed)
@@ -123,6 +122,10 @@ task("v:registerNodeWithRandomWallet", "register a node on behalf of owner " +
             randomWallet.address, nodeCollateralFromOwner, nodeUrl);
         log(`nodes after: `, await validatorCt.getNodes());
     });
+
+import "./tasks/deployTask"
+
+
 
 /*
 
