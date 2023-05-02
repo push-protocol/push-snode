@@ -24,11 +24,13 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
 
     // backend-wide variables
     // how many attesters should sign the message block, after validator proposes a block
-    uint32 public attestersRequired;
+    uint8 public attestersRequired;
     // how many networkRandom objects are required to compute a random value
-    uint32 public nodeRandomMinCount;
+    uint8 public nodeRandomMinCount;
     // how many nodes should see the emitter of that networkRandom ; so that we could count on this network random
-    uint32 public nodeRandomFilterPingsRequired;
+    uint8 public nodeRandomPingCount;
+
+
 
     // token storages
     IERC20 pushToken;
@@ -38,6 +40,17 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     mapping(address => NodeInfo) nodeMap; // nodeWallet -> node info
     uint256 totalStaked;      // push tokens owned by this contract; which have an owner
     uint256 totalPenalties;   // push tokens owned by this contract; comes from penalties
+
+    /* EVENTS */
+    event NodeAdded(address indexed ownerWallet, address indexed nodeWallet, NodeType nodeType, uint256 nodeTokens, string nodeApiBaseUrl);
+    event NodeStatusChanged(address indexed nodeWallet, NodeStatus nodeStatus, uint256 nodeTokens);
+
+    event AttestersRequiredUpdated(uint32 value);
+    event NodeRandomMinCountUpdated(uint32 value);
+    event NodeRandomPingCountUpdated(uint32 value);
+
+    /* TYPES */
+
 
     struct NodeInfo {
         address ownerWallet;
@@ -82,10 +95,6 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         DNode  // delivery
     }
 
-    event NodeAdded(address indexed ownerWallet, address indexed nodeWallet, NodeType nodeType, uint256 nodeTokens, string nodeApiBaseUrl);
-    event NodeStatusChanged(address indexed nodeWallet, NodeStatus nodeStatus, uint256 nodeTokens);
-
-
     struct VoteMessage {
         VoteAction vote;
         address target;
@@ -109,9 +118,9 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     function initialize(
         uint16 protocolVersion_,
         address pushToken_,
-        uint32 attestersRequired_,
-        uint32 nodeRandomMinCount_,
-        uint32 nodeRandomFilterPingsRequired_
+        uint8 attestersRequired_,
+        uint8 nodeRandomMinCount_,
+        uint8 nodeRandomPingCount_
     ) initializer public {
         // init libraries
         __UUPSUpgradeable_init();
@@ -124,8 +133,8 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         attestersRequired = attestersRequired_;
         require(nodeRandomMinCount_ > 0, "invalid nodeRandomMinCount amount");
         nodeRandomMinCount = nodeRandomMinCount_;
-        require(nodeRandomFilterPingsRequired_ > 0, "invalid nodeRandomFilterPingsRequired amount");
-        nodeRandomFilterPingsRequired = nodeRandomFilterPingsRequired_;
+        require(nodeRandomPingCount_ > 0, "invalid nodeRandomFilterPingsRequired amount");
+        nodeRandomPingCount = nodeRandomPingCount_;
 
         vnodeCollateralInPushTokens = 100;
         REPORT_COUNT_TO_SLASH = 2;
@@ -309,6 +318,23 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         return 2;
     }
 
+    function updateAttestersRequired(uint8 amount) public onlyOwner {
+        require(amount >= 0 && amount < nodes.length);
+        attestersRequired = amount;
+        emit AttestersRequiredUpdated(amount);
+    }
+
+    function updateNodeRandomMinCount(uint8 amount) public onlyOwner {
+        require(amount >= 0 && amount < nodes.length);
+        nodeRandomMinCount = amount;
+        emit NodeRandomMinCountUpdated(amount);
+    }
+
+    function updateNodeRandomPingCount(uint8 amount) public onlyOwner {
+        require(amount >= 0 && amount < nodes.length);
+        nodeRandomPingCount = amount;
+        emit NodeRandomPingCountUpdated(amount);
+    }
 }
 
 
@@ -368,4 +394,6 @@ library SigUtil {
         bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
         return recoverSigner(ethSignedMessageHash, _signature);
     }
+
+
 }
