@@ -34,3 +34,11 @@ npx hardhat --network localhost v:registerValidator --validator-proxy-ct $VAL_CT
 npx hardhat --network localhost v:registerValidator --validator-proxy-ct $VAL_CT --push-ct $PUSH_CT 98f9d910aef9b3b9a45137af1ca7675ed90a5355 "http://localhost:4003" 103
 
 ```
+
+Info commands
+```shell
+# show balance in PUSH tokens for Validator contract
+npx hardhat --network localhost push:balanceOf --push-ct $PUSH_CT $VAL_CT
+# show registered validator nodes
+npx hardhat --network localhost v:listNodes --validator-proxy-ct $VAL_CT
+```
