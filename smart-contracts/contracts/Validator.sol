@@ -90,9 +90,9 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     }
 
     enum NodeType {
-        VNode, // validator
-        SNode, // storage
-        DNode  // delivery
+        VNode, // validator 0
+        SNode, // storage 1
+        DNode  // delivery 2
     }
 
     struct VoteMessage {
@@ -153,6 +153,8 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         uint256 coll = _nodeTokens;
         if (_nodeType == NodeType.VNode) {
             require(coll >= vnodeCollateralInPushTokens, "Insufficient collateral for VNODE");
+        } else if(_nodeType == NodeType.DNode) {
+            require(coll >= vnodeCollateralInPushTokens, "Insufficient collateral for DNODE");
         } else {
             revert("unsupported nodeType ");
         }
@@ -217,6 +219,7 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
 
     // note: reading storage value multiple times which is sub-optimal, but the code looks much simpler
     function doReportNode(VoteMessage memory _vm, NodeInfo storage targetNode) private returns (uint8){
+        require(targetNode.nodeType == NodeType.VNode, "report only for VNodes");
         NodeStatus ns = targetNode.status;
         // 2 check count
         if (_vm.vote == VoteAction.Report) {
@@ -395,5 +398,12 @@ library SigUtil {
         return recoverSigner(ethSignedMessageHash, _signature);
     }
 
+    /**********/
+    /* Errors */
+    /**********/
+
+    // todo if(!condition) revert Error1();
+    // this produces smaller bytecode
+    error Error1();
 
 }

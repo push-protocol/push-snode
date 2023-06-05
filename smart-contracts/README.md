@@ -33,6 +33,12 @@ npx hardhat --network localhost v:registerValidator --validator-proxy-ct $VAL_CT
 npx hardhat --network localhost v:registerValidator --validator-proxy-ct $VAL_CT --push-ct $PUSH_CT fdaeaf7afcfbb4e4d16dc66bd2039fd6004cfce8 "http://localhost:4002" 102
 npx hardhat --network localhost v:registerValidator --validator-proxy-ct $VAL_CT --push-ct $PUSH_CT 98f9d910aef9b3b9a45137af1ca7675ed90a5355 "http://localhost:4003" 103
 
+# to register 1 delivery node
+npx hardhat --network localhost v:registerDelivery --validator-proxy-ct $VAL_CT --push-ct $PUSH_CT 816adec240b4744a1e1e112d0411cafb8f256183 200
+
+
+# check what has been registered
+npx hardhat --network localhost v:listNodes --validator-proxy-ct $VAL_CT
 ```
 
 Info commands

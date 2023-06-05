@@ -10,6 +10,8 @@ task("key:generateTestEthKeys", "shows a pre defined set of keys used for tests"
         await printPrivateKeyDetails('0x16c90855a0dfc9884adf2625a4bffcdbfe760d5ff6756a766d2bbc0bc82318f0', 'test');
         await printPrivateKeyDetails('0xb6c538bac86eb0964b16b7ff6a1ac7d5f0736dcbd0f00bd142ae433dad27f685', 'test');
         await printPrivateKeyDetails('0x445ab25af345ce4096ca1e46f6846a4e8617cc1d513440671647f5f137c9c684', 'test');
+        // a key for delivery node tests
+        await printPrivateKeyDetails('0xaceda8e33da25891123d3f425233f57832d8a139649f660fb2c63571ea777921', 'test');
     });
 
 task("key:generateEthKeyFromEthers", "generates secure keys")

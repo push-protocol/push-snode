@@ -4,7 +4,7 @@ import {HardhatRuntimeEnvironment} from "hardhat/types";
 
 let info = console.log;
 
-task("v:registerValidator", "redeploys a new validatorCt")
+task("v:registerValidator", "")
     .addParam("validatorProxyCt", "validatorCt proxy address")
     .addParam("pushCt", "push token contract")
     .addPositionalParam("nodeAddress", "")
@@ -22,7 +22,28 @@ task("v:registerValidator", "redeploys a new validatorCt")
         const nodeUrl = args.nodeUrl;
         const nodeAmount = args.nodeAmount;
         info(`nodeAddress=${nodeAddress}, nodeUrl=${nodeUrl}, nodeAmount=${nodeAmount}`);
-        await TaskUtil.registerNode(hre, pushCt, validatorProxyCt, nodeOwner, nodeAddress, nodeAmount, nodeUrl);
+        await TaskUtil.registerNode(hre, pushCt, validatorProxyCt, nodeOwner, nodeAddress, nodeAmount, nodeUrl, 0);
+        info(`success`);
+    });
+
+task("v:registerDelivery", "redeploys a new validatorCt")
+    .addParam("validatorProxyCt", "validatorCt proxy address")
+    .addParam("pushCt", "push token contract")
+    .addPositionalParam("nodeAddress", "")
+    .addPositionalParam("nodeAmount", "")
+    .setAction(async (args, hre) => {
+        const validatorProxyCt = args.validatorProxyCt;
+        info(`validatorProxyCt is ${validatorProxyCt}`);
+        const pushCt = args.pushCt;
+        info(`pushCt is ${pushCt}`);
+        const [nodeOwner] = await hre.ethers.getSigners();
+        info(`nodeOwner is ${nodeOwner.address}`);
+
+        const nodeAddress = args.nodeAddress;
+        const nodeUrl = '';
+        const nodeAmount = args.nodeAmount;
+        info(`nodeAddress=${nodeAddress}, nodeUrl=${nodeUrl}, nodeAmount=${nodeAmount}`);
+        await TaskUtil.registerNode(hre, pushCt, validatorProxyCt, nodeOwner, nodeAddress, nodeAmount, nodeUrl, 2);
         info(`success`);
     });
 

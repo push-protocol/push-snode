@@ -16,7 +16,7 @@ export class TaskUtil {
     public static async registerNode(hre:HardhatRuntimeEnvironment,
                                        pushAddr: string, validatorAddr: string,
                                        nodeOwner: SignerWithAddress,
-                                       nodeAddr: string, amount: number, nodeUrl: string) {
+                                       nodeAddr: string, amount: number, nodeUrl: string, nodeType:number) {
         info("registerNode()");
         const ethers = hre.ethers;
         const pushCt = await ethers.getContractAt("IERC20", pushAddr, nodeOwner);
@@ -24,7 +24,7 @@ export class TaskUtil {
         await tx1.wait();
         info("node ", nodeAddr);
         const validatorCt = await ethers.getContractAt("ValidatorV1", validatorAddr, nodeOwner);
-        let tx2 = await validatorCt.connect(nodeOwner).registerNodeAndStake(amount, 0,
+        let tx2 = await validatorCt.connect(nodeOwner).registerNodeAndStake(amount, nodeType,
             nodeUrl, nodeAddr);
         await tx2.wait();
         let res = await validatorCt.getNodeInfo(nodeAddr);
