@@ -43,7 +43,7 @@ export default (app: Router) => {
             const nsIndex = req.params.nsIndex;
             const dt = req.params.dt;
             const key = req.params.key;
-            const nodeId = 1; // todo read this from db
+            const nodeId = '1'; // todo read this from db
             log.debug(`nsName=${nsName} nsIndex=${nsIndex} dt=${dt} key=${key} nodeId=${nodeId}`);
             let shardId = DbHelper.calculateShardForNamespaceIndex(nsName, nsIndex);
             log.debug(`nodeId=${nodeId} shardId=${shardId}`);
@@ -88,7 +88,7 @@ export default (app: Router) => {
             const nsIndex = req.params.nsIndex; // ex: 1000000
             const ts:string = req.params.ts; //ex: 1661214142.123456
             const key = req.params.key; // ex: 5b62a7b2-d6eb-49ef-b080-20a7fa3091ad
-            const nodeId = 1; // todo read this from db
+            const nodeId = '1'; // todo read this from db
             const body = JSON.stringify(req.body);
             log.debug(`nsName=${nsName} nsIndex=${nsIndex} ts=${ts} key=${key} nodeId=${nodeId} body=${body}`);
             let shardId = DbHelper.calculateShardForNamespaceIndex(nsName, nsIndex);
@@ -152,7 +152,7 @@ export default (app: Router) => {
             const nsIndex = req.params.nsIndex;
             const dt = req.params.month + '01';
             const key = req.params.key;
-            const nodeId = 1; // todo read this from db
+            const nodeId = '1'; // todo read this from db
             const body = JSON.stringify(req.body);
             const page = parseInt(req.params.page);
             log.debug(`nsName=${nsName} nsIndex=${nsIndex} dt=${dt} key=${key} nodeId=${nodeId}  firstTs=${firstTs} body=${body}`);

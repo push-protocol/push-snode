@@ -14,8 +14,8 @@ CREATE TABLE IF NOT EXISTS network_storage_layout
 (
     id SERIAL PRIMARY KEY NOT NULL,
     namespace VARCHAR(20) NOT NULL,
-    namespace_shard_id VARCHAR(20) NOT NULL,
-    node_id VARCHAR(20) NOT NULL
+    namespace_shard_id VARCHAR(64) NOT NULL,
+    node_id VARCHAR(64) NOT NULL
 );
 
 ALTER TABLE network_storage_layout DROP CONSTRAINT IF EXISTS network_storage_layout_uniq;
@@ -45,7 +45,7 @@ DROP TABLE IF EXISTS node_storage_layout;
 CREATE TABLE IF NOT EXISTS node_storage_layout
 (
     namespace VARCHAR(20) NOT NULL,
-    namespace_shard_id VARCHAR(20) NOT NULL,
+    namespace_shard_id VARCHAR(64) NOT NULL,
     ts_start TIMESTAMP NOT NULL default NOW(),
     ts_end TIMESTAMP NOT NULL default NOW(),
     table_name VARCHAR(64) NOT NULL

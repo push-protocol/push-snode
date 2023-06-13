@@ -14,11 +14,11 @@ const crypto = require('crypto');
 export default class DbHelper {
 
     // maps key -> 8bit space (0..255)
-    // uses first 8bit from an md5 hash
+    // uses first 4bit from an md5 hash
     public static calculateShardForNamespaceIndex(namespace: string, key: string): number {
         let buf = crypto.createHash('md5').update(key).digest();
         let i32 = buf.readUInt32LE(0);
-        const i8bits = i32 & 0xFF;
+        const i8bits = i32 % 32; // todo it's 0x20 now, not 0xff
         log.debug('calculateShardForNamespaceIndex(): ', buf, '->', i32, '->', i8bits);
         return i8bits;
     }
@@ -64,8 +64,8 @@ export default class DbHelper {
             CREATE TABLE IF NOT EXISTS ${tableName}
             (
                 namespace VARCHAR(20) NOT NULL,
-                namespace_shard_id VARCHAR(20) NOT NULL,
-                namespace_id VARCHAR(20) NOT NULL,
+                namespace_shard_id VARCHAR(64) NOT NULL,
+                namespace_id VARCHAR(64) NOT NULL,
                 ts TIMESTAMP NOT NULL default NOW(),
                 skey VARCHAR(64) NOT NULL PRIMARY KEY,
                 dataSchema VARCHAR(20) NOT NULL,
@@ -88,7 +88,7 @@ export default class DbHelper {
     }
 
     // todo fix params substitution for the pg library;
-    public static async checkThatShardIsOnThisNode(namespace: string, namespaceShardId: number, nodeId: number): Promise<boolean> {
+    public static async checkThatShardIsOnThisNode(namespace: string, namespaceShardId: number, nodeId: string): Promise<boolean> {
         const sql = `SELECT count(*) FROM network_storage_layout
         where namespace='${namespace}' and namespace_shard_id='${namespaceShardId}' and node_id='${nodeId}'`
         console.log(sql);

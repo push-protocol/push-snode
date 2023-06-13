@@ -1127,3 +1127,39 @@ INSERT INTO network_storage_layout (id, namespace, namespace_shard_id, node_id) 
 INSERT INTO network_storage_layout (id, namespace, namespace_shard_id, node_id) VALUES (6142, 'feeds', '255', '1');
 INSERT INTO network_storage_layout (id, namespace, namespace_shard_id, node_id) VALUES (6143, 'feeds', '255', '2');
 INSERT INTO network_storage_layout (id, namespace, namespace_shard_id, node_id) VALUES (6144, 'feeds', '255', '3');
+
+
+INSERT INTO network_storage_layout (namespace, namespace_shard_id, node_id)
+VALUES
+    ( 'inbox', '0', '0x3563C89b05e4dcD0edEeE0F3e93e396C128C06E2'),
+    ( 'inbox', '1', '0x3563C89b05e4dcD0edEeE0F3e93e396C128C06E2'),
+    ( 'inbox', '2', '0x3563C89b05e4dcD0edEeE0F3e93e396C128C06E2'),
+    ( 'inbox', '3', '0x3563C89b05e4dcD0edEeE0F3e93e396C128C06E2'),
+    ( 'inbox', '4', '0x3563C89b05e4dcD0edEeE0F3e93e396C128C06E2'),
+    ( 'inbox', '5', '0x3563C89b05e4dcD0edEeE0F3e93e396C128C06E2'),
+    ( 'inbox', '6', '0x3563C89b05e4dcD0edEeE0F3e93e396C128C06E2'),
+    ( 'inbox', '7', '0x3563C89b05e4dcD0edEeE0F3e93e396C128C06E2'),
+    ( 'inbox', '8', '0x3563C89b05e4dcD0edEeE0F3e93e396C128C06E2'),
+    ( 'inbox', '9', '0x3563C89b05e4dcD0edEeE0F3e93e396C128C06E2'),
+    ( 'inbox', '10', '0x3563C89b05e4dcD0edEeE0F3e93e396C128C06E2'),
+    ( 'inbox', '11', '0x3563C89b05e4dcD0edEeE0F3e93e396C128C06E2'),
+    ( 'inbox', '12', '0x3563C89b05e4dcD0edEeE0F3e93e396C128C06E2'),
+    ( 'inbox', '13', '0x3563C89b05e4dcD0edEeE0F3e93e396C128C06E2'),
+    ( 'inbox', '14', '0x3563C89b05e4dcD0edEeE0F3e93e396C128C06E2'),
+    ( 'inbox', '15', '0x3563C89b05e4dcD0edEeE0F3e93e396C128C06E2'),
+    ( 'inbox', '16', '0x3563C89b05e4dcD0edEeE0F3e93e396C128C06E2'),
+    ( 'inbox', '17', '0x3563C89b05e4dcD0edEeE0F3e93e396C128C06E2'),
+    ( 'inbox', '18', '0x3563C89b05e4dcD0edEeE0F3e93e396C128C06E2'),
+    ( 'inbox', '19', '0x3563C89b05e4dcD0edEeE0F3e93e396C128C06E2'),
+    ( 'inbox', '20', '0x3563C89b05e4dcD0edEeE0F3e93e396C128C06E2'),
+    ( 'inbox', '21', '0x3563C89b05e4dcD0edEeE0F3e93e396C128C06E2'),
+    ( 'inbox', '22', '0x3563C89b05e4dcD0edEeE0F3e93e396C128C06E2'),
+    ( 'inbox', '23', '0x3563C89b05e4dcD0edEeE0F3e93e396C128C06E2'),
+    ( 'inbox', '24', '0x3563C89b05e4dcD0edEeE0F3e93e396C128C06E2'),
+    ( 'inbox', '25', '0x3563C89b05e4dcD0edEeE0F3e93e396C128C06E2'),
+    ( 'inbox', '26', '0x3563C89b05e4dcD0edEeE0F3e93e396C128C06E2'),
+    ( 'inbox', '27', '0x3563C89b05e4dcD0edEeE0F3e93e396C128C06E2'),
+    ( 'inbox', '28', '0x3563C89b05e4dcD0edEeE0F3e93e396C128C06E2'),
+    ( 'inbox', '29', '0x3563C89b05e4dcD0edEeE0F3e93e396C128C06E2'),
+    ( 'inbox', '30', '0x3563C89b05e4dcD0edEeE0F3e93e396C128C06E2'),
+    ( 'inbox', '31', '0x3563C89b05e4dcD0edEeE0F3e93e396C128C06E2');

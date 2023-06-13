@@ -1,6 +1,10 @@
 import 'reflect-metadata'; // We need this in order to use @Decorators
 import express from 'express';
 import chalk from 'chalk';
+import {Container} from "typedi";
+import StorageNode from "./services/messaging/storageNode";
+import {ValidatorContract} from "./services/messaging/validatorContract";
+import DeliverySocket from "./services/messaging/deliverySocket";
 
 async function startServer(logLevel = null) {
   if (logLevel) {
@@ -26,6 +30,10 @@ async function startServer(logLevel = null) {
 
   await require('./api/index');
   await require('./loaders/express');
+  Container.set("logger", Logger);
+  await Container.get(ValidatorContract).postConstruct();
+  await Container.get(StorageNode).postConstruct();
+  await Container.get(DeliverySocket).postConstruct();
 
   // load app
   const app = express();
