@@ -1,15 +1,43 @@
-import {Container} from 'typedi';
-import config from '../config';
-import { StrUtil } from 'dstorage-common'
 import log from '../loaders/logger';
 import pgPromise from 'pg-promise';
 
 import {DateTime} from "ts-luxon";
+import StrUtil from "../utilz/strUtil";
+import {EnvLoader} from "../utilz/envLoader";
+import {MySqlUtil} from "../utilz/mySqlUtil";
+import {PgUtil} from "../utilz/pgUtil";
+import {IClient} from "pg-promise/typescript/pg-subset";
 
-const pg = pgPromise({});
-// todo switch to a config file
-export const db = pg(`postgres://${process.env.DB_USER}:${process.env.DB_PASS}@${process.env.DB_HOST}:5432/${process.env.DB_NAME}`);
-const crypto = require('crypto');
+// mysql
+import crypto from "crypto";
+import {WinstonUtil} from "../utilz/winstonUtil";
+
+var mysql = require('mysql')
+var mysqlPool = mysql.createPool({
+    connectionLimit: 10,
+    host: EnvLoader.getPropertyOrFail('DB_HOST'),
+    user: EnvLoader.getPropertyOrFail('DB_USER'),
+    password: EnvLoader.getPropertyOrFail('DB_PASS'),
+    database: EnvLoader.getPropertyOrFail('DB_NAME'),
+    port: Number(EnvLoader.getPropertyOrFail('DB_NAME'))
+})
+MySqlUtil.init(mysqlPool);
+
+
+// todo move everything into PgUtil including connection management
+let logger = WinstonUtil.newLog('pg');
+let options = {
+    query: function (e) {
+        logger.debug('', e.query);
+        if (e.params) {
+            logger.debug('PARAMS: ', e.params);
+        }
+    }
+};
+const pg: pgPromise.IMain<{}, IClient> = pgPromise(options);
+export const pgPool = pg(`postgres://${EnvLoader.getPropertyOrFail('PG_USER')}:${EnvLoader.getPropertyOrFail('PG_PASS')}@${EnvLoader.getPropertyOrFail('PG_HOST')}:5432/${EnvLoader.getPropertyOrFail('PG_NAME')}`);
+PgUtil.init(pgPool);
+
 
 export default class DbHelper {
 
@@ -33,7 +61,7 @@ export default class DbHelper {
                 tablename='storage_ns_inbox_d_${dbdate}')
         `
         console.log(sql)
-        return db.query(sql).then(data => {
+        return pgPool.query(sql).then(data => {
             console.log(data)
             return Promise.resolve(true)
         }).catch(err => {
@@ -49,7 +77,7 @@ export default class DbHelper {
         values ($1, $2, $3, $4, $5) on conflict do nothing;
         `
         console.log(sql);
-        return db.result(sql, [namespace, namespaceShardId, ts_start, ts_end, table_name], r => r.rowCount)
+        return pgPool.result(sql, [namespace, namespaceShardId, ts_start, ts_end, table_name], r => r.rowCount)
             .then(rowCount => {
                 console.log('inserted rowcount: ', rowCount)
                 return Promise.resolve(rowCount == 1)
@@ -78,7 +106,7 @@ export default class DbHelper {
         `
         // todo CREATE INDEX CONCURRENTLY ?
         console.log(sql)
-        return db.query(sql).then(data => {
+        return pgPool.query(sql).then(data => {
             console.log(data)
             return Promise.resolve(true)
         }).catch(err => {
@@ -92,7 +120,7 @@ export default class DbHelper {
         const sql = `SELECT count(*) FROM network_storage_layout
         where namespace='${namespace}' and namespace_shard_id='${namespaceShardId}' and node_id='${nodeId}'`
         console.log(sql);
-        return db.query(sql).then(data => {
+        return pgPool.query(sql).then(data => {
             console.log(data)
             let cnt = parseInt(data[0].count);
             console.log(cnt);
@@ -109,7 +137,7 @@ export default class DbHelper {
                      where namespace='${namespace}' and namespace_shard_id='${namespaceShardId}' 
                      and ts_start <= '${dateYmd.toISO()}' and ts_end > '${dateYmd.toISO()}'`
         log.debug(sql);
-        return db.query(sql).then(data => {
+        return pgPool.query(sql).then(data => {
             log.debug(data);
             if (data.length != 1) {
                 return Promise.reject('missing table with the correct name');
@@ -127,7 +155,7 @@ export default class DbHelper {
                      from ${tableName}
                      where skey = '${skey}'`;
         log.debug(sql);
-        return db.query(sql).then(data => {
+        return pgPool.query(sql).then(data => {
             log.debug(data);
             if (data.length != 1) {
                 return Promise.reject('missing table with the correct name');
@@ -148,7 +176,7 @@ export default class DbHelper {
                      from ${tableName}
                      where skey = '${skey}'`;
         log.debug(sql);
-        return db.query(sql).then(data => {
+        return pgPool.query(sql).then(data => {
             log.debug(data);
             if (data.length != 1) {
                 return Promise.reject('missing table with the correct name');
@@ -172,7 +200,7 @@ export default class DbHelper {
                     values ('${ns}',  '${shardId}', '${nsIndex}', to_timestamp(${ts}),'${skey}', 'v1', '${body}')
                     ON CONFLICT (skey) DO UPDATE SET payload = '${body}'`
         log.debug(sql);
-        return db.none(sql).then(data => {
+        return pgPool.none(sql).then(data => {
             log.debug(data);
             return Promise.resolve();
         }).catch(err => {
@@ -195,7 +223,7 @@ export default class DbHelper {
                      order by ts
                      limit ${pageSize + pageLookAhead}`;
         log.debug(sql);
-        let data1 = await db.any(sql);
+        let data1 = await pgPool.any(sql);
         var items = [];
         var lastTs: number = 0;
         for (let i = 0; i < Math.min(data1.length, pageSize); i++) {
@@ -228,7 +256,7 @@ export default class DbHelper {
                      order by ts
                      limit ${pageSizeForSameTimestamp}`;
                 log.debug(sql2);
-                let data2 = await db.any(sql2);
+                let data2 = await pgPool.any(sql2);
                 for (let row of data2) {
                     items.push(DbHelper.convertRowToItem(row, namespace));
                 }

@@ -1,71 +1,80 @@
-import {Inject, Service} from 'typedi'
-import {ValidatorContract} from "./validatorContract";
+import {Service, Container, Inject} from 'typedi'
+import config from '../../config'
+import StrUtil from "../../utilz/strUtil";
+import {ValidatorContractState} from "../messaging-common/validatorContractState";
 import {Logger} from "winston";
-import {FeedItemSig, FPayload, MessageBlock, NetworkRole} from "./messageBlock";
+import {FPayload, MessageBlock, MessageBlockUtil} from "../messaging-common/messageBlock";
+import {QueueClient} from "../messaging-dset/queueClient";
+import {Consumer, QItem} from "../messaging-dset/queueTypes";
+import {BlockStorage} from "./BlockStorage";
+import {QueueManager} from "./queueManager";
+import {CollectionUtil} from "../../utilz/collectionUtil";
+import {Check} from "../../utilz/check";
+import {WinstonUtil} from "../../utilz/winstonUtil";
+import DateUtil from "../../utilz/dateUtil";
 import DbHelper from "../../helpers/dbHelper";
-import {DateUtil, StrUtil} from "dstorage-common";
-import {EthSig} from "../../utilz/ethSig";
+
 
 @Service()
-export default class StorageNode {
+export default class StorageNode implements Consumer<QItem> {
+  public log: Logger = WinstonUtil.newLog(StorageNode)
 
   @Inject()
-  private contract: ValidatorContract;
+  private contract: ValidatorContractState;
 
-  @Inject('logger')
-  private log: Logger;
+  @Inject(type => QueueManager)
+  private queueManager: QueueManager;
+
+  @Inject()
+  private blockStorage: BlockStorage;
+
+  private client: QueueClient;
 
   public async postConstruct() {
+    // MySqlUtil.init(dbHelper.pool); todo postgres !!!!!!!!!!!!!!
     await this.contract.postConstruct();
+    await this.queueManager.postConstruct();
   }
 
-  // todo move to common
-  public checkBlock(block: MessageBlock): CheckResult {
-    if (block.requests.length != block.responses.length) {
-      return CheckResult.failWithText(`message block has incorrect length ${block.requests.length}!=${block.responses.length}`);
+  // remote queue handler
+  async accept(item: QItem): Promise<boolean> {
+    // check hash
+    let mb = <MessageBlock>item.object;
+    Check.notEmpty(mb.id, 'message block has no id');
+    let calculatedHash = MessageBlockUtil.calculateHash(mb);
+    if (calculatedHash !== item.object_hash) {
+      this.log.error('received item hash=%s , ' +
+        'which differs from calculatedHash=%s, ' +
+        'ignoring the block because producer calculated the hash incorrectly',
+        item.object_hash, calculatedHash);
+      return false;
     }
-    let blockValidatorNodeId = null;
-    let item0sig0 = block.responsesSignatures[0][0];
-    if (item0sig0?.nodeMeta.role != NetworkRole.VALIDATOR
-        || StrUtil.isEmpty(item0sig0?.nodeMeta.nodeId)) {
-      return CheckResult.failWithText('first signature is not performed by a validator');
+    // check contents
+    // since this check is not for historical data, but for realtime data,
+    // so we do not care about old blocked validators which might occur in the historical queue
+    let activeValidators = CollectionUtil.arrayToFields(this.contract.getActiveValidators(), 'nodeId');
+    let check1 = MessageBlockUtil.checkBlock(mb, activeValidators);
+    if (!check1.success) {
+      this.log.error('item validation failed: ', check1.err);
+      return false;
     }
-    let result: FeedItemSig[] = [];
-    for (let i = 0; i < block.responses.length; i++) {
-      let payloadItem = block.requests[i];
-      let feedItem = block.responses[i];
-      // check signatures
-      let feedItemSignatures = block.responsesSignatures[i];
-      for (let j = 0; j < feedItemSignatures.length; j++) {
-        let fiSig = feedItemSignatures[j];
-        if (j == 0) {
-          if (fiSig.nodeMeta.role != NetworkRole.VALIDATOR) {
-            return CheckResult.failWithText(`First signature on a feed item should be  ${NetworkRole.VALIDATOR}`);
-          }
-        } else {
-          if (fiSig.nodeMeta.role != NetworkRole.ATTESTER) {
-            return CheckResult.failWithText(`2+ signature on a feed item should be  ${NetworkRole.ATTESTER}`);
-          }
-        }
-        const valid = EthSig.check(fiSig.signature, fiSig.nodeMeta.nodeId, fiSig.nodeMeta, feedItem);
-        if (!valid) {
-          return CheckResult.failWithText(`signature is not valid`);
-        } else {
-          this.log.debug('valid signature %o', fiSig);
-        }
-        const validNodeId = this.contract.isActiveValidator(fiSig.nodeMeta.nodeId);
-        if (!validNodeId) {
-          return CheckResult.failWithText(`${fiSig.nodeMeta.nodeId} is not a valid nodeId from a contract`);
-        } else {
-          this.log.debug('valid nodeId %o', fiSig.nodeMeta.nodeId);
-        }
-      }
+    // check database
+    let isNew = await this.blockStorage.accept(item);
+    if(!isNew) {
+      // this is not an error, because we read duplicates from every validator
+      this.log.debug('block %s already exists ', mb.id);
+      return false;
     }
-    return CheckResult.ok();
+    // send block
+    await this.unpackBlock(mb);
   }
+
   // sends the block contents (internal messages from every response)
   // to every recipient's inbox
   public async unpackBlock(mb: MessageBlock) {
+    // todo calculate shard
+
+
     let now = Date.now() / 1000;
     let nowStr = now + '';
     const currentNodeId = this.contract.nodeId;
@@ -111,7 +120,7 @@ export default class StorageNode {
       const dateYYYYMM = DateUtil.formatYYYYMM(date);
       const tableName = `storage_ns_${nsName}_d_${dateYYYYMM}`;
       const recordCreated = await DbHelper.createNewNodestorageRecord(nsName, shardId,
-          monthStart, monthEndExclusive, tableName);
+        monthStart, monthEndExclusive, tableName);
       if (recordCreated) {
         this.log.debug('record created: ', recordCreated)
         // we've added a new record to node_storage_layout => we can safely try to create a table
@@ -124,25 +133,8 @@ export default class StorageNode {
     }
     var storageTable = await DbHelper.findStorageTableByDate(nsName, shardId, date);
     const storageValue = await DbHelper.putValueInTable(nsName, shardId, nsIndex, storageTable,
-        ts, key, JSON.stringify(fpayload));
+      ts, key, JSON.stringify(fpayload));
     this.log.debug(`found value: ${storageValue}`)
     this.log.debug('success is ' + success);
   }
 }
-
-class CheckResult {
-  success: boolean;
-  err: string;
-
-
-  static failWithText(err: string): CheckResult {
-    return {success: false, err: err}
-  }
-
-  static ok(): CheckResult {
-    return {success: true, err: ''}
-  }
-
-}
-
-

@@ -1,39 +1,28 @@
 import {Router, Request, Response, NextFunction} from 'express';
 import {Container} from 'typedi';
-// import MessagingService from '../../services/pushMessageService';
-import middlewares from '../middlewares';
-import {celebrate, Joi} from 'celebrate';
 import log from '../../loaders/logger';
 import DbHelper from '../../helpers/dbHelper';
-import {isEmpty} from "lodash";
-import { StrUtil, DateUtil } from 'dstorage-common';
-
 import bodyParser from "body-parser";
-
 import {DateTime} from "ts-luxon";
-// const log = Container.get('logger');
-// console.log("pushMessaging imported");
+import {ExpressUtil} from "../../utilz/expressUtil";
+import DateUtil from "../../utilz/dateUtil";
+import StrUtil from "../../utilz/strUtil";
+import {ValidatorContractState} from "../../services/messaging-common/validatorContractState";
 
 const route = Router();
 const dbh = new DbHelper();
 
-function splitIntoNameAndIndex(nsNameWithIndex: string): string[] {
-    return nsNameWithIndex.split('.', 2);
-}
 
 function logRequest(req: Request) {
     log.debug('Calling %o %o with body: %o', req.method, req.url, req.body);
 }
 
-export default (app: Router) => {
+// todo ValidatorContractState
+// todo remove logic from router
+export function storageRoutes (app: Router) {
     app.use(bodyParser.json());
 
     app.use('/v1/kv', route);
-
-    app.post('/post-test', (req, res) => {
-        console.log('Got body:', req.body);
-        res.sendStatus(200);
-    });
 
     route.get(
         '/ns/:nsName/nsidx/:nsIndex/date/:dt/key/:key', /*  */
@@ -43,7 +32,7 @@ export default (app: Router) => {
             const nsIndex = req.params.nsIndex;
             const dt = req.params.dt;
             const key = req.params.key;
-            const nodeId = '1'; // todo read this from db
+            const nodeId = Container.get(ValidatorContractState).nodeId; // todo read this from db
             log.debug(`nsName=${nsName} nsIndex=${nsIndex} dt=${dt} key=${key} nodeId=${nodeId}`);
             let shardId = DbHelper.calculateShardForNamespaceIndex(nsName, nsIndex);
             log.debug(`nodeId=${nodeId} shardId=${shardId}`);
@@ -69,12 +58,10 @@ export default (app: Router) => {
             log.debug(`found value: ${storageItems}`)
             log.debug('success is ' + success);
             try {
-                // const messaging = Container.get(MessagingService);
                 return res.status(200).json({
                     items: storageItems
                 });
             } catch (e) {
-                // log.error('🔥 error: %o', e);
                 return next(e);
             }
         }
@@ -88,7 +75,7 @@ export default (app: Router) => {
             const nsIndex = req.params.nsIndex; // ex: 1000000
             const ts:string = req.params.ts; //ex: 1661214142.123456
             const key = req.params.key; // ex: 5b62a7b2-d6eb-49ef-b080-20a7fa3091ad
-            const nodeId = '1'; // todo read this from db
+            const nodeId = Container.get(ValidatorContractState).nodeId; // todo read this from db
             const body = JSON.stringify(req.body);
             log.debug(`nsName=${nsName} nsIndex=${nsIndex} ts=${ts} key=${key} nodeId=${nodeId} body=${body}`);
             let shardId = DbHelper.calculateShardForNamespaceIndex(nsName, nsIndex);
@@ -128,10 +115,8 @@ export default (app: Router) => {
             log.debug(`found value: ${storageValue}`)
             log.debug('success is ' + success);
             try {
-                // const messaging = Container.get(MessagingService);
                 return res.status(201).json(storageValue);
             } catch (e) {
-                // log.error('🔥 error: %o', e);
                 return next(e);
             }
         }
@@ -152,7 +137,7 @@ export default (app: Router) => {
             const nsIndex = req.params.nsIndex;
             const dt = req.params.month + '01';
             const key = req.params.key;
-            const nodeId = '1'; // todo read this from db
+            const nodeId = Container.get(ValidatorContractState).nodeId; // todo read this from db
             const body = JSON.stringify(req.body);
             const page = parseInt(req.params.page);
             log.debug(`nsName=${nsName} nsIndex=${nsIndex} dt=${dt} key=${key} nodeId=${nodeId}  firstTs=${firstTs} body=${body}`);
@@ -178,10 +163,8 @@ export default (app: Router) => {
             log.debug(`found value: ${storageValue}`)
             log.debug('success is ' + success);
             try {
-                // const messaging = Container.get(MessagingService);
                 return res.status(200).json(storageValue);
             } catch (e) {
-                // log.error('🔥 error: %o', e);
                 return next(e);
             }
         }
