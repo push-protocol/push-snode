@@ -36,9 +36,7 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
 
     // node colleciton
     address[] nodes;
-    mapping(address => uint16) addrToShortAddr;
-    mapping(uint16 => NodeInfo) nodeMap; // nodeWallet -> node info
-    uint16 public unusedNodeId; // increments after each invocation (new node registration)
+    mapping(address => NodeInfo) nodeMap;
     uint256 totalStaked;      // push tokens owned by this contract; which have an owner
     uint256 totalPenalties;   // push tokens owned by this contract; comes from penalties
 
@@ -50,7 +48,7 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     */
     mapping(uint8 => uint16[]) notifShardToNodeId; // todo support shards, and reshard on every storage node registration
     // this is the next free index, which will be assigned to a new node
-    uint16 notifShardsMax = 31;
+    uint16 notifShardsMax;
 
     /* EVENTS */
     event NodeAdded(address indexed ownerWallet, address indexed nodeWallet, NodeType nodeType, uint256 nodeTokens, string nodeApiBaseUrl);
@@ -148,7 +146,7 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         require(nodeRandomPingCount_ > 0, "invalid nodeRandomFilterPingsRequired amount");
         nodeRandomPingCount = nodeRandomPingCount_;
 
-        unusedNodeId = 1;
+        notifShardsMax = 31;
         vnodeCollateralInPushTokens = 100;
         REPORT_COUNT_TO_SLASH = 2;
         SLASH_COLL_PERCENTAGE = 1;
@@ -180,7 +178,6 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         require(allowed >= _nodeTokens, "_nodeTokens cannot be transferred, check allowance");
         // new mapping
         NodeInfo memory n;
-        n.shortAddr = unusedNodeId++;
         n.ownerWallet = msg.sender;
         n.nodeWallet = _nodeWallet;
         n.nodeType = _nodeType;
