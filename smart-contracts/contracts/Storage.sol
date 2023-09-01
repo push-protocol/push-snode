@@ -1,6 +1,9 @@
 //SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.17;
-import "hardhat/console.sol"; // todo remove
+
+// todo remove
+import "hardhat/console.sol";
+import "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 
 /*
 
@@ -43,12 +46,12 @@ map after:  Map(3) {
 }
 
 
-
+TODO reuse ids when nodes come and go (!)
 TODO ? use bitmaps for storing subscriptions
  use uint128 data type https://github.com/ethereum/solidity-examples/blob/master/src/bits/Bits.sol
 
 */
-contract StorageV1 {
+contract StorageV1 is Ownable2StepUpgradeable {
     // node address -> nodeId (short address)
     // ex: 0xAAAAAAAAA -> 1
     mapping(address => uint8) public mapAddrToNodeId;
@@ -67,6 +70,8 @@ contract StorageV1 {
     // dynamic,
     // ex: 1....20
     uint8 public rf = 1;
+    // if 5 nodes join, we will set rf to 5 and then it won't grow
+    uint8 public RF_AUTOADJUST_LIMIT = 5; // 0 to turn off
 
     // active nodeIds
     // nodeIds are 1-based
@@ -88,8 +93,36 @@ contract StorageV1 {
 
     event SNodeMappingChanged(uint8[] nodeList);
 
+    // ADMIN FUNCTIONS 
+
+    // allows to set replication factor manually; however this is limited by node count;
+    function overrideRf(uint8 _rf) public onlyOwner {
+        require(_rf <= nodeList.length, 'rf is limited by node count');
+        rf = _rf;
+        RF_AUTOADJUST_LIMIT = 0;
+    }
+
+    // allows to set
+    function setNodeShardsByAddr(address _nodeAddress, uint32 bitmap) public onlyOwner {
+        uint8 node = mapAddrToNodeId[_nodeAddress];
+        require(node > 0, 'node address is not registered');
+        mapNodeToShards[node] = bitmap;
+    }
+
+    function shuffle() public onlyOwner returns (uint8) {
+        return _shuffle();
+    }
+
+    // END ADMIN FUNCTIONS
+
+    function getNodeShardsByAddr(address _nodeAddress) public view returns (uint32) {
+        uint8 node = mapAddrToNodeId[_nodeAddress];
+        require(node > 0, 'no such node');
+        return mapNodeToShards[node];
+    }
+
     function nodeListLength() public view returns (uint8) {
-        return nodeList.length;
+        return uint8(nodeList.length);
     }
 
     function bit(uint32 self, uint8 index) internal pure returns (uint8) {
@@ -102,11 +135,18 @@ contract StorageV1 {
 
     // todo add staking (or merge with Validator code)
     function addNodeAndStake(address nodeAddress) public returns (uint8) {
+        console.log('addNodeAndStake', nodeAddress);
         require(mapAddrToNodeId[nodeAddress] == 0, 'address is already registered');
         require(unusedNodeId > 0, 'nodeId > 0');
         mapAddrToNodeId[nodeAddress] = SET_ON;
         nodeList.push(unusedNodeId);
-        shuffle();
+        // add more copies of the data if the network can handle it, unless we get enough
+        if (rf < RF_AUTOADJUST_LIMIT && rf < nodeList.length) {
+            rf++;
+//            console.log('rf is now', rf);
+        }
+        _shuffle();
+        console.log('addNodeAndStake finished');
         return unusedNodeId++;
     }
 
@@ -132,11 +172,12 @@ contract StorageV1 {
                 result = setBit(result, shard);
             }
         }
-        console.log('packShardsToBitmap', nodeId, '->', result);
+//        console.log('packShardsToBitmap', nodeId, '->', result);
         return result;
     }
 
-    function unpackBitmapToShards(uint32 bitmap, uint8[SHARD_COUNT][] memory _nodeShardsSet, uint8 nodeId) internal pure {
+    function unpackBitmapToShards(uint32 bitmap, uint8[SHARD_COUNT][] memory _nodeShardsSet, uint8 nodeId) internal view {
+//        console.log('unpacking', nodeId,'value', bitmap);
         uint8[SHARD_COUNT] memory shardSet = _nodeShardsSet[nodeId];
         for (uint8 shard = 0; shard < SHARD_COUNT; shard++) {
             shardSet[shard] = bit(bitmap, shard) == 1 ? SET_ON : SET_OFF;
@@ -172,6 +213,9 @@ contract StorageV1 {
                     poorShardsSet[shard] = SET_ON;
                     _poor.shardCount++;
                     _nodeModifiedSet[_poor.node]++;
+                    // todo REMOVE
+//                    console.log(shard, ': unused ->', _poor.node);
+
                     break;
                 }
             }
@@ -233,15 +277,20 @@ contract StorageV1 {
         return avgPerNode;
     }
 
-    function shuffle() public {
+    function _shuffle() private returns (uint8) {
         uint8[] memory _nodeList = nodeList;
         uint8 _rf = rf;
         require(_rf >= 1 && _rf <= 20, "bad rf");
         require(_nodeList.length >= 0 && _nodeList.length < NULL_SHARD, "bad node count");
 
         uint _maxNode = 0;
+
+//        console.log('node ids available:');
         for (uint i = 0; i < _nodeList.length; i++) {
             uint8 nodeId = _nodeList[i];
+
+            // todo REMOVE
+//            console.log('nodeId', nodeId);
             if (nodeId > _maxNode) {
                 _maxNode = nodeId;
             }
@@ -257,10 +306,23 @@ contract StorageV1 {
         for (uint i = 0; i < _nodeList.length; i++) {
             uint8 nodeId = _nodeList[i];
             require(nodeId >= 1, 'nodes are 1 based');
+            unpackBitmapToShards(mapNodeToShards[nodeId], _nodeShardsSet, nodeId);
+
             uint8[SHARD_COUNT] memory shardSet = _nodeShardsSet[nodeId];
             require(shardSet.length == SHARD_COUNT, 'bad length');
-            unpackBitmapToShards(mapNodeToShards[nodeId], _nodeShardsSet, nodeId);
         }
+        // todo remove
+//        console.log('after unpacking from storage');
+//        for (uint8 i = 0; i < _nodeList.length; i++) {
+//            uint8 nodeId = _nodeList[i];
+//
+//            uint8[SHARD_COUNT] memory shardSet = _nodeShardsSet[nodeId];
+//            for(uint8 k = 0; k<shardSet.length;k++) {
+//                if(shardSet[k]==SET_ON) {
+//                    console.log(nodeId, ' has ', k);
+//                }
+//            }
+//        }
 
         // calculate all possible shards x replication factor; 
         // a collection of shardIds
@@ -273,6 +335,10 @@ contract StorageV1 {
                 _unusedArr[cnt++] = shard;
             }
         }
+
+        // todo REMOVE
+//        console.log('unused after applying rf');
+//        for (uint8 i = 0; i < _unusedArr.length; i++) console.log('unused ', _unusedArr[i]);
 
         // check unused, and no-longer assigned
         for (uint i = 0; i < _nodeList.length; i++) {
@@ -301,6 +367,19 @@ contract StorageV1 {
                 }
             }
         }
+        // todo REMOVE
+//        console.log('unused after removing existing mappings');
+//        for (uint8 i = 0; i < _unusedArr.length; i++) console.log('unused2 ', _unusedArr[i]);
+//        for (uint8 i = 0; i < _nodeList.length; i++) {
+//            uint8 nodeId = _nodeList[i];
+//
+//            uint8[SHARD_COUNT] memory shardSet = _nodeShardsSet[nodeId];
+//            for(uint8 k = 0; k<shardSet.length;k++) {
+//                if(shardSet[k]==SET_ON) {
+//                    console.log(nodeId, ' had ', k);
+//                }
+//            }
+//        }
 
         // cleanup unused from empty slots (-1); normally most of them would be empty;
         {
@@ -326,6 +405,19 @@ contract StorageV1 {
         // 1 take unused, offer it only to poor
         distributeUnused(_unusedArr, _nodeList, _nodeShardsSet, _nodeModifiedSet, true, avgPerNode);
 
+        // todo remove
+//        for (uint8 i = 0; i < _unusedArr.length; i++) console.log('unused3 ', _unusedArr[i]);
+//        for (uint8 i = 0; i < _nodeList.length; i++) {
+//            uint8 nodeId = _nodeList[i];
+//
+//            uint8[SHARD_COUNT] memory shardSet = _nodeShardsSet[i];
+//            for(uint8 k = 0; k<shardSet.length;k++) {
+//                if(shardSet[k]==SET_ON) {
+//                    console.log(nodeId, ' has ', k);
+//                }
+//            }
+//        }
+
         // 2. every node that is richer than some AVG - SHOULD try to give to the poor, 
         // starting from the poorest first
         NodeDesc[] memory poorList = buildNodeDesc(_nodeList, _nodeShardsSet);
@@ -343,7 +435,7 @@ contract StorageV1 {
             sortNodesAndSize(poorList); // resort after every donation
             uint8[SHARD_COUNT] memory richShardsSet = _nodeShardsSet[rich.node];
             // every item from the end of the queue (to minimize the data moves)
-            for (uint shard = richShardsSet.length; shard > 0; ) {
+            for (uint shard = richShardsSet.length; shard > 0;) {
                 shard--;
                 // to every poor
                 for (uint j = 0; j < poorList.length && j < i; j++) { // todo is j < i correct ???????
@@ -383,9 +475,12 @@ contract StorageV1 {
             for (uint8 nodeId = 1; nodeId < _nodeModifiedSet.length; nodeId++) {
                 if (_nodeModifiedSet[nodeId] > 0) {
                     _modifiedNodesArr[pos++] = nodeId;
+//                    console.log('shuffle() node modified', nodeId);
                 }
             }
+//            console.log('emitting ', _modifiedNodesArr.length);
             emit SNodeMappingChanged(_modifiedNodesArr);
         }
+        return _modifiedNodes;
     }
 }
