@@ -17,10 +17,11 @@ we have M amount of vshards at the start (a predefined value)
 the algorithm should ensure that
 - a network maintains exactly [replication factor] amount of chunks in total on all nodes
 - if a node joins/leaves the data is re-distributed
-- replication factor can change - it go up (no more than # of nodes in total) and go down to 1
+- replication factor can change - it goes up (no more than # of nodes in total) and goes down to 1
 - re-distribution should affect the least amount of nodes possible
 - re-distribution should favor grabbing fresh shards instead of old ones (assigned to the node a long time ago)
 - difference between node with most vshards and least vshards should stay as close to ±1 as possible
+- specifically for this contract: first N nodes will raise replication factor to RF_AUTOADJUST_LIMIT;
 
 Re-sharding works like this:
 
@@ -47,15 +48,12 @@ map after:  Map(3) {
 
 
 TODO reuse ids when nodes come and go (!)
+     delete should be in nodeAddrList, nodeIdList
 TODO ? use bitmaps for storing subscriptions
  use uint128 data type https://github.com/ethereum/solidity-examples/blob/master/src/bits/Bits.sol
 
 */
 contract StorageV1 is Ownable2StepUpgradeable {
-    // node address -> nodeId (short address)
-    // ex: 0xAAAAAAAAA -> 1
-    mapping(address => uint8) public mapAddrToNodeId;
-
     // number of shards;
     // this value should not change after deploy
     // also this should match data type in mapNodeToShards (uint32/64/128/256)
@@ -73,10 +71,15 @@ contract StorageV1 is Ownable2StepUpgradeable {
     // if 5 nodes join, we will set rf to 5 and then it won't grow
     uint8 public RF_AUTOADJUST_LIMIT = 5; // 0 to turn off
 
+    // NODE DATA
+    // node address -> nodeId (short address)
+    // ex: 0xAAAAAAAAA -> 1
+    mapping(address => uint8) public mapAddrToNodeId;
+    address[] public nodeAddrList;
     // active nodeIds
     // nodeIds are 1-based
     // ex: [1,2,3]
-    uint8[] public nodeList;
+    uint8[] public nodeIdList;
 
     // nodeId -> shards
     // shards are 0-based
@@ -97,7 +100,7 @@ contract StorageV1 is Ownable2StepUpgradeable {
 
     // allows to set replication factor manually; however this is limited by node count;
     function overrideRf(uint8 _rf) public onlyOwner {
-        require(_rf <= nodeList.length, 'rf is limited by node count');
+        require(_rf <= nodeIdList.length, 'rf is limited by node count');
         rf = _rf;
         RF_AUTOADJUST_LIMIT = 0;
     }
@@ -121,8 +124,8 @@ contract StorageV1 is Ownable2StepUpgradeable {
         return mapNodeToShards[node];
     }
 
-    function nodeListLength() public view returns (uint8) {
-        return uint8(nodeList.length);
+    function nodeCount() public view returns (uint8) {
+        return uint8(nodeIdList.length);
     }
 
     function bit(uint32 self, uint8 index) internal pure returns (uint8) {
@@ -139,9 +142,10 @@ contract StorageV1 is Ownable2StepUpgradeable {
         require(mapAddrToNodeId[nodeAddress] == 0, 'address is already registered');
         require(unusedNodeId > 0, 'nodeId > 0');
         mapAddrToNodeId[nodeAddress] = SET_ON;
-        nodeList.push(unusedNodeId);
+        nodeIdList.push(unusedNodeId);
+        nodeAddrList.push(nodeAddress);
         // add more copies of the data if the network can handle it, unless we get enough
-        if (rf < RF_AUTOADJUST_LIMIT && rf < nodeList.length) {
+        if (rf < RF_AUTOADJUST_LIMIT && rf < nodeIdList.length) {
             rf++;
 //            console.log('rf is now', rf);
         }
@@ -155,13 +159,13 @@ contract StorageV1 is Ownable2StepUpgradeable {
         if (nodeId == 0) {
             revert('no address found');
         }
-        if (nodeList.length == 0) {
+        if (nodeIdList.length == 0) {
             // mapping exists, but node has no short id
             delete mapAddrToNodeId[nodeAddress];
             revert('no node id found');
         }
         // valid nodeId ; filter it out; don't shrink the storage array because it's expensive
-        nodeList[nodeId] = 0;
+        nodeIdList[nodeId] = 0;
     }
 
     function packShardsToBitmap(uint8[SHARD_COUNT][] memory _nodeShardsSet, uint8 nodeId) internal view returns (uint32) {
@@ -278,7 +282,7 @@ contract StorageV1 is Ownable2StepUpgradeable {
     }
 
     function _shuffle() private returns (uint8) {
-        uint8[] memory _nodeList = nodeList;
+        uint8[] memory _nodeList = nodeIdList;
         uint8 _rf = rf;
         require(_rf >= 1 && _rf <= 20, "bad rf");
         require(_nodeList.length >= 0 && _nodeList.length < NULL_SHARD, "bad node count");

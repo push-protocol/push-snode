@@ -12,6 +12,7 @@ import {NodeStatus, ValidatorContractHelper} from "./ValidatorContractHelper";
 import {BigNumber} from "ethers";
 import {JsonRpcClient} from "hardhat/internal/hardhat-network/jsonrpc/client";
 
+let info = console.log;
 
 export class State1 {
     pushContract: PushToken;
@@ -31,8 +32,17 @@ export class State1 {
         const ptFactory = await ethers.getContractFactory("PushToken");
         const pushContract = await ptFactory.deploy();
 
-        const valFactory = await ethers.getContractFactory("ValidatorV1");
-        const valContract = await valFactory.deploy(pushContract.address);
+        const validatorV1Factory = await ethers.getContractFactory("ValidatorV1");
+        const validatorV1Proxy = await upgrades.deployProxy(validatorV1Factory,
+          [1, pushContract.address, 1, 1, 1],
+          {kind: "uups"});
+        await validatorV1Proxy.deployed();
+        info(`deployed proxy: ${validatorV1Proxy.address}`);
+        let validatorV1Impl = await upgrades.erc1967.getImplementationAddress(validatorV1Proxy.address);
+        console.log(`deployed impl: ${validatorV1Impl}`);
+
+        // const valFactory = await ethers.getContractFactory("ValidatorV1");
+        const valContract = validatorV1Impl;
 
         await pushContract.mint(owner.address, ethers.utils.parseEther("100"));
         // owner can spend 1000000000000000
