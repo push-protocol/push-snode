@@ -46,12 +46,6 @@ map after:  Map(3) {
   3 => Set(7) { 1, 2, 3, 4, 7, 9, 10 }
 }
 
-
-TODO reuse ids when nodes come and go (!)
-     delete should be in nodeAddrList, nodeIdList
-TODO ? use bitmaps for storing subscriptions
- use uint128 data type https://github.com/ethereum/solidity-examples/blob/master/src/bits/Bits.sol
-
 */
 contract StorageV1 is Ownable2StepUpgradeable {
     // number of shards;
@@ -63,6 +57,7 @@ contract StorageV1 is Ownable2StepUpgradeable {
     uint8 public constant SET_OFF = 0;
     uint8 public constant NULL_SHARD = 255; // shard id that does not exists
     uint8 public constant MAX_NODE_ID = 254; // max nod
+    uint8 public constant NULL_NODE = 0;
 
     // replication factor - how many copies of the same shard should be served by the network
     // dynamic,
@@ -170,87 +165,33 @@ contract StorageV1 is Ownable2StepUpgradeable {
             delete mapAddrToNodeId[nodeAddress];
             revert('no node id found');
         }
-        // valid nodeId ; filter it out; don't shrink the storage array because it's expensive
-        nodeIdList[nodeId] = 0;
-    }
-/*
-    function distributeUnused(uint8[] memory _unusedArr,
-        uint8[] memory _nodeList,
-        uint8[SHARD_COUNT][] memory _nodeShardsSet,
-        uint8[] memory _nodeModifiedSet,
-        bool _stopOnAvg,
-        uint8 _avgPerNode
-    ) internal {
-        // 1 take unused, offer it only to poor
-        NodeDesc[] memory poorList = buildNodeDesc(_nodeList, _nodeShardsSet);
-        for (uint i = 0; i < _unusedArr.length; i++) {
-            uint8 shard = _unusedArr[i];
-            if (shard == NULL_SHARD) {
-                continue;
-            }
-            // get all nodes from poor to rich
-            for (uint j = 0; j < poorList.length; j++) {
-                NodeDesc memory _poor = poorList[j];
-                if (_stopOnAvg && _poor.shardCount >= _avgPerNode) {
-                    continue;
-                }
-                require(_poor.node != 0);
-                sortNodesAndSize(poorList);
-                uint8[SHARD_COUNT] memory poorShardsSet = _nodeShardsSet[_poor.node];
-                if (poorShardsSet[shard] == SET_OFF) {
-                    _unusedArr[i] = NULL_SHARD;
+        // valid nodeId ;
 
-                    poorShardsSet[shard] = SET_ON;
-                    _poor.shardCount++;
-                    _nodeModifiedSet[_poor.node]++;
-                    // todo REMOVE
-//                    console.log(shard, ': unused ->', _poor.node);
+        // cleanup shards
+        delete mapNodeToShards[nodeId];
 
-                    break;
-                }
+        // cleanup ids
+        uint nodeIdLen = nodeIdList.length;
+        for (uint i = 0; i < nodeIdLen; i++) {
+            if (nodeIdList[i] == nodeId) {
+                // shrink array
+                nodeIdList[i] = nodeIdList[nodeIdLen - 1];
+                nodeIdList.pop();
+                break;
             }
         }
-    }*/
-/*
-    function sort(NodeDesc[] memory _arr, int _left, int _right) private {
-        int i = _left;
-        int j = _right;
-        if (i == j) return;
-        NodeDesc memory pivot = _arr[uint(_left + (_right - _left) / 2)];
-        while (i <= j) {
-            while (_arr[uint(i)].shardCount < pivot.shardCount) i++;
-            while (pivot.shardCount < _arr[uint(j)].shardCount) j--;
-            if (i <= j) {
-                (_arr[uint(i)], _arr[uint(j)]) = (_arr[uint(j)], _arr[uint(i)]);
-                i++;
-                j--;
+
+        // cleanup addresses
+        uint nodeAddrLen = nodeAddrList.length;
+        for (uint i = 0; i < nodeAddrLen; i++) {
+            if (nodeAddrList[i] == nodeAddress) {
+                // shrink array
+                nodeAddrList[i] = nodeAddrList[nodeAddrLen - 1];
+                nodeAddrList.pop();
+                break;
             }
         }
-        if (_left < j) sort(_arr, _left, j);
-        if (i < _right) sort(_arr, i, _right);
     }
-
-    function sortNodesAndSize(NodeDesc[] memory _arr) private {
-        sort(_arr, 0, int(_arr.length - 1));
-    }
-
-    function resortOneItem(NodeDesc[] memory _arr, uint8 pos, bool increment) private {
-        uint8 target;
-        if (increment) {
-            target = pos + 1;
-            while (target <= _arr.length - 1 && _arr[pos].shardCount > _arr[target].shardCount) target++;
-        } else {
-            target = pos - 1;
-            while (target >= 0 && _arr[pos].shardCount < _arr[target].shardCount) target--;
-        }
-        NodeDesc memory tmp = _arr[target];
-        _arr[target] = _arr[pos];
-        _arr[pos] = tmp;
-        // todo remove
-        for (uint i = 1; i < _arr.length; i++) {
-            require(_arr[i].shardCount < _arr[i - 1].shardCount, 'sort failed');
-        }
-    }*/
 
     // todo resort 1 element addtion: bool onlyNewElement , uint8 newElementPos
     function buildNodeDesc(
@@ -434,8 +375,8 @@ contract StorageV1 is Ownable2StepUpgradeable {
             uint movedCount = distributeFromRightToLeft(_nodeList, _countersMap, _maxNode,
                 _nodeShardsBitmap, _nodeModifiedSet);
             if (movedCount > 0) {
-                console.log('moved count/demand', movedCount, _demand);
                 _demand -= movedCount;
+                console.log('moved count/demand', movedCount, _demand);
             } else {
                 console.log('moving finished');
                 break;
@@ -722,23 +663,19 @@ contract StorageV1 is Ownable2StepUpgradeable {
         return _assignedCounter;
     }
 
-    // convers bit shard mask (ex: 0b1101) to shard numbers (ex: [0,2,3]) and sorts randomly ([2, 3, 0])
-    function bitMaskToRandomShards(uint32 shardmask, uint8[] memory shardList) private {
-        for (uint i = 0; i < SHARD_COUNT; i++) {
-            shardList[i] = 0;
-        }
-        uint len = 0;
-        for (uint8 shard = 0; shard < SHARD_COUNT; shard++) {
-            if (getBit(shardmask, shard) == 1) {
-                shardList[len++] = shard;
+    // convers bit shard mask (ex: 0b1101) to shard numbers (ex: [0,2,3]) and gets a random one (ex: 2)
+    function bitMaskToRandomShard(uint32 shardmask, uint8[SHARD_COUNT] memory shardList) private returns (uint8) {
+        uint8 pos = 0;
+        uint8 shard = 0;
+        while (shardmask != 0) {
+            if (shardmask & 1 == 1) {
+                shardList[pos++] = shard;
             }
+            shardmask >>= 1;
+            shard++;
         }
-        for (uint8 i = 0; i < len; i++) {
-            uint8 rnd = uint8(uint256(keccak256(abi.encodePacked(block.timestamp, i))) % len);
-            uint8 tmp = shardList[i];
-            shardList[i] = shardList[rnd];
-            shardList[rnd] = tmp;
-        }
+        uint8 rnd = uint8(uint256(keccak256(abi.encodePacked(block.timestamp, shard, shardmask, pos))) % pos);
+        return shardList[rnd];
     }
 
     function distributeFromRightToLeft(
@@ -751,7 +688,7 @@ contract StorageV1 is Ownable2StepUpgradeable {
         sortCounters(_nodeList, _countersMap);
         uint i = 0;
         uint j = _nodeList.length - 1;
-        uint8[] memory transferShards = new uint8[](SHARD_COUNT);
+        uint8[SHARD_COUNT] memory tmp;
         while (i < j) {
             uint8 leftNode = _nodeList[i];
             uint8 rightNode = _nodeList[j];
@@ -761,8 +698,7 @@ contract StorageV1 is Ownable2StepUpgradeable {
             console.log('***** shardBitmaps from/to/transfer', transfer, _nodeShardsBitmap[rightNode], _nodeShardsBitmap[leftNode]);
             if (transfer != 0) {
                 // give
-                bitMaskToRandomShards(transfer, transferShards); // todo get only one random value !!!!!!!!!
-                uint8 shard = transferShards[0];
+                uint8 shard = bitMaskToRandomShard(transfer, tmp);
                 _nodeShardsBitmap[rightNode] = clearBit(_nodeShardsBitmap[rightNode], shard);
                 _countersMap[rightNode]--;
                 _nodeModifiedSet[rightNode]++;
