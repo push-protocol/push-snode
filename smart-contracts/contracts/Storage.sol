@@ -211,7 +211,7 @@ contract StorageV1 is Ownable2StepUpgradeable {
             }
         }
     }*/
-
+/*
     function sort(NodeDesc[] memory _arr, int _left, int _right) private {
         int i = _left;
         int j = _right;
@@ -250,7 +250,7 @@ contract StorageV1 is Ownable2StepUpgradeable {
         for (uint i = 1; i < _arr.length; i++) {
             require(_arr[i].shardCount < _arr[i - 1].shardCount, 'sort failed');
         }
-    }
+    }*/
 
     // todo resort 1 element addtion: bool onlyNewElement , uint8 newElementPos
     function buildNodeDesc(
@@ -429,11 +429,12 @@ contract StorageV1 is Ownable2StepUpgradeable {
         console.log('avgPerNode', _avgPerNode);
         console.log('demand', _demand);
 
+        console.log('moving started');
         while (_demand > 0) {
             uint movedCount = distributeFromRightToLeft(_nodeList, _countersMap, _maxNode,
                 _nodeShardsBitmap, _nodeModifiedSet);
             if (movedCount > 0) {
-                console.log('moved', movedCount, _demand);
+                console.log('moved count/demand', movedCount, _demand);
                 _demand -= movedCount;
             } else {
                 console.log('moving finished');
@@ -579,51 +580,68 @@ contract StorageV1 is Ownable2StepUpgradeable {
 
         // todo remove
         for (uint i = 0; i < _nodesList.length; i++) {
-            console.log(_nodesList[i], 'has shards size', _countersMap[_nodesList[i]]);
+            console.log(_nodesList[i], 'has shards size:', _countersMap[_nodesList[i]]);
         }
         for (uint i = 1; i < _nodesList.length; i++) {
-            require(_countersMap[_nodesList[i]] >= _countersMap[_nodesList[i - 1]], 'sort failed');
+            if (!(_countersMap[_nodesList[i]] >= _countersMap[_nodesList[i - 1]])) {
+                revert('sort failed');
+            }
+
         }
     }
 
-    function resortCountersRow(uint8[] memory _nodesList, uint8[] memory _countersMap, uint pos, bool increment) private {
+    // todo remove
+    function assertSorting(uint8[] memory _nodeList, uint8[] memory _countersMap) private {
+        {
+            console.log('after sort');
+            for (uint i = 0; i < _nodeList.length; i++) {
+                console.log('#', i);
+                console.log(_nodeList[i], 'has shards size', _countersMap[_nodeList[i]]);
+            }
+            for (uint i = 1; i < _nodeList.length; i++) {
+                require(_countersMap[_nodeList[i]] >= _countersMap[_nodeList[i - 1]], 'sort failed (2)');
+            }
+        }
+    }
+
+    function resortCountersRow(uint8[] memory _nodeList, uint8[] memory _countersMap, uint pos, bool increment) private {
         // todo remove
-//        console.log('resortCountersRow() total nodes:', _nodesList.length, ' pos:', pos);
-//        console.log('before sort');
-//        for (uint i = 0; i < _nodesList.length; i++) {
-//            console.log('#', i);
-//            console.log(_nodesList[i], 'has shards size', _countersMap[_nodesList[i]]);
-//        }
+        console.log('resortCountersRow() total nodes:', _nodeList.length, ' pos:', pos);
+        console.log('before sort');
+        for (uint i = 0; i < _nodeList.length; i++) {
+            console.log('#', i);
+            console.log(_nodeList[i], 'has shards size', _countersMap[_nodeList[i]]);
+        }
 
         int cur = int(pos);
         if (increment) {
-            while (cur + 1 >= 0 && cur + 1 <= int(_nodesList.length - 1)
-                && _countersMap[_nodesList[pos]] > _countersMap[_nodesList[uint(cur + 1)]]) {
+            while (cur + 1 >= 0 && cur + 1 <= int(_nodeList.length - 1)
+                && _countersMap[_nodeList[pos]] > _countersMap[_nodeList[uint(cur + 1)]]) {
                 cur++;
             }
         } else {
-            while (cur - 1 >= 0 && cur - 1 <= int(_nodesList.length - 1)
-                && _countersMap[_nodesList[pos]] < _countersMap[_nodesList[uint(cur - 1)]]) {
+            while (cur - 1 >= 0 && cur - 1 <= int(_nodeList.length - 1)
+                && _countersMap[_nodeList[pos]] < _countersMap[_nodeList[uint(cur - 1)]]) {
                 cur--;
             }
         }
         if (cur != int(pos)) {
-//            console.log('moved to new');
+            console.log('moved to new');
             console.log(uint(pos));
             console.log(uint(cur));
-            uint8 tmp = _nodesList[uint(cur)];
-            _nodesList[uint(cur)] = _nodesList[pos];
-            _nodesList[pos] = tmp;
+            uint8 tmp = _nodeList[uint(cur)];
+            _nodeList[uint(cur)] = _nodeList[pos];
+            _nodeList[pos] = tmp;
         }
         // todo remove
-//        console.log('after sort');
-//        for (uint i = 0; i < _nodesList.length; i++) {
-//            console.log('#', i);
-//            console.log(_nodesList[i], 'has shards size', _countersMap[_nodesList[i]]);
-//        }
-        for (uint i = 1; i < _nodesList.length; i++) {
-            require(_countersMap[_nodesList[i]] >= _countersMap[_nodesList[i - 1]], 'sort failed');
+        console.log('after sort');
+        for (uint i = 0; i < _nodeList.length; i++) {
+            console.log('#', i);
+            console.log(_nodeList[i], 'has shards size', _countersMap[_nodeList[i]]);
         }
+//        for (uint i = 1; i < _nodesList.length; i++) {
+//            require(_countersMap[_nodesList[i]] >= _countersMap[_nodesList[i - 1]], 'sort failed (2)');
+//        }
     }
 
     function buildCounters(
@@ -731,40 +749,38 @@ contract StorageV1 is Ownable2StepUpgradeable {
         uint8[] memory _nodeModifiedSet
     ) private returns (uint){
         sortCounters(_nodeList, _countersMap);
-
         uint i = 0;
         uint j = _nodeList.length - 1;
         uint8[] memory transferShards = new uint8[](SHARD_COUNT);
         while (i < j) {
             uint8 leftNode = _nodeList[i];
-//            uint8 leftShardsCount = _countersMap[i];
-//            uint32 leftShardsMask = _nodeShardsBitmap[leftNode];
             uint8 rightNode = _nodeList[j];
-//            uint8 rightShardsCount = _countersMap[j]; // todo check rich.size > poor.size + 1
-//            uint32 rightShardsMask = _nodeShardsBitmap[rightNode];
             uint32 transfer = (_nodeShardsBitmap[leftNode] ^ _nodeShardsBitmap[rightNode])
-                & (~_nodeShardsBitmap[rightNode]);
+                & (~_nodeShardsBitmap[leftNode]);
+            console.log('>>>>> starting moving from/to', rightNode, leftNode);
+            console.log('***** shardBitmaps from/to/transfer', transfer, _nodeShardsBitmap[rightNode], _nodeShardsBitmap[leftNode]);
             if (transfer != 0) {
                 // give
-                bitMaskToRandomShards(transfer, transferShards);
-                for (uint i = 0; i < transferShards.length; i++) {
-                    uint8 shard = transferShards[i];
-                    _nodeShardsBitmap[rightNode] = clearBit(rightShardsMask, shard);
-                    _countersMap[rightNode]--;
-                    _nodeModifiedSet[rightNode]++;
-                    resortCountersRow(_nodeList, _countersMap, rightNode, false);
+                bitMaskToRandomShards(transfer, transferShards); // todo get only one random value !!!!!!!!!
+                uint8 shard = transferShards[0];
+                _nodeShardsBitmap[rightNode] = clearBit(_nodeShardsBitmap[rightNode], shard);
+                _countersMap[rightNode]--;
+                _nodeModifiedSet[rightNode]++;
 
-                    _nodeShardsBitmap[leftNode] = setBit(leftShardsMask, shard);
-                    _countersMap[leftNode]++;
-                    _nodeModifiedSet[leftNode]++;
-                    resortCountersRow(_nodeList, _countersMap, rightNode, true);
+                _nodeShardsBitmap[leftNode] = setBit(_nodeShardsBitmap[leftNode], shard);
+                _countersMap[leftNode]++;
+                _nodeModifiedSet[leftNode]++;
 
-                    console.log(shard, rightNode, '->', leftNode);
-                    return 1;
-                }
+                resortCountersRow(_nodeList, _countersMap, i, true);
+                resortCountersRow(_nodeList, _countersMap, j, false);
+
+                // todo remove
+                assertSorting(_nodeList, _countersMap);
+
+                console.log(rightNode, '->', leftNode);
+                console.log('<<<<< done moving shard ', shard);
+                return 1;
             }
-
-
             i++;
             j--;
         }
