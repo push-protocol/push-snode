@@ -43,7 +43,9 @@ export class TestHelper {
   }
 
   static async confirmTransaction(tx: ContractTransaction) {
-    expect((await tx.wait(1)).status).to.be.equal(1);
+    const receipt = await tx.wait(1);
+    expect(receipt.status).to.be.equal(1);
+    // console.log('tx logs', receipt.logs);
   }
 
   static async filterEventsFromTransaction(contract: ValidatorV1, tx: ContractTransaction,

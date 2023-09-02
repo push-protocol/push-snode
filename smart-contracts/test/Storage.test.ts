@@ -56,6 +56,8 @@ interface StorageContract {
 
   nodeAddrList(pos: number): Promise<string>;
 
+  nodeIdList(pos: number): Promise<number>;
+
   rf(): Promise<number>;
 
   getNodeShardsByAddr(addr: string): Promise<number>;
@@ -81,12 +83,13 @@ class State {
     let nodeCount = await ct.nodeCount();
     for (let i = 0; i < nodeCount; i++) {
       let addr = await ct.nodeAddrList(i);
+      let nodeId = await ct.nodeIdList(i);
       let shardsBitSet = await ct.getNodeShardsByAddr(addr);
       let shardsIntArr = BitUtil.bitsToPositions(shardsBitSet);
       let shardsIntSet = CollectionUtil.arrayToSet(shardsIntArr);
       s.map.set(addr, shardsIntSet);
       s.nodeList.add(addr);
-      console.log(addr, '->', CollectionUtil.setToArray(shardsIntSet));
+      console.log(addr, `node:${nodeId} bitset:${shardsBitSet} -> size:${shardsIntSet.size} `, CollectionUtil.setToArray(shardsIntSet));
     }
     return s;
   }
@@ -207,7 +210,24 @@ describe("StorageTest", function () {
         10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
         20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
         30, 31]);
-  })
+  });
+
+  it('test_5to6', async () => {
+    let nodeCount = 0;
+    for (let nodeId = 1; nodeId <= 6; nodeId++) {
+      if (nodeId === 6) {
+        console.log('\n'.repeat(5) + '='.repeat(15))
+      }
+      let tx = await ct.addNodeAndStake(nodes[nodeId]);
+      await t.confirmTransaction(tx);
+      nodeCount++;
+    }
+    let s = await State.readFromEvm();
+    s.checkRf(5);
+    s.checkNodeCount(6);
+    s.checkDistribution();
+
+  });
 
   it('test_1to5_6to10', async () => {
     let s = await State.readFromEvm();

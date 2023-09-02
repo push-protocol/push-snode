@@ -2,7 +2,7 @@
 pragma solidity ^0.8.17;
 
 // todo remove
-import "hardhat/console.sol";
+//import "hardhat/console.sol";
 import "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 
 /*
@@ -121,7 +121,9 @@ contract StorageV1 is Ownable2StepUpgradeable {
     function getNodeShardsByAddr(address _nodeAddress) public view returns (uint32) {
         uint8 node = mapAddrToNodeId[_nodeAddress];
         require(node > 0, 'no such node');
-        return mapNodeToShards[node];
+        uint32 result = mapNodeToShards[node];
+//        console.log(node, _nodeAddress, ' mapped to ', result);
+        return result;
     }
 
     function nodeCount() public view returns (uint8) {
@@ -138,10 +140,9 @@ contract StorageV1 is Ownable2StepUpgradeable {
 
     // todo add staking (or merge with Validator code)
     function addNodeAndStake(address nodeAddress) public returns (uint8) {
-        console.log('addNodeAndStake', nodeAddress);
+//        console.log('addNodeAndStake', nodeAddress);
         require(mapAddrToNodeId[nodeAddress] == 0, 'address is already registered');
         require(unusedNodeId > 0, 'nodeId > 0');
-        mapAddrToNodeId[nodeAddress] = SET_ON;
         nodeIdList.push(unusedNodeId);
         nodeAddrList.push(nodeAddress);
         // add more copies of the data if the network can handle it, unless we get enough
@@ -149,8 +150,9 @@ contract StorageV1 is Ownable2StepUpgradeable {
             rf++;
 //            console.log('rf is now', rf);
         }
+        mapAddrToNodeId[nodeAddress] = unusedNodeId;
         _shuffle();
-        console.log('addNodeAndStake finished');
+//        console.log('addNodeAndStake finished');
         return unusedNodeId++;
     }
 
@@ -248,6 +250,24 @@ contract StorageV1 is Ownable2StepUpgradeable {
         sort(_arr, 0, int(_arr.length - 1));
     }
 
+    function resortOneItem(NodeDesc[] memory _arr, uint8 pos, bool increment) internal {
+        uint8 target;
+        if (increment) {
+            target = pos + 1;
+            while (target <= _arr.length - 1 && _arr[pos].shardCount > _arr[target].shardCount) target++;
+        } else {
+            target = pos - 1;
+            while (target >=0 && _arr[pos].shardCount < _arr[target].shardCount) target--;
+        }
+        NodeDesc memory tmp = _arr[target];
+        _arr[target] = _arr[pos];
+        _arr[pos] = tmp;
+        // todo remove
+        for (uint i = 1; i < _arr.length; i++) {
+            require(_arr[i].shardCount < _arr[i - 1].shardCount, 'sort failed');
+        }
+    }
+
     // todo resort 1 element addtion: bool onlyNewElement , uint8 newElementPos
     function buildNodeDesc(
         uint8[] memory _nodeList,
@@ -334,8 +354,8 @@ contract StorageV1 is Ownable2StepUpgradeable {
         // results in: 5,0,1 are in a set, -1 = nothing here
         uint8[] memory _unusedArr = new uint8[](_rf * SHARD_COUNT);
         uint16 cnt = 0;
-        for (uint8 shard = 0; shard < SHARD_COUNT; shard++) {
-            for (uint i = 0; i < _rf; i++) {
+        for (uint i = 0; i < _rf; i++) {
+            for (uint8 shard = 0; shard < SHARD_COUNT; shard++) {
                 _unusedArr[cnt++] = shard;
             }
         }
@@ -353,21 +373,21 @@ contract StorageV1 is Ownable2StepUpgradeable {
                 if (shardSet[nodeId] == SET_OFF) {
                     continue;
                 }
-                uint8 unusedPos = NULL_SHARD;
-                for (uint8 j = 0; j < _unusedArr.length; j++) {
+                int unusedPos = - 1;
+                for (uint j = 0; j < _unusedArr.length; j++) {
                     if (_unusedArr[j] == shard) {
-                        unusedPos = j;
+                        unusedPos = int(j);
                         break;
                     }
                 }
                 // decide
-                if (unusedPos == NULL_SHARD) {
+                if (unusedPos == - 1) {
                     // over-assigned - this food is no longer available
                     shardSet[shard] = SET_OFF;
                     _nodeModifiedSet[nodeId]++;
                 } else {
                     // this food is used
-                    _unusedArr[unusedPos] = NULL_SHARD;
+                    _unusedArr[uint(unusedPos)] = NULL_SHARD;
                 }
             }
         }
@@ -378,8 +398,8 @@ contract StorageV1 is Ownable2StepUpgradeable {
 //            uint8 nodeId = _nodeList[i];
 //
 //            uint8[SHARD_COUNT] memory shardSet = _nodeShardsSet[nodeId];
-//            for(uint8 k = 0; k<shardSet.length;k++) {
-//                if(shardSet[k]==SET_ON) {
+//            for (uint8 k = 0; k < shardSet.length; k++) {
+//                if (shardSet[k] == SET_ON) {
 //                    console.log(nodeId, ' had ', k);
 //                }
 //            }
@@ -388,7 +408,7 @@ contract StorageV1 is Ownable2StepUpgradeable {
         // cleanup unused from empty slots (-1); normally most of them would be empty;
         {
             uint8 emptyCnt = 0;
-            for (uint8 j = 0; j < _unusedArr.length; j++) {
+            for (uint j = 0; j < _unusedArr.length; j++) {
                 if (_unusedArr[j] == NULL_SHARD) {
                     emptyCnt++;
                 }
@@ -405,6 +425,7 @@ contract StorageV1 is Ownable2StepUpgradeable {
         }
 
         uint8 avgPerNode = calculateAvgPerNode(_nodeList);
+//        console.log('avg per node', avgPerNode);
 
         // 1 take unused, offer it only to poor
         distributeUnused(_unusedArr, _nodeList, _nodeShardsSet, _nodeModifiedSet, true, avgPerNode);
@@ -445,7 +466,11 @@ contract StorageV1 is Ownable2StepUpgradeable {
                 for (uint j = 0; j < poorList.length && j < i; j++) { // todo is j < i correct ???????
                     NodeDesc memory poor = poorList[j];
                     uint8[SHARD_COUNT] memory poorShardsSet = _nodeShardsSet[poor.node];
-                    if (rich.shardCount > poor.shardCount + 1 && poorShardsSet[shard] == SET_OFF) {
+                    if (!(rich.shardCount > poor.shardCount + 1)) {
+                        break;
+                    }
+                    if ((poorShardsSet[shard] == SET_OFF)) {
+//                        console.log('rich ', rich.shardCount, ' poor', poor.shardCount);
                         richShardsSet[shard] = SET_OFF;
                         rich.shardCount--;
                         _nodeModifiedSet[rich.node]++;
@@ -453,12 +478,32 @@ contract StorageV1 is Ownable2StepUpgradeable {
                         poorShardsSet[shard] = SET_ON;
                         poor.shardCount++;
                         _nodeModifiedSet[poor.node]++;
+                        // todo remove
+//                        console.log(shard, rich.node, '->', poor.node);
                         break;
                     }
                 }
             }
         }
-
+        // todo remove
+//        console.log('after redistribution');
+//        for (uint i = 0; i < _nodeList.length; i++) {
+//            uint8 nodeId = _nodeList[i];
+////            if(nodeId!=1) {
+////                break;
+////            }
+//            uint8[SHARD_COUNT] memory shardSet = _nodeShardsSet[nodeId];
+//            uint count = 0;
+//            for (uint8 k = 0; k < shardSet.length; k++) {
+//                if (shardSet[k] == SET_ON) {
+//                    console.log(nodeId, ' has ', k);
+//                    count++;
+//                }
+//            }
+//            if (count == 0) {
+//                console.log(nodeId, ' has nothing');
+//            }
+//        }
         // 3 take unused food, offer it to everyone
         distributeUnused(_unusedArr, _nodeList, _nodeShardsSet, _nodeModifiedSet, false, avgPerNode);
 
@@ -467,7 +512,9 @@ contract StorageV1 is Ownable2StepUpgradeable {
         {
             for (uint8 node = 1; node < _nodeModifiedSet.length; node++) {
                 if (_nodeModifiedSet[node] > 0) {
-                    mapNodeToShards[node] = packShardsToBitmap(_nodeShardsSet, node);
+                    uint32 bitmap = packShardsToBitmap(_nodeShardsSet, node);
+                    mapNodeToShards[node] = bitmap;
+//                    console.log(node, ' stores bitmask ', bitmap);
                     _modifiedNodes++;
                 }
             }
