@@ -2,7 +2,7 @@
 pragma solidity ^0.8.17;
 
 // todo remove
-//import "hardhat/console.sol";
+import "hardhat/console.sol";
 import "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 
 /*
@@ -130,7 +130,7 @@ contract StorageV1 is Ownable2StepUpgradeable {
         return uint8(nodeIdList.length);
     }
 
-    function bit(uint32 self, uint8 index) internal pure returns (uint8) {
+    function getBit(uint32 self, uint8 index) internal pure returns (uint8) {
         return uint8(self >> index & 1);
     }
 
@@ -168,26 +168,6 @@ contract StorageV1 is Ownable2StepUpgradeable {
         }
         // valid nodeId ; filter it out; don't shrink the storage array because it's expensive
         nodeIdList[nodeId] = 0;
-    }
-
-    function packShardsToBitmap(uint8[SHARD_COUNT][] memory _nodeShardsSet, uint8 nodeId) internal view returns (uint32) {
-        uint32 result;
-        uint8[SHARD_COUNT] memory shardSet = _nodeShardsSet[nodeId];
-        for (uint8 shard = 0; shard < SHARD_COUNT; shard++) {
-            if (shardSet[shard] == SET_ON) {
-                result = setBit(result, shard);
-            }
-        }
-//        console.log('packShardsToBitmap', nodeId, '->', result);
-        return result;
-    }
-
-    function unpackBitmapToShards(uint32 bitmap, uint8[SHARD_COUNT][] memory _nodeShardsSet, uint8 nodeId) internal view {
-//        console.log('unpacking', nodeId,'value', bitmap);
-        uint8[SHARD_COUNT] memory shardSet = _nodeShardsSet[nodeId];
-        for (uint8 shard = 0; shard < SHARD_COUNT; shard++) {
-            shardSet[shard] = bit(bitmap, shard) == 1 ? SET_ON : SET_OFF;
-        }
     }
 
     function distributeUnused(uint8[] memory _unusedArr,
@@ -257,7 +237,7 @@ contract StorageV1 is Ownable2StepUpgradeable {
             while (target <= _arr.length - 1 && _arr[pos].shardCount > _arr[target].shardCount) target++;
         } else {
             target = pos - 1;
-            while (target >=0 && _arr[pos].shardCount < _arr[target].shardCount) target--;
+            while (target >= 0 && _arr[pos].shardCount < _arr[target].shardCount) target--;
         }
         NodeDesc memory tmp = _arr[target];
         _arr[target] = _arr[pos];
@@ -291,14 +271,14 @@ contract StorageV1 is Ownable2StepUpgradeable {
     }
 
     function calculateAvgPerNode(uint8[] memory _nodeList) public view returns (uint8) {
-        uint8 nodeCount = uint8(_nodeList.length);
-        uint8 total = SHARD_COUNT * rf;
-        uint8 avgPerNode = total / nodeCount;
+        uint8 _nodeCount = uint8(_nodeList.length);
+        uint8 _total = SHARD_COUNT * rf;
+        uint8 _avgPerNode = _total / _nodeCount;
         // Math.ceil
-        if (total % nodeCount > 0) {
-            avgPerNode = avgPerNode + 1;
+        if (_total % _nodeCount > 0) {
+            _avgPerNode = _avgPerNode + 1;
         }
-        return avgPerNode;
+        return _avgPerNode;
     }
 
     function _shuffle() private returns (uint8) {
@@ -307,7 +287,7 @@ contract StorageV1 is Ownable2StepUpgradeable {
         require(_rf >= 1 && _rf <= 20, "bad rf");
         require(_nodeList.length >= 0 && _nodeList.length < NULL_SHARD, "bad node count");
 
-        uint _maxNode = 0;
+        uint8 _maxNode = 0;
 
 //        console.log('node ids available:');
         for (uint i = 0; i < _nodeList.length; i++) {
@@ -322,18 +302,13 @@ contract StorageV1 is Ownable2StepUpgradeable {
         require(_maxNode < MAX_NODE_ID);
 
         // copy storage to memory
-        // nodeShardsSet[i][j] = 1, if nodeI has shard J
-        // nodeShardsSet[i][j] = 0, if nodeI has no shard J assigned
+        // nodeShardsSet[i]: bit(J) = 1, if nodeI has shard J
         uint8[] memory _nodeModifiedSet = new uint8[](_maxNode + 1);
-        // n arrays , each is of SHARD_COUNT size 
-        uint8[SHARD_COUNT][] memory _nodeShardsSet = new uint8[SHARD_COUNT][](_maxNode + 1);
+        uint32[] memory _nodeShardsBitmap = new uint32[](_maxNode + 1);
         for (uint i = 0; i < _nodeList.length; i++) {
             uint8 nodeId = _nodeList[i];
             require(nodeId >= 1, 'nodes are 1 based');
-            unpackBitmapToShards(mapNodeToShards[nodeId], _nodeShardsSet, nodeId);
-
-            uint8[SHARD_COUNT] memory shardSet = _nodeShardsSet[nodeId];
-            require(shardSet.length == SHARD_COUNT, 'bad length');
+            _nodeShardsBitmap[nodeId] = mapNodeToShards[nodeId];
         }
         // todo remove
 //        console.log('after unpacking from storage');
@@ -361,16 +336,16 @@ contract StorageV1 is Ownable2StepUpgradeable {
         }
 
         // todo REMOVE
-//        console.log('unused after applying rf');
-//        for (uint8 i = 0; i < _unusedArr.length; i++) console.log('unused ', _unusedArr[i]);
+        console.log('unused after applying rf');
+        for (uint8 i = 0; i < _unusedArr.length; i++) console.log('unused ', _unusedArr[i]);
 
         // check unused, and no-longer assigned
         for (uint i = 0; i < _nodeList.length; i++) {
             uint nodeId = _nodeList[i];
-            uint8[SHARD_COUNT] memory shardSet = _nodeShardsSet[nodeId];
-            for (uint shard = 0; shard < SHARD_COUNT; shard++) { // todo wtf is this
+            uint32 shardmask = _nodeShardsBitmap[nodeId];
+            for (uint8 shard = 0; shard < SHARD_COUNT; shard++) { // todo wtf is this
                 // search this shard
-                if (shardSet[nodeId] == SET_OFF) {
+                if (getBit(shardmask, shard) == 0) {
                     continue;
                 }
                 int unusedPos = - 1;
@@ -383,7 +358,7 @@ contract StorageV1 is Ownable2StepUpgradeable {
                 // decide
                 if (unusedPos == - 1) {
                     // over-assigned - this food is no longer available
-                    shardSet[shard] = SET_OFF;
+                    _nodeShardsBitmap[nodeId] = setBit(shardmask, shard);
                     _nodeModifiedSet[nodeId]++;
                 } else {
                     // this food is used
@@ -392,8 +367,8 @@ contract StorageV1 is Ownable2StepUpgradeable {
             }
         }
         // todo REMOVE
-//        console.log('unused after removing existing mappings');
-//        for (uint8 i = 0; i < _unusedArr.length; i++) console.log('unused2 ', _unusedArr[i]);
+        console.log('unused after removing existing mappings');
+        for (uint8 i = 0; i < _unusedArr.length; i++) console.log('unused2 ', _unusedArr[i]);
 //        for (uint8 i = 0; i < _nodeList.length; i++) {
 //            uint8 nodeId = _nodeList[i];
 //
@@ -428,10 +403,13 @@ contract StorageV1 is Ownable2StepUpgradeable {
 //        console.log('avg per node', avgPerNode);
 
         // 1 take unused, offer it only to poor
-        distributeUnused(_unusedArr, _nodeList, _nodeShardsSet, _nodeModifiedSet, true, avgPerNode);
+        distributeUnused2(_unusedArr, _nodeList, _maxNode, _nodeShardsBitmap, _nodeModifiedSet, 0);
+//        distributeUnused(_unusedArr, _nodeList, _nodeShardsSet, _nodeModifiedSet, true, avgPerNode);
+//        return 0; // todo !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+        /*
         // todo remove
-//        for (uint8 i = 0; i < _unusedArr.length; i++) console.log('unused3 ', _unusedArr[i]);
+        for (uint8 i = 0; i < _unusedArr.length; i++) console.log('unused3 ', _unusedArr[i]);
 //        for (uint8 i = 0; i < _nodeList.length; i++) {
 //            uint8 nodeId = _nodeList[i];
 //
@@ -507,14 +485,15 @@ contract StorageV1 is Ownable2StepUpgradeable {
         // 3 take unused food, offer it to everyone
         distributeUnused(_unusedArr, _nodeList, _nodeShardsSet, _nodeModifiedSet, false, avgPerNode);
 
+*/
         // 4 save to storage , only modified nodes
         uint8 _modifiedNodes = 0;
         {
             for (uint8 node = 1; node < _nodeModifiedSet.length; node++) {
                 if (_nodeModifiedSet[node] > 0) {
-                    uint32 bitmap = packShardsToBitmap(_nodeShardsSet, node);
+                    uint32 bitmap = _nodeShardsBitmap[node];
                     mapNodeToShards[node] = bitmap;
-//                    console.log(node, ' stores bitmask ', bitmap);
+                    console.log(node, ' stores bitmask ', bitmap);
                     _modifiedNodes++;
                 }
             }
@@ -526,12 +505,152 @@ contract StorageV1 is Ownable2StepUpgradeable {
             for (uint8 nodeId = 1; nodeId < _nodeModifiedSet.length; nodeId++) {
                 if (_nodeModifiedSet[nodeId] > 0) {
                     _modifiedNodesArr[pos++] = nodeId;
-//                    console.log('shuffle() node modified', nodeId);
+                    console.log('shuffle() node modified', nodeId);
                 }
             }
-//            console.log('emitting ', _modifiedNodesArr.length);
+            console.log('emitting ', _modifiedNodesArr.length);
             emit SNodeMappingChanged(_modifiedNodesArr);
         }
         return _modifiedNodes;
+    }
+
+    // NEW VERSION
+
+    function sortCounters(uint8[] memory _nodesList, uint8[] memory _countersMap, int _left, int _right) internal {
+        int i = _left;
+        int j = _right;
+        if (i == j) return;
+        uint8 pivotCount = _countersMap[uint(_nodesList[uint(_left + (_right - _left) / 2)])];
+        while (i <= j) {
+            while (_countersMap[_nodesList[uint(i)]] < pivotCount) i++;
+            while (pivotCount < _countersMap[_nodesList[uint(j)]]) j--;
+            if (i <= j) {
+                (_nodesList[uint(i)], _nodesList[uint(j)]) = (_nodesList[uint(j)], _nodesList[uint(i)]);
+                i++;
+                j--;
+            }
+        }
+        if (_left < j) sortCounters(_nodesList, _countersMap, _left, j);
+        if (i < _right) sortCounters(_nodesList, _countersMap, i, _right);
+    }
+
+    function sortCounters(uint8[] memory _nodesList, uint8[] memory _countersMap) internal {
+        // todo remove
+        for (uint nodeId = 0; nodeId < _nodesList.length; nodeId++) {
+            require(nodeId < _countersMap.length);
+        }
+
+        sortCounters(_nodesList, _countersMap, 0, int(_nodesList.length - 1));
+
+        // todo remove
+        for (uint i = 0; i < _nodesList.length; i++) {
+            console.log(_nodesList[i], 'has shards size', _countersMap[_nodesList[i]]);
+        }
+        for (uint i = 1; i < _nodesList.length; i++) {
+            require(_countersMap[_nodesList[i]] >= _countersMap[_nodesList[i - 1]], 'sort failed');
+        }
+    }
+
+    function resortCountersRow(uint8[] memory _nodesList, uint8[] memory _countersMap, uint pos, bool increment) internal {
+        // todo remove
+//        console.log('resortCountersRow() total nodes:', _nodesList.length, ' pos:', pos);
+//        console.log('before sort');
+//        for (uint i = 0; i < _nodesList.length; i++) {
+//            console.log('#', i);
+//            console.log(_nodesList[i], 'has shards size', _countersMap[_nodesList[i]]);
+//        }
+
+        int cur = int(pos);
+        if (increment) {
+            while (cur + 1 >= 0 && cur + 1 <= int(_nodesList.length - 1)
+                && _countersMap[_nodesList[pos]] > _countersMap[_nodesList[uint(cur + 1)]]) {
+                cur++;
+            }
+        } else {
+            while (cur - 1 >= 0 && cur - 1 <= int(_nodesList.length - 1)
+                && _countersMap[_nodesList[pos]] < _countersMap[_nodesList[uint(cur - 1)]]) {
+                cur--;
+            }
+        }
+        if(cur !=int(pos)) {
+//            console.log('moved to new');
+            console.log(uint(pos));
+            console.log(uint(cur));
+            uint8 tmp = _nodesList[uint(cur)];
+            _nodesList[uint(cur)] = _nodesList[pos];
+            _nodesList[pos] = tmp;
+        }
+        // todo remove
+//        console.log('after sort');
+//        for (uint i = 0; i < _nodesList.length; i++) {
+//            console.log('#', i);
+//            console.log(_nodesList[i], 'has shards size', _countersMap[_nodesList[i]]);
+//        }
+        for (uint i = 1; i < _nodesList.length; i++) {
+            require(_countersMap[_nodesList[i]] >= _countersMap[_nodesList[i - 1]], 'sort failed');
+        }
+    }
+
+    function buildCounters(
+        uint8[] memory _nodeList,
+        uint8 _maxNode,
+        uint32[] memory _nodeShardsBitmap
+    ) private pure returns (uint8[] memory) {
+        uint8[] memory counters = new uint8[](_maxNode + 1);
+        // init nodeArr
+        for (uint i = 0; i < _nodeList.length; i++) {
+            uint8 nodeId = _nodeList[i];
+            uint32 shardmask = _nodeShardsBitmap[nodeId];
+            uint8 count = 0;
+            for (uint8 shard = 0; shard < SHARD_COUNT; shard++) {
+                if (getBit(shardmask, shard) == 1) {
+                    count++;
+                }
+            }
+            counters[i] = count;
+        }
+        return counters;
+    }
+
+    function distributeUnused2(uint8[] memory _unusedArr,
+        uint8[] memory _nodeList,
+        uint8 _maxNode,
+        uint32[] memory _nodeShardsBitmap,
+        uint8[] memory _nodeModifiedSet,
+        uint8 _nodeThreshold
+    ) internal {
+        uint8[] memory _countersMap = buildCounters(_nodeList, _maxNode, _nodeShardsBitmap);
+        sortCounters(_nodeList, _countersMap);
+        // _nodeList is sorted asc
+
+        // with every unused shard
+        for (uint i = 0; i < _unusedArr.length; i++) {
+            uint8 shard = _unusedArr[i];
+            if (shard == NULL_SHARD) {
+                continue;
+            }
+
+            // give it to someone (from poor to rich) and stop (and resort)
+            for (uint8 j = 0; j < _nodeList.length; j++) {
+                uint8 nodeId = _nodeList[j];
+                if (_nodeThreshold >0 && _countersMap[nodeId] >= _nodeThreshold) {
+                    continue;
+                }
+                uint32 shardmask = _nodeShardsBitmap[nodeId];
+                uint8 nodeHasShard = getBit(shardmask, shard);
+                if (nodeHasShard==0) { // todo stopOnAvg ????????????????????????
+                    _unusedArr[i] = NULL_SHARD;
+
+                    _nodeShardsBitmap[nodeId] = setBit(shardmask, shard);
+                    _countersMap[nodeId]++;
+                    _nodeModifiedSet[nodeId]++;
+                    resortCountersRow(_nodeList, _countersMap, j, true);
+                    console.log(shard, ': unused to node ->', nodeId);
+                    console.log('counters', _countersMap[nodeId], 'bitmap', _nodeShardsBitmap[nodeId]);
+                    console.log('nodeModified', _nodeModifiedSet[nodeId]);
+                    break;
+                }
+            }
+        }
     }
 }

@@ -183,7 +183,14 @@ describe("StorageTest", function () {
     expect(ct.address).to.be.properAddress;
   })
 
-  it("TestBasic", async function () {
+  it('test0', async () => {
+    let s = await State.readFromEvm();
+    s.checkRf(1);
+    assert.equal(await ct.nodeCount(), 0);
+    assert.equal(await ct.SHARD_COUNT(), 32);
+  })
+
+  it("test1", async function () {
     console.log(nodes[1]);
     let tx = await ct.addNodeAndStake(nodes[1]);
     await expect(tx).to.emit(ct, "SNodeMappingChanged").withArgs([1]);
@@ -192,14 +199,9 @@ describe("StorageTest", function () {
     s.checkRf(1);
   });
 
-  it('test0node', async () => {
-    let s = await State.readFromEvm();
-    s.checkRf(1);
-    assert.equal(await ct.nodeCount(), 0);
-    assert.equal(await ct.SHARD_COUNT(), 32);
-  })
 
-  it('test1node-', async () => {
+
+  it('test2', async () => {
     let t1 = await ct.addNodeAndStake(nodes[1]);
     await expect(t1).to.emit(ct, "SNodeMappingChanged").withArgs([1]);
     let s = await State.readFromEvm();
