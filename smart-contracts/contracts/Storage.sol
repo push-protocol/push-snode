@@ -169,7 +169,7 @@ contract StorageV1 is Ownable2StepUpgradeable {
         // valid nodeId ; filter it out; don't shrink the storage array because it's expensive
         nodeIdList[nodeId] = 0;
     }
-
+/*
     function distributeUnused(uint8[] memory _unusedArr,
         uint8[] memory _nodeList,
         uint8[SHARD_COUNT][] memory _nodeShardsSet,
@@ -206,7 +206,7 @@ contract StorageV1 is Ownable2StepUpgradeable {
                 }
             }
         }
-    }
+    }*/
 
     function sort(NodeDesc[] memory _arr, int _left, int _right) internal {
         int i = _left;
@@ -270,7 +270,8 @@ contract StorageV1 is Ownable2StepUpgradeable {
         return nodeDesc;
     }
 
-    function calculateAvgPerNode(uint8[] memory _nodeList) public view returns (uint8) {
+    function calculateAvgPerNode(uint8[] memory _nodeList, uint8[] memory _countersMap
+    ) public view returns (uint avgPerNode, uint demand) {
         uint8 _nodeCount = uint8(_nodeList.length);
         uint8 _total = SHARD_COUNT * rf;
         uint8 _avgPerNode = _total / _nodeCount;
@@ -278,7 +279,22 @@ contract StorageV1 is Ownable2StepUpgradeable {
         if (_total % _nodeCount > 0) {
             _avgPerNode = _avgPerNode + 1;
         }
-        return _avgPerNode;
+        uint _demand = 0;
+        for (uint i = 0; i < _nodeList.length; i++) {
+            uint8 nodeId = _nodeList[i];
+            uint8 shardCount = _countersMap[nodeId];
+            if (shardCount < _avgPerNode) {
+                console.log('checking demand for', nodeId, shardCount);
+                _demand += _avgPerNode - shardCount;
+            }
+        }
+
+        for (uint i = 0; i < _nodeList.length; i++) {
+            console.log('#', i);
+            console.log(_nodeList[i], 'has shards size', _countersMap[_nodeList[i]]);
+        }
+
+        return (_avgPerNode, _demand);
     }
 
     function _shuffle() private returns (uint8) {
@@ -399,11 +415,15 @@ contract StorageV1 is Ownable2StepUpgradeable {
             _unusedArr = _tmp;
         }
 
-        uint8 avgPerNode = calculateAvgPerNode(_nodeList);
-//        console.log('avg per node', avgPerNode);
-
         // 1 take unused, offer it only to poor
-        distributeUnused2(_unusedArr, _nodeList, _maxNode, _nodeShardsBitmap, _nodeModifiedSet, 0);
+        uint8[] memory _countersMap = buildCounters(_nodeList, _maxNode, _nodeShardsBitmap);
+        uint _assignedCounter = distributeUnused2(_unusedArr, _nodeList, _countersMap, _maxNode, _nodeShardsBitmap, _nodeModifiedSet, 0);
+        uint _avgPerNode;
+        uint _demand;
+        (_avgPerNode, _demand) = calculateAvgPerNode(_nodeList, _countersMap);
+        console.log('avgPerNode', _avgPerNode);
+        console.log('demand', _demand);
+
 //        distributeUnused(_unusedArr, _nodeList, _nodeShardsSet, _nodeModifiedSet, true, avgPerNode);
 //        return 0; // todo !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -572,7 +592,7 @@ contract StorageV1 is Ownable2StepUpgradeable {
                 cur--;
             }
         }
-        if(cur !=int(pos)) {
+        if (cur != int(pos)) {
 //            console.log('moved to new');
             console.log(uint(pos));
             console.log(uint(cur));
@@ -595,34 +615,41 @@ contract StorageV1 is Ownable2StepUpgradeable {
         uint8[] memory _nodeList,
         uint8 _maxNode,
         uint32[] memory _nodeShardsBitmap
-    ) private pure returns (uint8[] memory) {
-        uint8[] memory counters = new uint8[](_maxNode + 1);
+    ) private view returns (uint8[] memory) {
+        uint8[] memory _countersMap = new uint8[](_maxNode + 1);
         // init nodeArr
         for (uint i = 0; i < _nodeList.length; i++) {
             uint8 nodeId = _nodeList[i];
             uint32 shardmask = _nodeShardsBitmap[nodeId];
+            console.log(nodeId, 'has shardmask', shardmask);
             uint8 count = 0;
             for (uint8 shard = 0; shard < SHARD_COUNT; shard++) {
                 if (getBit(shardmask, shard) == 1) {
                     count++;
                 }
             }
-            counters[i] = count;
+            _countersMap[nodeId] = count;
         }
-        return counters;
+        console.log('buildCounters()');
+        for (uint i = 0; i < _nodeList.length; i++) {
+            console.log('#', i);
+            console.log(_nodeList[i], 'has shards size', _countersMap[_nodeList[i]]);
+        }
+
+        return _countersMap;
     }
 
     function distributeUnused2(uint8[] memory _unusedArr,
         uint8[] memory _nodeList,
+        uint8[] memory _countersMap,
         uint8 _maxNode,
         uint32[] memory _nodeShardsBitmap,
         uint8[] memory _nodeModifiedSet,
         uint8 _nodeThreshold
-    ) internal {
-        uint8[] memory _countersMap = buildCounters(_nodeList, _maxNode, _nodeShardsBitmap);
+    ) internal returns (uint){
         sortCounters(_nodeList, _countersMap);
         // _nodeList is sorted asc
-
+        uint _assignedCounter = 0;
         // with every unused shard
         for (uint i = 0; i < _unusedArr.length; i++) {
             uint8 shard = _unusedArr[i];
@@ -633,18 +660,19 @@ contract StorageV1 is Ownable2StepUpgradeable {
             // give it to someone (from poor to rich) and stop (and resort)
             for (uint8 j = 0; j < _nodeList.length; j++) {
                 uint8 nodeId = _nodeList[j];
-                if (_nodeThreshold >0 && _countersMap[nodeId] >= _nodeThreshold) {
+                if (_nodeThreshold > 0 && _countersMap[nodeId] >= _nodeThreshold) {
                     continue;
                 }
                 uint32 shardmask = _nodeShardsBitmap[nodeId];
                 uint8 nodeHasShard = getBit(shardmask, shard);
-                if (nodeHasShard==0) { // todo stopOnAvg ????????????????????????
+                if (nodeHasShard == 0) { // todo stopOnAvg ????????????????????????
                     _unusedArr[i] = NULL_SHARD;
 
                     _nodeShardsBitmap[nodeId] = setBit(shardmask, shard);
                     _countersMap[nodeId]++;
                     _nodeModifiedSet[nodeId]++;
                     resortCountersRow(_nodeList, _countersMap, j, true);
+                    _assignedCounter++;
                     console.log(shard, ': unused to node ->', nodeId);
                     console.log('counters', _countersMap[nodeId], 'bitmap', _nodeShardsBitmap[nodeId]);
                     console.log('nodeModified', _nodeModifiedSet[nodeId]);
@@ -652,5 +680,22 @@ contract StorageV1 is Ownable2StepUpgradeable {
                 }
             }
         }
+        console.log('distributeUnused2 counters');
+        for (uint i = 0; i < _nodeList.length; i++) {
+            console.log('#', i);
+            console.log(_nodeList[i], 'has shards size', _countersMap[_nodeList[i]]);
+        }
+
+        return _assignedCounter;
+    }
+
+    function calculateDemand(uint8[] memory _unusedArr,
+        uint8[] memory _nodeList,
+        uint8 _maxNode,
+        uint32[] memory _nodeShardsBitmap,
+        uint8[] memory _nodeModifiedSet,
+        uint8 _nodeThreshold
+    ) internal {
+
     }
 }

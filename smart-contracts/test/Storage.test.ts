@@ -197,21 +197,40 @@ describe("StorageTest", function () {
     let s = await State.readFromEvm();
     s.checkNodeCount(1);
     s.checkRf(1);
-  });
-
-
-
-  it('test2', async () => {
-    let t1 = await ct.addNodeAndStake(nodes[1]);
-    await expect(t1).to.emit(ct, "SNodeMappingChanged").withArgs([1]);
-    let s = await State.readFromEvm();
-    s.checkRf(1);
-    s.checkNodeCount(1);
     s.assertMapping(nodes[1],
       [0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
         10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
         20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
         30, 31]);
+  });
+
+
+
+  it('test2', async () => {
+    {
+      let t1 = await ct.addNodeAndStake(nodes[1]);
+      await expect(t1).to.emit(ct, "SNodeMappingChanged").withArgs([1]);
+      let s = await State.readFromEvm();
+      s.checkRf(1);
+      s.checkNodeCount(1);
+      s.assertMapping(nodes[1],
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+          10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+          20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
+          30, 31]);
+    }
+    {
+      let t1 = await ct.addNodeAndStake(nodes[2]);
+      await expect(t1).to.emit(ct, "SNodeMappingChanged").withArgs([2]);
+      let s = await State.readFromEvm();
+      s.checkRf(2);
+      s.checkNodeCount(2);
+      s.assertMapping(nodes[2],
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+          10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+          20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
+          30, 31]);
+    }
   });
 
   it('test_5to6', async () => {
