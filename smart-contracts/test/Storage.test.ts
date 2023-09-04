@@ -13,6 +13,11 @@ import {CollectionUtil} from "./uitlz/collectionUtil";
 import {NodeStatus} from "./ValidatorContractHelper";
 
 let debug = console.log;
+let ct: StorageContract & Contract;
+let nodes = [null];
+for (let i = 1; i <= 100; i++) {
+  nodes.push('0x' + i.toString().padStart(40, '0'));
+}
 
 
 class DeployInfo {
@@ -31,30 +36,12 @@ async function state1(): Promise<DeployInfo> {
   return {storageCt, owner};
 }
 
-let ct: StorageContract & Contract;
-
-/*assertCorrectReplicationFactor() {
-  let shardToCnt = new Map<number, number>;
-  for (const [nodeId, shards] of this.map) {
-    for (const sh of shards) {
-      let counter = shardToCnt.get(sh);
-      counter = counter == null ? 1 : ++counter;
-      shardToCnt.set(sh, counter);
-    }
-  }
-  if (this.nodeCount == 0) {
-    return;
-  }
-  for (let sh = 1; sh <= this.shardCount; sh++) {
-    if (shardToCnt.get(sh) != this.rf) {
-      throw new Error(`not enough shards for ${sh}`);
-    }
-  }
-}*/
 
 interface StorageContract {
 
   nodeAddrList(pos: number): Promise<string>;
+
+  mapNodeIdToAddr(nodeId:number): Promise<string>;
 
   nodeIdList(pos: number): Promise<number>;
 
@@ -66,7 +53,16 @@ interface StorageContract {
 
   addNodeAndStake(addr: string): Promise<ContractTransaction>;
 
+  removeNode(addr:string): Promise<ContractTransaction>;
+
   SHARD_COUNT(): Promise<number>;
+
+  // admin functions
+
+  overrideRf(number): Promise<ContractTransaction>;
+
+  shuffle(): Promise<ContractTransaction>;
+
 }
 
 // read everything from the contract state to ease the testing
@@ -82,14 +78,14 @@ class State {
     s.shardCount = await ct.SHARD_COUNT();
     let nodeCount = await ct.nodeCount();
     for (let i = 0; i < nodeCount; i++) {
-      let addr = await ct.nodeAddrList(i);
       let nodeId = await ct.nodeIdList(i);
+      let addr = await ct.mapNodeIdToAddr(nodeId);
       let shardsBitSet = await ct.getNodeShardsByAddr(addr);
       let shardsIntArr = BitUtil.bitsToPositions(shardsBitSet);
       let shardsIntSet = CollectionUtil.arrayToSet(shardsIntArr);
       s.map.set(addr, shardsIntSet);
       s.nodeList.add(addr);
-      console.log(addr, `node:${nodeId} bitset:${shardsBitSet} -> size:${shardsIntSet.size} `, CollectionUtil.setToArray(shardsIntSet));
+      console.log(`node:${nodeId} addr:${addr} bitset:${shardsBitSet} -> size:${shardsIntSet.size} `, CollectionUtil.setToArray(shardsIntSet));
     }
     return s;
   }
@@ -157,25 +153,7 @@ async function assertNodeListLength(e: number) {
 }
 
 
-/*
-
-
-*/
-
-
-async function assertMapping(addr: string, shardsAssigned: number[]) {
-  const nodeShardsByAddr = await ct.getNodeShardsByAddr(addr);
-  assert.deepEqual(BitUtil.bitsToPositions(nodeShardsByAddr), shardsAssigned);
-  console.log(`assert ${addr} has good mapping`);
-}
-
-let nodes = [null];
-for (let i = 1; i <= 100; i++) {
-  nodes.push('0x' + i.toString().padStart(40, '0'));
-}
-
-
-describe("StorageTest", function () {
+describe("StorageTestAutoRf", function () {
 
   beforeEach(async () => {
     const state = await loadFixture(state1);
@@ -185,7 +163,7 @@ describe("StorageTest", function () {
 
   it('test0', async () => {
     let s = await State.readFromEvm();
-    s.checkRf(1);
+    s.checkRf(0);
     assert.equal(await ct.nodeCount(), 0);
     assert.equal(await ct.SHARD_COUNT(), 32);
   })
@@ -193,7 +171,7 @@ describe("StorageTest", function () {
   it("test1", async function () {
     console.log(nodes[1]);
     let tx = await ct.addNodeAndStake(nodes[1]);
-    await expect(tx).to.emit(ct, "SNodeMappingChanged").withArgs([1]);
+    await expect(tx).to.emit(ct, "SNodeMappingChanged").withArgs([nodes[1]]);
     let s = await State.readFromEvm();
     s.checkNodeCount(1);
     s.checkRf(1);
@@ -205,11 +183,10 @@ describe("StorageTest", function () {
   });
 
 
-
   it('test2', async () => {
     {
       let t1 = await ct.addNodeAndStake(nodes[1]);
-      await expect(t1).to.emit(ct, "SNodeMappingChanged").withArgs([1]);
+      await expect(t1).to.emit(ct, "SNodeMappingChanged").withArgs([nodes[1]]);
       let s = await State.readFromEvm();
       s.checkRf(1);
       s.checkNodeCount(1);
@@ -221,7 +198,7 @@ describe("StorageTest", function () {
     }
     {
       let t1 = await ct.addNodeAndStake(nodes[2]);
-      await expect(t1).to.emit(ct, "SNodeMappingChanged").withArgs([2]);
+      await expect(t1).to.emit(ct, "SNodeMappingChanged").withArgs([nodes[2]]);
       let s = await State.readFromEvm();
       s.checkRf(2);
       s.checkNodeCount(2);
@@ -252,7 +229,7 @@ describe("StorageTest", function () {
 
   it('test_1to5_6to10', async () => {
     let s = await State.readFromEvm();
-    s.checkRf(1);
+    s.checkRf(0);
     s.checkNodeCount(0);
     s.checkDistribution();
 
@@ -264,7 +241,7 @@ describe("StorageTest", function () {
       const addr = nodes[nodeId];
       console.log('test adds ', addr);
       let t1 = await ct.addNodeAndStake(addr);
-      await expect(t1).to.emit(ct, "SNodeMappingChanged").withArgs([nodeId]);
+      await expect(t1).to.emit(ct, "SNodeMappingChanged").withArgs([addr]);
       nodeCount++;
       // check that replication count incremented
       // check that event affected only this one node
@@ -283,8 +260,9 @@ describe("StorageTest", function () {
     }
 
     // we have 5 nodes
-    await assertRf(5);
-    await assertNodeListLength(5);
+    let s1 = await State.readFromEvm();
+    s1.checkRf(5);
+    s1.checkNodeCount(5);
 
     // add 6 to 10
     for (let nodeId = 6; nodeId <= 10; nodeId++) {
@@ -302,4 +280,47 @@ describe("StorageTest", function () {
   });
 
 
+});
+
+
+describe("StorageTestNoAutoRf", function () {
+
+  beforeEach(async () => {
+    const state = await loadFixture(state1);
+    ct = <StorageContract & Contract>state.storageCt;
+    expect(ct.address).to.be.properAddress;
+  })
+
+  it('test_add2_remove2', async () => {
+    let nodeCount = 0;
+    for (let nodeId = 1; nodeId <= 2; nodeId++) {
+      const addr = nodes[nodeId];
+      console.log('test adds ', addr);
+      let t1 = await ct.addNodeAndStake(addr);
+      await expect(t1).to.emit(ct, "SNodeMappingChanged").withArgs([nodes[nodeId]]);
+      nodeCount++;
+      let s = await State.readFromEvm();
+      s.checkRf(nodeCount);
+      s.checkNodeCount(nodeCount);
+      s.checkDistribution();
+    }
+    {
+      let t1 = ct.removeNode(nodes[1]);
+      nodeCount--;
+      await expect(t1).to.emit(ct, "SNodeMappingChanged").withArgs([nodes[1]]); // raised by delete
+      let s = await State.readFromEvm();
+      s.checkRf(nodeCount);
+      s.checkNodeCount(nodeCount);
+      s.checkDistribution();
+    }
+    {
+      let t1 = ct.removeNode(nodes[2]);
+      nodeCount--;
+      await expect(t1).to.emit(ct, "SNodeMappingChanged").withArgs([nodes[2]]); // raised by delete
+      let s = await State.readFromEvm();
+      s.checkRf(nodeCount);
+      s.checkNodeCount(nodeCount);
+      s.checkDistribution();
+    }
+  })
 });
