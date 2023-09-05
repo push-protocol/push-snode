@@ -89,7 +89,10 @@ contract StorageV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     // ex: 0xAAAAAAAAA -> 1
     mapping(address => uint8) public mapAddrToNodeId;
 
+    // next free value of nodeId
     uint8 private unusedNodeId;
+    // other free values of nodeId (added after delete operation)
+    uint8[] private unusedNodeIdList;
 
     address public validatorContract;
 
@@ -166,31 +169,41 @@ contract StorageV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     }
 
     function addNode(address nodeAddress) public onlyV returns (uint8) {
-//        console.log('addNodeAndStake', nodeAddress);
+        console.log('addNode()', nodeAddress);
+        console.log('unusedNodeId', unusedNodeId);
+        for (uint i = 0; i < nodeIdList.length; i++) {
+            console.log(i, nodeIdList[i]);
+        }
         require(mapAddrToNodeId[nodeAddress] == 0, 'address is already registered');
         require(unusedNodeId > 0 && unusedNodeId < MAX_NODE_ID, 'nodeId > 0 && nodeId < max');
-        uint8 newNodeId = unusedNodeId++;
+        uint8 newNodeId;
+        uint unusedLenth = unusedNodeIdList.length;
+        if (unusedLenth > 0) {
+            newNodeId = unusedNodeIdList[unusedLenth - 1];
+            unusedNodeIdList.pop();
+        } else {
+            newNodeId = unusedNodeId++;
+        }
         nodeIdList.push(newNodeId);
         mapNodeIdToAddr[newNodeId] = nodeAddress;
         mapAddrToNodeId[nodeAddress] = newNodeId;
         mapNodeToShards[newNodeId] = 0; // for safety only
         // add more copies of the data if the network can handle it, unless we get enough
-        bool rfChanged_ = rfChangedByAdmin; // for admin
-        if (rfChanged_) {
-            rfChangedByAdmin = false;
-        }
-        if (rfTarget != 0 && rf < rfTarget && rf < nodeIdList.length) {
-            rf++;
-            rfChanged_ = true;
-            console.log('rf is now', rf);
-        }
+        bool rfChanged_ = adjustRf(1);
         _shuffle(rfChanged_, false, 0);
 //        console.log('addNodeAndStake finished');
         return unusedNodeId;
     }
 
     function removeNode(address nodeAddress) public onlyV {
+        console.log('removeNode()', nodeAddress);
+        console.log('unusedNodeId', unusedNodeId);
+        for (uint i = 0; i < nodeIdList.length; i++) {
+            console.log(i, nodeIdList[i]);
+        }
+
         uint8 nodeId = mapAddrToNodeId[nodeAddress];
+        unusedNodeIdList.push(nodeId);
         if (nodeId == NULL_NODE) {
             revert('no address found');
         }
@@ -202,6 +215,7 @@ contract StorageV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         // valid nodeId ;
 
         // cleanup shards
+        uint32 nodeShardMask = mapNodeToShards[nodeId];
         delete mapNodeToShards[nodeId];
 
         // cleanup ids
@@ -209,25 +223,21 @@ contract StorageV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         for (uint i = 0; i < nodeIdLen; i++) {
             if (nodeIdList[i] == nodeId) {
                 // shrink array
-                nodeIdList[i] = nodeIdList[nodeIdLen - 1];
+                if (i != nodeIdLen - 1) {
+                    nodeIdList[i] = nodeIdList[nodeIdLen - 1];
+                }
                 nodeIdList.pop();
                 break;
             }
         }
-        unusedNodeId--;
 
         // cleanup addresses
         delete mapNodeIdToAddr[nodeId];
-        bool rfChanged_ = false;
-        if (rfTarget != 0 && rf > nodeIdList.length) {
-            rf--;
-            rfChanged_ = true;
-//            console.log('rf is now', rf);
-        }
+        bool rfChanged_ = adjustRf(- 1);
         address[] memory _arr = new address[](1);
         _arr[0] = nodeAddress;
         emit SNodeMappingChanged(_arr);
-        _shuffle(rfChanged_, true, 0);
+        _shuffle(rfChanged_, true, nodeShardMask);
     }
 
     // ----------------------------- IMPL --------------------------------------------------
@@ -256,6 +266,24 @@ contract StorageV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         return self & ~(uint32(1) << index);
     }
 
+    function adjustRf(int adjust) private returns (bool){
+        console.log('adjustRf', uint(adjust > 0 ? 1 : 0xFF));
+        bool rfChanged_ = rfChangedByAdmin; // if admin changed rf = we need full recalculation
+        if (rfChanged_) {
+            rfChangedByAdmin = false; // clear flag
+        }
+        int rf_ = int(uint(rf));
+        int rfNew_ = rf_ + adjust;
+        console.log('rf', uint(rf_));
+        console.log('rfNew_', uint(rfNew_));
+        if (rfTarget != 0 && rfNew_ >= 0 && rfNew_ <= int(uint(rfTarget)) && rfNew_ <= int(nodeIdList.length)) {
+            rf = uint8(uint(rfNew_));
+            rfChanged_ = true;
+            console.log('rf is now', uint(rfNew_));
+        }
+        console.log('rfChanged_', rfChanged_);
+        return rfChanged_;
+    }
 
     function calculateAvgPerNode(uint8[] memory _nodeList, uint8[] memory _countersMap
     ) public view returns (uint avgPerNode, uint demand) {
@@ -395,9 +423,13 @@ contract StorageV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
             // only 1 node added to unused
             _unusedArr = new uint8[](SHARD_COUNT);
             for (uint8 shard = 0; shard < SHARD_COUNT; shard++) {
-                _unusedArr[shard] = getBit(removedNodeShardmask_, shard);
+                _unusedArr[shard] = getBit(removedNodeShardmask_, shard) == 1 ? shard : NULL_SHARD;
             }
+
             console.log('unused - 1 node');
+            console.log('unused after unpacking', removedNodeShardmask_);
+            for (uint8 i = 0; i < _unusedArr.length; i++) console.log('unused ', _unusedArr[i]);
+
             return _unusedArr;
         }
         console.log('unused - full recalculation');

@@ -342,50 +342,69 @@ describe("StorageTestNoAutoRf", function () {
   beforeEach(beforeEachInit)
 
   it('rf2_test_add2_remove2', async () => {
-    await ctAsOwner.overrideRf(2); // now replication factor never changes
     let nodeCount = 0;
-    for (let nodeId = 1; nodeId <= 2; nodeId++) {
+    {
+      let nodeId = 1;
       const addr = nodes[nodeId];
       console.log('test adds ', addr);
       let t1 = await ct.addNode(addr);
-      await expect(t1).to.emit(ct, "SNodeMappingChanged").withArgs([nodes[nodeId]]);
       nodeCount++;
+      await expect(t1).to.emit(ct, "SNodeMappingChanged").withArgs([addr]);
+      await ctAsOwner.overrideRf(1); // manually set RF
       let s = await State.readFromEvm();
-      s.checkRf(nodeCount);
-      s.checkNodeCount(nodeCount);
+      s.checkRf(1);
+      s.checkNodeCount(1);
       s.checkDistribution();
     }
+    {
+      let nodeId = 2;
+      const addr = nodes[nodeId];
+      console.log('test adds ', addr);
+      let t1 = await ct.addNode(addr); // rf is 1
+      nodeCount++;
+      await expect(t1).to.emit(ct, "SNodeMappingChanged").withArgs([nodes[1], nodes[2]]);
+      await ctAsOwner.overrideRf(2); // manually set RF
+      await ctAsOwner.shuffle();
+      // await t.confirmTransaction(t1);
+      let s = await State.readFromEvm();
+      s.checkRf(2);
+      s.checkNodeCount(2);
+      s.checkDistribution();
+    }
+
     {
       let t1 = ct.removeNode(nodes[1]);
       nodeCount--;
       await expect(t1).to.emit(ct, "SNodeMappingChanged").withArgs([nodes[1]]); // raised by delete
       let s = await State.readFromEvm();
-      s.checkRf(nodeCount);
+      s.checkRf(2); // RF doesn't decrement since it's manual
       s.checkNodeCount(nodeCount);
-      s.checkDistribution();
+      s.checkDistribution(1);
     }
     {
       let t1 = ct.removeNode(nodes[2]);
       nodeCount--;
       await expect(t1).to.emit(ct, "SNodeMappingChanged").withArgs([nodes[2]]); // raised by delete
       let s = await State.readFromEvm();
-      s.checkRf(nodeCount);
+      s.checkRf(2); // RF doesn't decrement since it's manual
       s.checkNodeCount(nodeCount);
-      s.checkDistribution();
+      s.checkDistribution(0);
     }
   });
 
 
   it('rf2_test20nodes_2join_1leave', async () => {
-    await ctAsOwner.overrideRf(2); // now replication factor never changes
     let nodeCount = 0;
     for (let nodeId = 1; nodeId <= 3; nodeId++) {
       const addr = nodes[nodeId];
       let t1 = await ct.addNode(addr);
+      if (nodeId == 2) {
+        await ctAsOwner.overrideRf(2); // manually set RF
+        await ctAsOwner.shuffle();
+      }
       nodeCount++;
       await t.confirmTransaction(t1);
       let s = await State.readFromEvm();
-      s.checkRf(2);
       s.checkNodeCount(nodeCount);
       if (nodeId >= 2) {
         s.checkDistribution();
@@ -394,8 +413,9 @@ describe("StorageTestNoAutoRf", function () {
     let s = await State.readFromEvm();
     s.checkRf(2);
     s.checkNodeCount(nodeCount);
-    s.checkDistribution();
+    s.checkDistribution(2);
     for (let nodeId = 4; nodeId <= 20; nodeId++) {
+      console.log('-'.repeat(20), 'adding', nodeId);
       if (nodeId % 3 === 0) {
         {
           const addr = nodes[nodeId];
@@ -419,7 +439,7 @@ describe("StorageTestNoAutoRf", function () {
       let s = await State.readFromEvm();
       s.checkRf(2);
       s.checkNodeCount(nodeCount);
-      s.checkDistribution();
+      s.checkDistribution(2);
     }
   })
 });
@@ -434,7 +454,7 @@ describe('StorageTestBig', function () {
   async function addNode(nodeId: number) {
     {
       const addr = nodes[nodeId];
-      assert.isTrue(addr!=null);
+      assert.isTrue(addr != null);
       let t1 = await ct.addNode(addr);
       nodeCount++;
       await t.confirmTransaction(t1);
@@ -443,7 +463,7 @@ describe('StorageTestBig', function () {
 
   async function removeNode(nodeId: number) {
     const addr = nodes[nodeId];
-    assert.isTrue(addr!=null);
+    assert.isTrue(addr != null);
     let t1 = await ct.removeNode(addr);
     nodeCount--;
     await t.confirmTransaction(t1);
@@ -463,8 +483,8 @@ describe('StorageTestBig', function () {
     }
   }).timeout(600000);
 
-  it('test_rfManual_n1to100', async () => {
-    for (let nodeCount = 1; nodeCount <= 10; nodeCount++) {
+  it('test_rfManual_n1to50', async () => {
+    for (let nodeCount = 1; nodeCount <= 50; nodeCount++) {
       await addNode(nodeCount);
       if (nodeCount == 5) {
         await setRfAndShuffle(5); // stop auto rf grow on 5
@@ -476,7 +496,7 @@ describe('StorageTestBig', function () {
   }).timeout(600000);
 
   it('test_rfAll_nAll', async () => {
-    await ctAsOwner.overrideRf(2); // now replication factor never changes
+    // await ctAsOwner.overrideRf(2); // now replication factor never changes
 
     const NODES_TO_TRY = 40;
     const RF_TO_TRY = 10;
@@ -487,7 +507,7 @@ describe('StorageTestBig', function () {
       // nodes = 1..40 , rf = 1..10 10..1
       for (let nodeCount = 1; nodeCount <= NODES_TO_TRY; nodeCount++) {
         await addNode(nodeCount);
-        for (let rf = 1; rf <= nodeCount; rf++) {
+        for (let rf = 1; rf <= RF_TO_TRY; rf++) {
           console.log('%s testing shardcount: %d nodecount: %d rf: %d', '-'.repeat(30), shardCount, nodeCount, rf);
           if (nodeCount >= rf) {
             await setRfAndShuffle(rf);
@@ -504,7 +524,7 @@ describe('StorageTestBig', function () {
       // nodes = 40..1 , rf = 1..10 10..1
       for (let nodeCount = NODES_TO_TRY; nodeCount >= 1; nodeCount--) {
         await removeNode(nodeCount);
-        for (let rf = 1; rf <= nodeCount; rf++) {
+        for (let rf = 1; rf <= RF_TO_TRY; rf++) {
           console.log('%s testing shardcount: %d nodecount: %d rf: %d', '-'.repeat(30), shardCount, nodeCount, rf);
           if (nodeCount >= rf) {
             await ctAsOwner.overrideRf(rf);
