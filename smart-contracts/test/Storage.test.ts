@@ -507,13 +507,13 @@ describe('StorageTestBig', function () {
       // nodes = 1..40 , rf = 1..10 10..1
       for (let nodeCount = 1; nodeCount <= NODES_TO_TRY; nodeCount++) {
         await addNode(nodeCount);
-        for (let rf = 1; rf <= RF_TO_TRY; rf++) {
+        for (let rf = 1; rf <= Math.min(nodeCount, RF_TO_TRY); rf++) {
           console.log('%s testing shardcount: %d nodecount: %d rf: %d', '-'.repeat(30), shardCount, nodeCount, rf);
           if (nodeCount >= rf) {
             await setRfAndShuffle(rf);
           }
         }
-        for (let rf = RF_TO_TRY; rf >= 1; rf--) {
+        for (let rf = Math.min(nodeCount, RF_TO_TRY); rf >= 1; rf--) {
           console.log('%s testing shardcount: %d nodecount: %d rf: %d', '-'.repeat(30), shardCount, nodeCount, rf);
           if (nodeCount >= rf) {
             await ctAsOwner.overrideRf(rf);
@@ -524,13 +524,13 @@ describe('StorageTestBig', function () {
       // nodes = 40..1 , rf = 1..10 10..1
       for (let nodeCount = NODES_TO_TRY; nodeCount >= 1; nodeCount--) {
         await removeNode(nodeCount);
-        for (let rf = 1; rf <= RF_TO_TRY; rf++) {
+        for (let rf = 1; rf <= Math.min(nodeCount, RF_TO_TRY); rf++) {
           console.log('%s testing shardcount: %d nodecount: %d rf: %d', '-'.repeat(30), shardCount, nodeCount, rf);
           if (nodeCount >= rf) {
             await ctAsOwner.overrideRf(rf);
           }
         }
-        for (let rf = RF_TO_TRY; rf >= 1; rf--) {
+        for (let rf = Math.min(nodeCount, RF_TO_TRY); rf >= 1; rf--) {
           console.log('%s testing shardcount: %d nodecount: %d rf: %d', '-'.repeat(30), shardCount, nodeCount, rf);
           if (nodeCount >= rf) {
             await ctAsOwner.overrideRf(rf);
