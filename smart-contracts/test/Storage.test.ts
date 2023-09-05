@@ -36,7 +36,7 @@ interface StorageContract {
 
   nodeCount(): Promise<number>;
 
-  addNodeAndStake(addr: string): Promise<ContractTransaction>;
+  addNode(addr: string): Promise<ContractTransaction>;
 
   removeNode(addr: string): Promise<ContractTransaction>;
 
@@ -64,7 +64,7 @@ async function state1(): Promise<DeployInfo> {
 
   let protocolVersion = 1;
   let validatorContract = '0x' + '0'.repeat(40);
-  let rfTarget = 0;
+  let rfTarget = 5;
   const factory = await ethers.getContractFactory("StorageV1");
   const proxyCt: TypedStorageContract = <TypedStorageContract>await upgrades.deployProxy(factory,
     [protocolVersion, validatorContract, rfTarget],
@@ -135,6 +135,7 @@ class State {
   }
 
   assertCorrectReplicationFactor(expectedRf: number = -1) {
+    console.log('assert rf', expectedRf);
     let shardToCnt = new Map<number, number>;
     for (const [nodeId, shards] of this.map) {
       for (const sh of shards) {
@@ -191,7 +192,7 @@ describe("StorageTestAutoRf", function () {
 
   it("test1", async function () {
     console.log(nodes[1]);
-    let tx = await ct.addNodeAndStake(nodes[1]);
+    let tx = await ct.addNode(nodes[1]);
     await expect(tx).to.emit(ct, "SNodeMappingChanged").withArgs([nodes[1]]);
     let s = await State.readFromEvm();
     s.checkNodeCount(1);
@@ -206,7 +207,7 @@ describe("StorageTestAutoRf", function () {
 
   it('test2', async () => {
     {
-      let t1 = await ct.addNodeAndStake(nodes[1]);
+      let t1 = await ct.addNode(nodes[1]);
       await expect(t1).to.emit(ct, "SNodeMappingChanged").withArgs([nodes[1]]);
       let s = await State.readFromEvm();
       s.checkRf(1);
@@ -218,7 +219,7 @@ describe("StorageTestAutoRf", function () {
           30, 31]);
     }
     {
-      let t1 = await ct.addNodeAndStake(nodes[2]);
+      let t1 = await ct.addNode(nodes[2]);
       await expect(t1).to.emit(ct, "SNodeMappingChanged").withArgs([nodes[2]]);
       let s = await State.readFromEvm();
       s.checkRf(2);
@@ -237,7 +238,7 @@ describe("StorageTestAutoRf", function () {
       if (nodeId === 6) {
         console.log('\n'.repeat(5) + '='.repeat(15))
       }
-      let tx = await ct.addNodeAndStake(nodes[nodeId]);
+      let tx = await ct.addNode(nodes[nodeId]);
       await t.confirmTransaction(tx);
       nodeCount++;
     }
@@ -261,7 +262,7 @@ describe("StorageTestAutoRf", function () {
       // add 1 node
       const addr = nodes[nodeId];
       console.log('test adds ', addr);
-      let t1 = await ct.addNodeAndStake(addr);
+      let t1 = await ct.addNode(addr);
       await expect(t1).to.emit(ct, "SNodeMappingChanged").withArgs([addr]);
       nodeCount++;
       // check that replication count incremented
@@ -288,7 +289,7 @@ describe("StorageTestAutoRf", function () {
     // add 6 to 10
     for (let nodeId = 6; nodeId <= 10; nodeId++) {
       {
-        let t1 = await ct.addNodeAndStake(nodes[nodeId]);
+        let t1 = await ct.addNode(nodes[nodeId]);
         await t.confirmTransaction(t1);
         nodeCount++;
         let s = await State.readFromEvm();
@@ -305,7 +306,7 @@ describe("StorageTestAutoRf", function () {
     for (let nodeId = 1; nodeId <= 2; nodeId++) {
       const addr = nodes[nodeId];
       console.log('test adds ', addr);
-      let t1 = await ct.addNodeAndStake(addr);
+      let t1 = await ct.addNode(addr);
       await expect(t1).to.emit(ct, "SNodeMappingChanged").withArgs([nodes[nodeId]]);
       nodeCount++;
       let s = await State.readFromEvm();
@@ -346,7 +347,7 @@ describe("StorageTestNoAutoRf", function () {
     for (let nodeId = 1; nodeId <= 2; nodeId++) {
       const addr = nodes[nodeId];
       console.log('test adds ', addr);
-      let t1 = await ct.addNodeAndStake(addr);
+      let t1 = await ct.addNode(addr);
       await expect(t1).to.emit(ct, "SNodeMappingChanged").withArgs([nodes[nodeId]]);
       nodeCount++;
       let s = await State.readFromEvm();
@@ -380,7 +381,7 @@ describe("StorageTestNoAutoRf", function () {
     let nodeCount = 0;
     for (let nodeId = 1; nodeId <= 3; nodeId++) {
       const addr = nodes[nodeId];
-      let t1 = await ct.addNodeAndStake(addr);
+      let t1 = await ct.addNode(addr);
       nodeCount++;
       await t.confirmTransaction(t1);
       let s = await State.readFromEvm();
@@ -398,7 +399,7 @@ describe("StorageTestNoAutoRf", function () {
       if (nodeId % 3 === 0) {
         {
           const addr = nodes[nodeId];
-          let t1 = await ct.addNodeAndStake(addr);
+          let t1 = await ct.addNode(addr);
           nodeCount++;
           await t.confirmTransaction(t1);
         }
@@ -410,7 +411,7 @@ describe("StorageTestNoAutoRf", function () {
       } else {
         {
           const addr = nodes[nodeId];
-          let t1 = await ct.addNodeAndStake(addr);
+          let t1 = await ct.addNode(addr);
           nodeCount++;
           await t.confirmTransaction(t1);
         }
@@ -434,7 +435,7 @@ describe('StorageTestBig', function () {
     {
       const addr = nodes[nodeId];
       assert.isTrue(addr!=null);
-      let t1 = await ct.addNodeAndStake(addr);
+      let t1 = await ct.addNode(addr);
       nodeCount++;
       await t.confirmTransaction(t1);
     }
@@ -448,37 +449,51 @@ describe('StorageTestBig', function () {
     await t.confirmTransaction(t1);
   }
 
-  async function setRf(rf: number) {
+  async function setRfAndShuffle(rf: number) {
     await ctAsOwner.overrideRf(rf);
     await ctAsOwner.shuffle();
   }
 
-  it('test_rf8_n8', async () => {
-    await setRf(5);
-    for (let nodeCount = 1; nodeCount <= 200; nodeCount++) {
+  it('test_rfAuto_n1to50', async () => {
+    for (let nodeCount = 1; nodeCount <= 50; nodeCount++) {
       await addNode(nodeCount);
       let s = await State.readFromEvm();
       s.checkNodeCount(nodeCount);
       s.checkDistribution(Math.min(nodeCount, 5));
     }
-  });
+  }).timeout(600000);
 
-  it('test_all_kinds', async () => {
+  it('test_rfManual_n1to100', async () => {
+    for (let nodeCount = 1; nodeCount <= 10; nodeCount++) {
+      await addNode(nodeCount);
+      if (nodeCount == 5) {
+        await setRfAndShuffle(5); // stop auto rf grow on 5
+      }
+      let s = await State.readFromEvm();
+      s.checkNodeCount(nodeCount);
+      s.checkDistribution(Math.min(nodeCount, 5));
+    }
+  }).timeout(600000);
+
+  it('test_rfAll_nAll', async () => {
     await ctAsOwner.overrideRf(2); // now replication factor never changes
+
+    const NODES_TO_TRY = 40;
+    const RF_TO_TRY = 10;
 
     for (let shardCount of [32]) { // always 32 in the contract
       console.log('%s testing shardcount: %d', '-'.repeat(30), shardCount);
 
-      // nodes = 1..40 , rf = 1..40 40..1
-      for (let nodeCount = 1; nodeCount <= 40; nodeCount++) {
+      // nodes = 1..40 , rf = 1..10 10..1
+      for (let nodeCount = 1; nodeCount <= NODES_TO_TRY; nodeCount++) {
         await addNode(nodeCount);
         for (let rf = 1; rf <= nodeCount; rf++) {
           console.log('%s testing shardcount: %d nodecount: %d rf: %d', '-'.repeat(30), shardCount, nodeCount, rf);
           if (nodeCount >= rf) {
-            await setRf(rf);
+            await setRfAndShuffle(rf);
           }
         }
-        for (let rf = 40; rf >= 1; rf--) {
+        for (let rf = RF_TO_TRY; rf >= 1; rf--) {
           console.log('%s testing shardcount: %d nodecount: %d rf: %d', '-'.repeat(30), shardCount, nodeCount, rf);
           if (nodeCount >= rf) {
             await ctAsOwner.overrideRf(rf);
@@ -486,8 +501,8 @@ describe('StorageTestBig', function () {
         }
       }
 
-      // nodes = 40..1 , rf = 1..40 40..1
-      for (let nodeCount = 40; nodeCount >= 1; nodeCount--) {
+      // nodes = 40..1 , rf = 1..10 10..1
+      for (let nodeCount = NODES_TO_TRY; nodeCount >= 1; nodeCount--) {
         await removeNode(nodeCount);
         for (let rf = 1; rf <= nodeCount; rf++) {
           console.log('%s testing shardcount: %d nodecount: %d rf: %d', '-'.repeat(30), shardCount, nodeCount, rf);
@@ -495,7 +510,7 @@ describe('StorageTestBig', function () {
             await ctAsOwner.overrideRf(rf);
           }
         }
-        for (let rf = 40; rf >= 1; rf--) {
+        for (let rf = RF_TO_TRY; rf >= 1; rf--) {
           console.log('%s testing shardcount: %d nodecount: %d rf: %d', '-'.repeat(30), shardCount, nodeCount, rf);
           if (nodeCount >= rf) {
             await ctAsOwner.overrideRf(rf);
