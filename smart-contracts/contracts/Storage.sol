@@ -4,6 +4,7 @@ pragma solidity ^0.8.17;
 // todo remove
 import "hardhat/console.sol";
 import "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 /*
 
@@ -47,7 +48,7 @@ map after:  Map(3) {
 }
 
 */
-contract StorageV1 is Ownable2StepUpgradeable {
+contract StorageV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     // number of shards;
     // this value should not change after deploy
     // also this should match data type in mapNodeToShards (uint32/64/128/256)
@@ -63,9 +64,9 @@ contract StorageV1 is Ownable2StepUpgradeable {
     // replication factor - how many copies of the same shard should be served by the network
     // dynamic,
     // ex: 1....20
-    uint8 public rf = 0;
+    uint8 public rf;
     // if 5 nodes join, we will set rf to 5 and then it won't grow
-    uint8 public RF_TARGET = 5; // 0 to turn off
+    uint8 public rfTarget; // 0 to turn off
 
     // active nodeIds
     // nodeIds are 1-based
@@ -86,19 +87,48 @@ contract StorageV1 is Ownable2StepUpgradeable {
     // ex: 0xAAAAAAAAA -> 1
     mapping(address => uint8) public mapAddrToNodeId;
 
-    uint8 private unusedNodeId = 1;
+    uint8 private unusedNodeId;
+
+    address public validatorContract;
+
+    uint16 public protocolVersion;
 
     // ----------------------------- EVENTS --------------------------------------------------
 
     event SNodeMappingChanged(address[] nodeList);
 
+    // ----------------------------- UPGRADABLE --------------------------------------------------
+
+    // an empty constructor; constructor is replaced with initialize()
+    constructor() {
+    }
+
+    // called only once when a proxy gets deployed; for updates use reinitializer
+    function initialize(
+        uint16 protocolVersion_,
+        address validatorContract_,
+        uint8 rfTarget_
+    ) initializer public {
+        // init libraries
+        __UUPSUpgradeable_init();
+        __Ownable_init_unchained();
+
+        unusedNodeId = 1;
+        rf = 0;
+        protocolVersion = protocolVersion_;
+        rfTarget = rfTarget_;
+        validatorContract = validatorContract_;
+    }
+
+    function _authorizeUpgrade(address) internal override onlyOwner {}
+
     // ----------------------------- ADMIN FUNCTIONS --------------------------------------------------
 
     // allows to set replication factor manually; however this is limited by node count;
     function overrideRf(uint8 _rf) public onlyOwner {
-        require(_rf <= nodeIdList.length, 'rf is limited by node count');
+//        require(_rf <= nodeIdList.length, 'rf is limited by node count');
         rf = _rf;
-        RF_TARGET = 0;
+        rfTarget = 0;
     }
 
     // allows to set
@@ -112,8 +142,74 @@ contract StorageV1 is Ownable2StepUpgradeable {
         return _shuffle();
     }
 
-    // ----------------------------- IMPL --------------------------------------------------
+    // ----------------------------- VALIDATOR FUNCTIONS --------------------------------------------------
 
+    modifier onlyV() {
+        require(validatorContract == _msgSender() || owner() == _msgSender(),
+            "Ownable: caller is not the owner");
+        _;
+    }
+
+    // todo add staking (or merge with Validator code)
+    function addNodeAndStake(address nodeAddress) public onlyV returns (uint8) {
+//        console.log('addNodeAndStake', nodeAddress);
+        require(mapAddrToNodeId[nodeAddress] == 0, 'address is already registered');
+        require(unusedNodeId > 0 && unusedNodeId < MAX_NODE_ID, 'nodeId > 0 && nodeId < max');
+        uint8 newNodeId = unusedNodeId++;
+        nodeIdList.push(newNodeId);
+        mapNodeIdToAddr[newNodeId] = nodeAddress;
+        mapAddrToNodeId[nodeAddress] = newNodeId;
+        mapNodeToShards[newNodeId] = 0; // for safety only
+        // add more copies of the data if the network can handle it, unless we get enough
+        if (rfTarget != 0 && rf < rfTarget && rf < nodeIdList.length) {
+            rf++;
+//            console.log('rf is now', rf);
+        }
+        _shuffle();
+//        console.log('addNodeAndStake finished');
+        return unusedNodeId;
+    }
+
+    function removeNode(address nodeAddress) public onlyV {
+        uint8 nodeId = mapAddrToNodeId[nodeAddress];
+        if (nodeId == NULL_NODE) {
+            revert('no address found');
+        }
+        if (nodeIdList.length == 0) {
+            // mapping exists, but node has no short id
+            delete mapAddrToNodeId[nodeAddress];
+            revert('no node id found');
+        }
+        // valid nodeId ;
+
+        // cleanup shards
+        delete mapNodeToShards[nodeId];
+
+        // cleanup ids
+        uint nodeIdLen = nodeIdList.length;
+        for (uint i = 0; i < nodeIdLen; i++) {
+            if (nodeIdList[i] == nodeId) {
+                // shrink array
+                nodeIdList[i] = nodeIdList[nodeIdLen - 1];
+                nodeIdList.pop();
+                break;
+            }
+        }
+        unusedNodeId--;
+
+        // cleanup addresses
+        delete mapNodeIdToAddr[nodeId];
+        if (rfTarget != 0 && rf > nodeIdList.length) {
+            rf--;
+//            console.log('rf is now', rf);
+        }
+        address[] memory _arr = new address[](1);
+        _arr[0] = nodeAddress;
+        emit SNodeMappingChanged(_arr);
+        _shuffle();
+    }
+
+    // ----------------------------- IMPL --------------------------------------------------
 
     function getNodeShardsByAddr(address _nodeAddress) public view returns (uint32) {
         uint8 node = mapAddrToNodeId[_nodeAddress];
@@ -139,69 +235,12 @@ contract StorageV1 is Ownable2StepUpgradeable {
         return self & ~(uint32(1) << index);
     }
 
-    // todo add staking (or merge with Validator code)
-    function addNodeAndStake(address nodeAddress) public returns (uint8) {
-//        console.log('addNodeAndStake', nodeAddress);
-        require(mapAddrToNodeId[nodeAddress] == 0, 'address is already registered');
-        require(unusedNodeId > 0, 'nodeId > 0');
-        uint8 newNodeId = unusedNodeId++;
-        nodeIdList.push(newNodeId);
-        mapNodeIdToAddr[newNodeId] = nodeAddress;
-        mapAddrToNodeId[nodeAddress] = newNodeId;
-        mapNodeToShards[newNodeId] = 0; // for safety only
-        // add more copies of the data if the network can handle it, unless we get enough
-        if (RF_TARGET != 0 && rf < RF_TARGET && rf < nodeIdList.length) {
-            rf++;
-//            console.log('rf is now', rf);
-        }
-        _shuffle();
-//        console.log('addNodeAndStake finished');
-        return unusedNodeId++;
-    }
-
-    function removeNode(address nodeAddress) public {
-        uint8 nodeId = mapAddrToNodeId[nodeAddress];
-        if (nodeId == NULL_NODE) {
-            revert('no address found');
-        }
-        if (nodeIdList.length == 0) {
-            // mapping exists, but node has no short id
-            delete mapAddrToNodeId[nodeAddress];
-            revert('no node id found');
-        }
-        // valid nodeId ;
-
-        // cleanup shards
-        delete mapNodeToShards[nodeId];
-
-        // cleanup ids
-        uint nodeIdLen = nodeIdList.length;
-        for (uint i = 0; i < nodeIdLen; i++) {
-            if (nodeIdList[i] == nodeId) {
-                // shrink array
-                nodeIdList[i] = nodeIdList[nodeIdLen - 1];
-                nodeIdList.pop();
-                break;
-            }
-        }
-
-        // cleanup addresses
-        delete mapNodeIdToAddr[nodeId];
-        if (RF_TARGET != 0 && rf > nodeIdList.length) {
-            rf--;
-//            console.log('rf is now', rf);
-        }
-        address[] memory _arr = new address[](1);
-        _arr[0] = nodeAddress;
-        emit SNodeMappingChanged(_arr);
-        _shuffle();
-    }
 
     function calculateAvgPerNode(uint8[] memory _nodeList, uint8[] memory _countersMap
     ) public view returns (uint avgPerNode, uint demand) {
-        uint8 _nodeCount = uint8(_nodeList.length);
-        uint8 _total = SHARD_COUNT * rf;
-        uint8 _avgPerNode = _nodeCount == 0 ? 0 : _total / _nodeCount;
+        uint _nodeCount = uint8(_nodeList.length);
+        uint _total = uint(SHARD_COUNT) * rf;
+        uint _avgPerNode = _nodeCount == 0 ? 0 : _total / _nodeCount;
         // Math.ceil
         if (_total % _nodeCount > 0) {
             _avgPerNode = _avgPerNode + 1;
@@ -211,22 +250,22 @@ contract StorageV1 is Ownable2StepUpgradeable {
             uint8 nodeId = _nodeList[i];
             uint8 shardCount = _countersMap[nodeId];
             if (shardCount < _avgPerNode) {
-                console.log('checking demand for', nodeId, shardCount);
+//                console.log('checking demand for', nodeId, shardCount);
                 _demand += _avgPerNode - shardCount;
             }
         }
 
-        for (uint i = 0; i < _nodeList.length; i++) {
-            console.log('#', i);
-            console.log(_nodeList[i], 'has shards size', _countersMap[_nodeList[i]]);
-        }
+//        for (uint i = 0; i < _nodeList.length; i++) {
+//            console.log('#', i);
+//            console.log(_nodeList[i], 'has shards size', _countersMap[_nodeList[i]]);
+//        }
 
         return (_avgPerNode, _demand);
     }
 
     function _shuffle() private returns (uint8) {
         uint8[] memory _nodeList = nodeIdList;
-        uint8 _rf = rf;
+        uint _rf = rf;
         require(_rf >= 0 && _rf <= MAX_NODE_ID, "bad rf");
         require(_nodeList.length >= 0 && _nodeList.length < NULL_SHARD, "bad node count");
 
@@ -271,7 +310,7 @@ contract StorageV1 is Ownable2StepUpgradeable {
         // unusedArr = [5, -1, 0, 1];
         // results in: 5,0,1 are in a set, -1 = nothing here
         uint8[] memory _unusedArr = new uint8[](_rf * SHARD_COUNT);
-        uint16 cnt = 0;
+        uint cnt = 0;
         for (uint i = 0; i < _rf; i++) {
             for (uint8 shard = 0; shard < SHARD_COUNT; shard++) {
                 _unusedArr[cnt++] = shard;
@@ -279,8 +318,8 @@ contract StorageV1 is Ownable2StepUpgradeable {
         }
 
         // todo REMOVE
-        console.log('unused after applying rf');
-        for (uint8 i = 0; i < _unusedArr.length; i++) console.log('unused ', _unusedArr[i]);
+//        console.log('unused after applying rf');
+//        for (uint8 i = 0; i < _unusedArr.length; i++) console.log('unused ', _unusedArr[i]);
 
         // check unused, and no-longer assigned
         for (uint i = 0; i < _nodeList.length; i++) {
@@ -310,8 +349,8 @@ contract StorageV1 is Ownable2StepUpgradeable {
             }
         }
         // todo REMOVE
-        console.log('unused after removing existing mappings');
-        for (uint8 i = 0; i < _unusedArr.length; i++) console.log('unused2 ', _unusedArr[i]);
+//        console.log('unused after removing existing mappings');
+//        for (uint8 i = 0; i < _unusedArr.length; i++) console.log('unused2 ', _unusedArr[i]);
 //        for (uint8 i = 0; i < _nodeList.length; i++) {
 //            uint8 nodeId = _nodeList[i];
 //
@@ -325,14 +364,14 @@ contract StorageV1 is Ownable2StepUpgradeable {
 
         // cleanup unused from empty slots (-1); normally most of them would be empty;
         {
-            uint8 emptyCnt = 0;
+            uint emptyCnt = 0;
             for (uint j = 0; j < _unusedArr.length; j++) {
                 if (_unusedArr[j] == NULL_SHARD) {
                     emptyCnt++;
                 }
             }
             uint8[] memory _tmp = new uint8[](_unusedArr.length - emptyCnt);
-            uint8 dst = 0;
+            uint dst = 0;
             for (uint i = 0; i < _unusedArr.length; i++) {
                 if (_unusedArr[i] != NULL_SHARD) {
                     _tmp[dst] = _unusedArr[i];
@@ -354,15 +393,15 @@ contract StorageV1 is Ownable2StepUpgradeable {
             console.log('demand', _demand);
 
             // 2 take from rich and share, until the demand kpi is reached
-            console.log('moving started');
+//            console.log('moving started');
             while (_demand > 0) {
                 uint movedCount = distributeFromRightToLeft(_nodeList, _countersMap,
                     _nodeShardsBitmap, _nodeModifiedSet);
                 if (movedCount > 0) {
                     _demand -= movedCount;
-                    console.log('moved count/demand', movedCount, _demand);
+//                    console.log('moved count/demand', movedCount, _demand);
                 } else {
-                    console.log('moving finished');
+//                    console.log('moving finished');
                     break;
                 }
             }
@@ -390,7 +429,7 @@ contract StorageV1 is Ownable2StepUpgradeable {
                     console.log('shuffle() node modified', nodeId);
                 }
             }
-            console.log('emitting ', _modifiedAddrArr.length);
+            console.log('emitting X events:', _modifiedAddrArr.length);
             emit SNodeMappingChanged(_modifiedAddrArr);
         }
         return _modifiedNodes;
@@ -421,22 +460,22 @@ contract StorageV1 is Ownable2StepUpgradeable {
             return;
         }
         // todo remove
-        for (uint nodeId = 0; nodeId < _nodesList.length; nodeId++) {
-            require(nodeId < _countersMap.length);
-        }
+//        for (uint nodeId = 0; nodeId < _nodesList.length; nodeId++) {
+//            require(nodeId < _countersMap.length);
+//        }
 
         sortCounters(_nodesList, _countersMap, 0, int(_nodesList.length - 1));
 
         // todo remove
-        for (uint i = 0; i < _nodesList.length; i++) {
-            console.log(_nodesList[i], 'has shards size:', _countersMap[_nodesList[i]]);
-        }
-        for (uint i = 1; i < _nodesList.length; i++) {
-            if (!(_countersMap[_nodesList[i]] >= _countersMap[_nodesList[i - 1]])) {
-                revert('sort failed');
-            }
-
-        }
+//        for (uint i = 0; i < _nodesList.length; i++) {
+//            console.log(_nodesList[i], 'has shards size:', _countersMap[_nodesList[i]]);
+//        }
+//        for (uint i = 1; i < _nodesList.length; i++) {
+//            if (!(_countersMap[_nodesList[i]] >= _countersMap[_nodesList[i - 1]])) {
+//                revert('sort failed');
+//            }
+//
+//        }
     }
 
     // todo remove
@@ -455,39 +494,39 @@ contract StorageV1 is Ownable2StepUpgradeable {
 
     function resortCountersRow(uint8[] memory _nodeList, uint8[] memory _countersMap, uint pos, bool increment) private {
         // todo remove
-        console.log('resortCountersRow() total nodes:', _nodeList.length, ' pos:', pos);
-        console.log('before sort');
-        for (uint i = 0; i < _nodeList.length; i++) {
-            console.log('#', i);
-            console.log(_nodeList[i], 'has shards size', _countersMap[_nodeList[i]]);
-        }
+//        console.log('resortCountersRow() total nodes:', _nodeList.length, ' pos:', pos);
+//        console.log('before sort');
+//        for (uint i = 0; i < _nodeList.length; i++) {
+//            console.log('#', i);
+//            console.log(_nodeList[i], 'has shards size', _countersMap[_nodeList[i]]);
+//        }
 
         int cur = int(pos);
         if (increment) {
-            while (cur + 1 >= 0 && cur + 1 <= int(_nodeList.length - 1)
+            while ((cur + 1) >= 0 && (cur + 1) <= int(_nodeList.length - 1)
                 && _countersMap[_nodeList[pos]] > _countersMap[_nodeList[uint(cur + 1)]]) {
                 cur++;
             }
         } else {
-            while (cur - 1 >= 0 && cur - 1 <= int(_nodeList.length - 1)
+            while ((cur - 1) >= 0 && (cur - 1) <= int(_nodeList.length - 1)
                 && _countersMap[_nodeList[pos]] < _countersMap[_nodeList[uint(cur - 1)]]) {
                 cur--;
             }
         }
         if (cur != int(pos)) {
-            console.log('moved to new');
-            console.log(uint(pos));
-            console.log(uint(cur));
+//            console.log('moved to new');
+//            console.log(uint(pos));
+//            console.log(uint(cur));
             uint8 tmp = _nodeList[uint(cur)];
             _nodeList[uint(cur)] = _nodeList[pos];
             _nodeList[pos] = tmp;
         }
         // todo remove
-        console.log('after sort');
-        for (uint i = 0; i < _nodeList.length; i++) {
-            console.log('#', i);
-            console.log(_nodeList[i], 'has shards size', _countersMap[_nodeList[i]]);
-        }
+//        console.log('after sort');
+//        for (uint i = 0; i < _nodeList.length; i++) {
+//            console.log('#', i);
+//            console.log(_nodeList[i], 'has shards size', _countersMap[_nodeList[i]]);
+//        }
 //        for (uint i = 1; i < _nodesList.length; i++) {
 //            require(_countersMap[_nodesList[i]] >= _countersMap[_nodesList[i - 1]], 'sort failed (2)');
 //        }
@@ -503,7 +542,7 @@ contract StorageV1 is Ownable2StepUpgradeable {
         for (uint i = 0; i < _nodeList.length; i++) {
             uint8 nodeId = _nodeList[i];
             uint32 shardmask = _nodeShardsBitmap[nodeId];
-            console.log(nodeId, 'has shardmask', shardmask);
+//            console.log(nodeId, 'has shardmask', shardmask);
             uint8 count = 0;
             for (uint8 shard = 0; shard < SHARD_COUNT; shard++) {
                 if (getBit(shardmask, shard) == 1) {
@@ -512,11 +551,11 @@ contract StorageV1 is Ownable2StepUpgradeable {
             }
             _countersMap[nodeId] = count;
         }
-        console.log('buildCounters()');
-        for (uint i = 0; i < _nodeList.length; i++) {
-            console.log('#', i);
-            console.log(_nodeList[i], 'has shards size', _countersMap[_nodeList[i]]);
-        }
+//        console.log('buildCounters()');
+//        for (uint i = 0; i < _nodeList.length; i++) {
+//            console.log('#', i);
+//            console.log(_nodeList[i], 'has shards size', _countersMap[_nodeList[i]]);
+//        }
 
         return _countersMap;
     }
@@ -554,18 +593,18 @@ contract StorageV1 is Ownable2StepUpgradeable {
                     _nodeModifiedSet[nodeId]++;
                     resortCountersRow(_nodeList, _countersMap, j, true);
                     _assignedCounter++;
-                    console.log(shard, ': unused to node ->', nodeId);
-                    console.log('counters', _countersMap[nodeId], 'bitmap', _nodeShardsBitmap[nodeId]);
-                    console.log('nodeModified', _nodeModifiedSet[nodeId]);
+//                    console.log(shard, ': unused to node ->', nodeId);
+//                    console.log('counters', _countersMap[nodeId], 'bitmap', _nodeShardsBitmap[nodeId]);
+//                    console.log('nodeModified', _nodeModifiedSet[nodeId]);
                     break;
                 }
             }
         }
-        console.log('distributeUnused2 counters');
-        for (uint i = 0; i < _nodeList.length; i++) {
-            console.log('#', i);
-            console.log(_nodeList[i], 'has shards size', _countersMap[_nodeList[i]]);
-        }
+//        console.log('distributeUnused2 counters');
+//        for (uint i = 0; i < _nodeList.length; i++) {
+//            console.log('#', i);
+//            console.log(_nodeList[i], 'has shards size', _countersMap[_nodeList[i]]);
+//        }
 
         return _assignedCounter;
     }
@@ -603,8 +642,8 @@ contract StorageV1 is Ownable2StepUpgradeable {
             uint8 rightNode = _nodeList[j];
             uint32 transfer = (_nodeShardsBitmap[leftNode] ^ _nodeShardsBitmap[rightNode])
                 & (~_nodeShardsBitmap[leftNode]);
-            console.log('>>>>> starting moving from/to', rightNode, leftNode);
-            console.log('***** shardBitmaps from/to/transfer', transfer, _nodeShardsBitmap[rightNode], _nodeShardsBitmap[leftNode]);
+//            console.log('>>>>> starting moving from/to', rightNode, leftNode);
+//            console.log('***** shardBitmaps from/to/transfer', transfer, _nodeShardsBitmap[rightNode], _nodeShardsBitmap[leftNode]);
             if (transfer != 0) {
                 // give
                 uint8 shard = bitMaskToRandomShard(transfer, tmp);
@@ -620,10 +659,10 @@ contract StorageV1 is Ownable2StepUpgradeable {
                 resortCountersRow(_nodeList, _countersMap, j, false);
 
                 // todo remove
-                assertSorting(_nodeList, _countersMap);
+//                assertSorting(_nodeList, _countersMap);
 
-                console.log(rightNode, '->', leftNode);
-                console.log('<<<<< done moving shard ', shard);
+//                console.log(rightNode, '->', leftNode);
+//                console.log('<<<<< done moving shard ', shard);
                 return 1;
             }
             i++;

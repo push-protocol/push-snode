@@ -14,26 +14,11 @@ import {NodeStatus} from "./ValidatorContractHelper";
 
 let debug = console.log;
 let ct: StorageContract & Contract;
+let ctAsOwner: StorageContract & Contract;
+
 let nodes = [null];
-for (let i = 1; i <= 100; i++) {
+for (let i = 1; i <= 254; i++) {
   nodes.push('0x' + i.toString().padStart(40, '0'));
-}
-
-
-class DeployInfo {
-  storageCt: Contract;
-  owner: SignerWithAddress;
-}
-
-async function state1(): Promise<DeployInfo> {
-  debug('building snapshot');
-  // Contracts are deployed using the first signer/account by default
-  const [owner, otherAccount, thirdAccount] = await ethers.getSigners();
-
-  const storageCtFactory = await ethers.getContractFactory("StorageV1");
-  const storageCt = await storageCtFactory.deploy();
-
-  return {storageCt, owner};
 }
 
 
@@ -41,7 +26,7 @@ interface StorageContract {
 
   nodeAddrList(pos: number): Promise<string>;
 
-  mapNodeIdToAddr(nodeId:number): Promise<string>;
+  mapNodeIdToAddr(nodeId: number): Promise<string>;
 
   nodeIdList(pos: number): Promise<number>;
 
@@ -53,7 +38,7 @@ interface StorageContract {
 
   addNodeAndStake(addr: string): Promise<ContractTransaction>;
 
-  removeNode(addr:string): Promise<ContractTransaction>;
+  removeNode(addr: string): Promise<ContractTransaction>;
 
   SHARD_COUNT(): Promise<number>;
 
@@ -64,6 +49,36 @@ interface StorageContract {
   shuffle(): Promise<ContractTransaction>;
 
 }
+
+type TypedStorageContract = StorageContract & Contract;
+
+class DeployInfo {
+  storageCt: TypedStorageContract;
+  owner: SignerWithAddress;
+}
+
+async function state1(): Promise<DeployInfo> {
+  debug('building snapshot');
+  // Contracts are deployed using the first signer/account by default
+  const [owner, otherAccount, thirdAccount] = await ethers.getSigners();
+
+  let protocolVersion = 1;
+  let validatorContract = '0x' + '0'.repeat(40);
+  let rfTarget = 0;
+  const factory = await ethers.getContractFactory("StorageV1");
+  const proxyCt: TypedStorageContract = <TypedStorageContract>await upgrades.deployProxy(factory,
+    [protocolVersion, validatorContract, rfTarget],
+    {kind: "uups"});
+  await proxyCt.deployed();
+  debug(`deployed proxy: ${proxyCt.address}`);
+  let implCt = await upgrades.erc1967.getImplementationAddress(proxyCt.address);
+  debug(`deployed impl: ${implCt}`);
+
+  // const storageCtFactory = await ethers.getContractFactory("StorageV1");
+  // const storageCt = await storageCtFactory.deploy();
+  return {storageCt: proxyCt, owner};
+}
+
 
 // read everything from the contract state to ease the testing
 class State {
@@ -85,7 +100,8 @@ class State {
       let shardsIntSet = CollectionUtil.arrayToSet(shardsIntArr);
       s.map.set(addr, shardsIntSet);
       s.nodeList.add(addr);
-      console.log(`node:${nodeId} addr:${addr} bitset:${shardsBitSet} -> size:${shardsIntSet.size} `, CollectionUtil.setToArray(shardsIntSet));
+      const nodeIdFixed = (nodeId + '').padStart(3, ' ');
+      console.log(`node`, nodeIdFixed, addr, CollectionUtil.setToArray(shardsIntSet));
     }
     return s;
   }
@@ -105,7 +121,7 @@ class State {
     console.log(`assert ${addr} has good mapping`);
   }
 
-  checkDistribution() {
+  checkDistribution(expectedRf: number = -1) {
     let minSize = 100000000000;
     let maxSize = 0;
     for (const [node, shards] of this.map) {
@@ -115,10 +131,10 @@ class State {
     const delta = maxSize - minSize;
     console.log('assert maxdistance', delta)
     assert.isTrue(delta <= 1, `maxdistance > 1`);
-    this.assertCorrectReplicationFactor();
+    this.assertCorrectReplicationFactor(expectedRf);
   }
 
-  assertCorrectReplicationFactor() {
+  assertCorrectReplicationFactor(expectedRf: number = -1) {
     let shardToCnt = new Map<number, number>;
     for (const [nodeId, shards] of this.map) {
       for (const sh of shards) {
@@ -130,9 +146,12 @@ class State {
     if (this.nodeList.size == 0) {
       return;
     }
+    if (expectedRf == -1) {
+      expectedRf = this.rf;
+    }
     for (let sh = 0; sh < this.shardCount; sh++) {
       const actualCnt = shardToCnt.get(sh);
-      if (actualCnt != this.rf) {
+      if (actualCnt != expectedRf) {
         throw new Error(`incorrect number of shards for shard: ${sh} , `
           + `got ${actualCnt} expected ${this.rf}`);
       }
@@ -152,14 +171,16 @@ async function assertNodeListLength(e: number) {
   assert.equal(nodeListLength, e);
 }
 
+async function beforeEachInit() {
+  const state = await loadFixture(state1);
+  ct = <StorageContract & Contract>state.storageCt;
+  ctAsOwner = <StorageContract & Contract>ct.connect(state.owner);
+  expect(ct.address).to.be.properAddress;
+}
 
 describe("StorageTestAutoRf", function () {
 
-  beforeEach(async () => {
-    const state = await loadFixture(state1);
-    ct = <StorageContract & Contract>state.storageCt;
-    expect(ct.address).to.be.properAddress;
-  })
+  beforeEach(beforeEachInit)
 
   it('test0', async () => {
     let s = await State.readFromEvm();
@@ -279,18 +300,6 @@ describe("StorageTestAutoRf", function () {
     // END TEST
   });
 
-
-});
-
-
-describe("StorageTestNoAutoRf", function () {
-
-  beforeEach(async () => {
-    const state = await loadFixture(state1);
-    ct = <StorageContract & Contract>state.storageCt;
-    expect(ct.address).to.be.properAddress;
-  })
-
   it('test_add2_remove2', async () => {
     let nodeCount = 0;
     for (let nodeId = 1; nodeId <= 2; nodeId++) {
@@ -323,4 +332,176 @@ describe("StorageTestNoAutoRf", function () {
       s.checkDistribution();
     }
   })
+
+});
+
+
+describe("StorageTestNoAutoRf", function () {
+
+  beforeEach(beforeEachInit)
+
+  it('rf2_test_add2_remove2', async () => {
+    await ctAsOwner.overrideRf(2); // now replication factor never changes
+    let nodeCount = 0;
+    for (let nodeId = 1; nodeId <= 2; nodeId++) {
+      const addr = nodes[nodeId];
+      console.log('test adds ', addr);
+      let t1 = await ct.addNodeAndStake(addr);
+      await expect(t1).to.emit(ct, "SNodeMappingChanged").withArgs([nodes[nodeId]]);
+      nodeCount++;
+      let s = await State.readFromEvm();
+      s.checkRf(nodeCount);
+      s.checkNodeCount(nodeCount);
+      s.checkDistribution();
+    }
+    {
+      let t1 = ct.removeNode(nodes[1]);
+      nodeCount--;
+      await expect(t1).to.emit(ct, "SNodeMappingChanged").withArgs([nodes[1]]); // raised by delete
+      let s = await State.readFromEvm();
+      s.checkRf(nodeCount);
+      s.checkNodeCount(nodeCount);
+      s.checkDistribution();
+    }
+    {
+      let t1 = ct.removeNode(nodes[2]);
+      nodeCount--;
+      await expect(t1).to.emit(ct, "SNodeMappingChanged").withArgs([nodes[2]]); // raised by delete
+      let s = await State.readFromEvm();
+      s.checkRf(nodeCount);
+      s.checkNodeCount(nodeCount);
+      s.checkDistribution();
+    }
+  });
+
+
+  it('rf2_test20nodes_2join_1leave', async () => {
+    await ctAsOwner.overrideRf(2); // now replication factor never changes
+    let nodeCount = 0;
+    for (let nodeId = 1; nodeId <= 3; nodeId++) {
+      const addr = nodes[nodeId];
+      let t1 = await ct.addNodeAndStake(addr);
+      nodeCount++;
+      await t.confirmTransaction(t1);
+      let s = await State.readFromEvm();
+      s.checkRf(2);
+      s.checkNodeCount(nodeCount);
+      if (nodeId >= 2) {
+        s.checkDistribution();
+      }
+    }
+    let s = await State.readFromEvm();
+    s.checkRf(2);
+    s.checkNodeCount(nodeCount);
+    s.checkDistribution();
+    for (let nodeId = 4; nodeId <= 20; nodeId++) {
+      if (nodeId % 3 === 0) {
+        {
+          const addr = nodes[nodeId];
+          let t1 = await ct.addNodeAndStake(addr);
+          nodeCount++;
+          await t.confirmTransaction(t1);
+        }
+        {
+          let t1 = await ct.removeNode(nodes[nodeId - 1]);
+          nodeCount--;
+          await t.confirmTransaction(t1);
+        }
+      } else {
+        {
+          const addr = nodes[nodeId];
+          let t1 = await ct.addNodeAndStake(addr);
+          nodeCount++;
+          await t.confirmTransaction(t1);
+        }
+      }
+      let s = await State.readFromEvm();
+      s.checkRf(2);
+      s.checkNodeCount(nodeCount);
+      s.checkDistribution();
+    }
+  })
+});
+
+
+describe('StorageTestBig', function () {
+
+  beforeEach(beforeEachInit);
+
+  let nodeCount = 0;
+
+  async function addNode(nodeId: number) {
+    {
+      const addr = nodes[nodeId];
+      assert.isTrue(addr!=null);
+      let t1 = await ct.addNodeAndStake(addr);
+      nodeCount++;
+      await t.confirmTransaction(t1);
+    }
+  }
+
+  async function removeNode(nodeId: number) {
+    const addr = nodes[nodeId];
+    assert.isTrue(addr!=null);
+    let t1 = await ct.removeNode(addr);
+    nodeCount--;
+    await t.confirmTransaction(t1);
+  }
+
+  async function setRf(rf: number) {
+    await ctAsOwner.overrideRf(rf);
+    await ctAsOwner.shuffle();
+  }
+
+  it('test_rf8_n8', async () => {
+    await setRf(5);
+    for (let nodeCount = 1; nodeCount <= 200; nodeCount++) {
+      await addNode(nodeCount);
+      let s = await State.readFromEvm();
+      s.checkNodeCount(nodeCount);
+      s.checkDistribution(Math.min(nodeCount, 5));
+    }
+  });
+
+  it('test_all_kinds', async () => {
+    await ctAsOwner.overrideRf(2); // now replication factor never changes
+
+    for (let shardCount of [32]) { // always 32 in the contract
+      console.log('%s testing shardcount: %d', '-'.repeat(30), shardCount);
+
+      // nodes = 1..40 , rf = 1..40 40..1
+      for (let nodeCount = 1; nodeCount <= 40; nodeCount++) {
+        await addNode(nodeCount);
+        for (let rf = 1; rf <= nodeCount; rf++) {
+          console.log('%s testing shardcount: %d nodecount: %d rf: %d', '-'.repeat(30), shardCount, nodeCount, rf);
+          if (nodeCount >= rf) {
+            await setRf(rf);
+          }
+        }
+        for (let rf = 40; rf >= 1; rf--) {
+          console.log('%s testing shardcount: %d nodecount: %d rf: %d', '-'.repeat(30), shardCount, nodeCount, rf);
+          if (nodeCount >= rf) {
+            await ctAsOwner.overrideRf(rf);
+          }
+        }
+      }
+
+      // nodes = 40..1 , rf = 1..40 40..1
+      for (let nodeCount = 40; nodeCount >= 1; nodeCount--) {
+        await removeNode(nodeCount);
+        for (let rf = 1; rf <= nodeCount; rf++) {
+          console.log('%s testing shardcount: %d nodecount: %d rf: %d', '-'.repeat(30), shardCount, nodeCount, rf);
+          if (nodeCount >= rf) {
+            await ctAsOwner.overrideRf(rf);
+          }
+        }
+        for (let rf = 40; rf >= 1; rf--) {
+          console.log('%s testing shardcount: %d nodecount: %d rf: %d', '-'.repeat(30), shardCount, nodeCount, rf);
+          if (nodeCount >= rf) {
+            await ctAsOwner.overrideRf(rf);
+          }
+        }
+      }
+    }
+  }).timeout(600000);
 });

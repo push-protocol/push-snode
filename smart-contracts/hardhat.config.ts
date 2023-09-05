@@ -11,11 +11,21 @@ import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 require("dotenv").config();
 
 const config: HardhatUserConfig = {
-    solidity: "0.8.17",
+    solidity: {
+        version: "0.8.17",
+        settings: {
+            optimizer: {
+                enabled: true,
+                runs: 1000,
+            },
+        },
+    },
     // defaultNetwork: "polygon_mumbai",
 
     networks: {
-        hardhat: {},
+        hardhat: {
+            gas: 30000000
+        },
         polygon_mumbai: {
             url: "https://rpc-mumbai.maticvigil.com",
             accounts: [process.env.PRIVATE_KEY_POLYGON_TESTNET_MUMBAI]
