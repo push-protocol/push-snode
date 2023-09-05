@@ -1,9 +1,8 @@
 import {ethers} from "hardhat";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 
-export class ValidatorContractHelper {
+export class ValidatorHelper {
     static utils = ethers.utils;
-
 
     static getMessageHashAsInContract(message: string) {
         let utils = ethers.utils;
@@ -11,7 +10,7 @@ export class ValidatorContractHelper {
     }
 
     static async sign(wallet: SignerWithAddress, message: string): Promise<string> {
-        const hash = ValidatorContractHelper.getMessageHashAsInContract(message);
+        const hash = ValidatorHelper.getMessageHashAsInContract(message);
         return await wallet.signMessage(ethers.utils.arrayify(hash));
     }
 
@@ -19,7 +18,6 @@ export class ValidatorContractHelper {
         let abi = ethers.utils.defaultAbiCoder;
         return abi.encode(["uint8", "address"], [voteAction, targetWallet]);
     }
-
 }
 
 export enum NodeStatus {

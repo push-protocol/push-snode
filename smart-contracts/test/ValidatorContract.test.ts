@@ -8,7 +8,7 @@ import {ethers} from "hardhat";
 import {PushToken, ValidatorV1} from "../typechain-types";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {TestHelper as t} from "./TestHelper";
-import {NodeStatus, ValidatorContractHelper} from "./ValidatorContractHelper";
+import {NodeStatus, ValidatorHelper} from "./ValidatorHelper";
 import {BigNumber} from "ethers";
 import {JsonRpcClient} from "hardhat/internal/hardhat-network/jsonrpc/client";
 
@@ -235,7 +235,7 @@ describe("Validator Tests :: A node reports on other node", function () {
         const {valContract, pushContract, owner, node1Wallet, node2Wallet} = await State1.build(); //await loadFixture(chain1);
 
         let message = "0xAA";
-        let node1Signature = await ValidatorContractHelper.sign(node1Wallet, message);
+        let node1Signature = await ValidatorHelper.sign(node1Wallet, message);
         let signatures = [node1Signature];
         console.log(`voteData=${message}, signatures=${signatures}`);
         // simulate a read only method - just to get method output
@@ -267,8 +267,8 @@ describe("Validator Tests :: A node reports on other node", function () {
         }
         expect(await pushContract.balanceOf(valContract.address)).to.be.equal(300);
         {
-            let reportThatNode2IsBad = ValidatorContractHelper.encodeVoteDataToHex(0, node2Wallet.address);
-            let node1Signature = await ValidatorContractHelper.sign(node1Wallet, reportThatNode2IsBad);
+            let reportThatNode2IsBad = ValidatorHelper.encodeVoteDataToHex(0, node2Wallet.address);
+            let node1Signature = await ValidatorHelper.sign(node1Wallet, reportThatNode2IsBad);
             let signers = [node1Wallet.address];
             let signatures = [node1Signature];
             console.log(`voteData=${reportThatNode2IsBad}, signers=${signers}, signatures=${signatures}`);

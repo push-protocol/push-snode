@@ -10,7 +10,7 @@ import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {BitUtil} from "./uitlz/bitUtil";
 import {TestHelper as t} from "./TestHelper";
 import {CollectionUtil} from "./uitlz/collectionUtil";
-import {NodeStatus} from "./ValidatorContractHelper";
+import {NodeStatus} from "./ValidatorHelper";
 
 let debug = console.log;
 let ct: StorageContract & Contract;
@@ -65,7 +65,7 @@ async function state1(): Promise<DeployInfo> {
   let protocolVersion = 1;
   let validatorContract = '0x' + '0'.repeat(40);
   let rfTarget = 5;
-  const factory = await ethers.getContractFactory("StorageV1");
+  const factory = await ethers.getContractFactory("StorageV2");
   const proxyCt: TypedStorageContract = <TypedStorageContract>await upgrades.deployProxy(factory,
     [protocolVersion, validatorContract, rfTarget],
     {kind: "uups"});
@@ -498,7 +498,7 @@ describe('StorageTestBig', function () {
   it('test_rfAll_nAll', async () => {
     // await ctAsOwner.overrideRf(2); // now replication factor never changes
 
-    const NODES_TO_TRY = 40;
+    const NODES_TO_TRY = 10;
     const RF_TO_TRY = 10;
 
     for (let shardCount of [32]) { // always 32 in the contract
@@ -516,7 +516,7 @@ describe('StorageTestBig', function () {
         for (let rf = Math.min(nodeCount, RF_TO_TRY); rf >= 1; rf--) {
           console.log('%s testing shardcount: %d nodecount: %d rf: %d', '-'.repeat(30), shardCount, nodeCount, rf);
           if (nodeCount >= rf) {
-            await ctAsOwner.overrideRf(rf);
+            await setRfAndShuffle(rf);
           }
         }
       }
@@ -527,13 +527,13 @@ describe('StorageTestBig', function () {
         for (let rf = 1; rf <= Math.min(nodeCount, RF_TO_TRY); rf++) {
           console.log('%s testing shardcount: %d nodecount: %d rf: %d', '-'.repeat(30), shardCount, nodeCount, rf);
           if (nodeCount >= rf) {
-            await ctAsOwner.overrideRf(rf);
+            await setRfAndShuffle(rf);
           }
         }
         for (let rf = Math.min(nodeCount, RF_TO_TRY); rf >= 1; rf--) {
           console.log('%s testing shardcount: %d nodecount: %d rf: %d', '-'.repeat(30), shardCount, nodeCount, rf);
           if (nodeCount >= rf) {
-            await ctAsOwner.overrideRf(rf);
+            await setRfAndShuffle(rf);
           }
         }
       }

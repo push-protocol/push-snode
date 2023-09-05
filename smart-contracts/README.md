@@ -1,8 +1,18 @@
 # Validator contract
 
 ## 1 How to run tests (uses embedded EVM, it resets for every test case)
+all tests
 ```shell
 npx hardhat test
+```
+
+Storage.sol tests
+```shell
+# for normal tests
+npx hardhat test --grep StorageTestAutoRf
+npx hardhat test --grep StorageTestNoAutoRf
+# for fuzzy tests (takes 5-15min)
+npx hardhat test --grep StorageTestBig
 ```
 
 ## 2 How to set up the local env
