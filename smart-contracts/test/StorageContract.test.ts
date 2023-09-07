@@ -447,6 +447,11 @@ describe("StorageTestNoAutoRf", function () {
 
 describe('StorageTestBig', function () {
 
+  // runs only when ENV is set because it takes time
+  if(process.env.StorageTestBig!=='true') {
+    return;
+  }
+
   beforeEach(beforeEachInit);
 
   let nodeCount = 0;

@@ -96,7 +96,7 @@ export class State1 {
 }
 
 
-describe("vto Valdator ownership tests", function () {
+describe("vto Valdator - ownership tests", function () {
   let valCt:ValidatorV1;
   let owner:SignerWithAddress;
   let acc1:SignerWithAddress;
@@ -140,7 +140,7 @@ describe("vto Valdator ownership tests", function () {
   });
 });
 
-describe("vrn Validator register nodes tests", function () {
+describe("vrn Validator - register nodes tests", function () {
 
   it("Deploy Validator contract and Push Contract", async function () {
     log("ValidatorTest");
@@ -203,9 +203,10 @@ describe("vrn Validator register nodes tests", function () {
   })
 });
 
-describe("Validator Tests :: A node reports on other node", function () {
+describe("vnro Validator - node reports on other node", function () {
 
   it("report-tc1", async function () {
+    // todo improve this test
     const {valContract_, pushContract_, owner_, node1Wallet_, node2Wallet_} = await State1.build(); //await loadFixture(chain1);
 
     let message = "0xAA";
@@ -337,8 +338,7 @@ describe("Validator Tests :: A node reports on other node", function () {
   })
 });
 
-
-describe("Validator Tests :: Test unstake", function () {
+describe("vuns Validator - Test unstake", function () {
 
   it("unstake-test-1 :: register 1 node / unstake to bad address / unstake to owner address", async function () {
     const {valContract_, pushContract_, owner_, node1Wallet_, node2Wallet_} = await State1.build(); //await loadFixture(chain1);
