@@ -11,25 +11,45 @@ import {TestHelper as t} from "./TestHelper";
 import {NodeStatus, ValidatorHelper} from "./ValidatorHelper";
 import {BigNumber} from "ethers";
 
-let debug = console.log;
+let log = console.log;
 
 
-async function deployStorageContract(validatorV1Proxy): Promise<string> {
-  debug('deploying StorageV2')
-  let validatorContract = validatorV1Proxy.address;
+async function deployPushTokenFake():Promise<PushToken> {
+  const ptFactory = await ethers.getContractFactory("PushToken");
+  const pushContract = await ptFactory.deploy();
+  return pushContract;
+}
+
+async function deployValidatorContract(pushCt: PushToken) {
+  const validatorV1Factory = await ethers.getContractFactory("ValidatorV1");
+  const validatorV1Proxy = await upgrades.deployProxy(validatorV1Factory,
+    [1, pushCt.address, 1, 1, 1],
+    {kind: "uups"});
+  await validatorV1Proxy.deployed();
+  log(`deployed proxy: ${validatorV1Proxy.address}`);
+
+  let validatorV1Impl = await upgrades.erc1967.getImplementationAddress(validatorV1Proxy.address);
+  log(`deployed impl: ${validatorV1Impl}`);
+  log('done');
+  return validatorV1Proxy;
+}
+
+async function deployStorageContract(valCt:ValidatorV1): Promise<string> {
+  log('deploying StorageV2')
   let protocolVersion = 1;
   let rfTarget = 5;
   const factory = await ethers.getContractFactory("StorageV2");
   const proxyCt = await upgrades.deployProxy(factory,
-    [protocolVersion, validatorContract, rfTarget],
+    [protocolVersion, valCt.address, rfTarget],
     {kind: "uups"});
   await proxyCt.deployed();
-  debug(`deployed proxy: ${proxyCt.address}`);
+  log(`deployed proxy: ${proxyCt.address}`);
   let implCt = await upgrades.erc1967.getImplementationAddress(proxyCt.address);
-  debug(`deployed impl: ${implCt}`);
-  debug('done');
+  log(`deployed impl: ${implCt}`);
+  log('done');
   return proxyCt.address;
 }
+
 
 
 export class State1 {
@@ -44,41 +64,28 @@ export class State1 {
   acc2_: SignerWithAddress;
 
   static async build() {
-    console.log('building snapshot');
+    log('building snapshot');
 
-    debug('deploying ValidatorV1');
+    log('deploying ValidatorV1');
     // Contracts are deployed using the first signer/account by default
     const [owner, node1Wallet, node2Wallet, acc1, acc2] = await ethers.getSigners();
 
-    const ptFactory = await ethers.getContractFactory("PushToken");
-    const pushContract = await ptFactory.deploy();
+    const pushCt = await deployPushTokenFake();
 
-    const validatorV1Factory = await ethers.getContractFactory("ValidatorV1");
-    const validatorV1Proxy = await upgrades.deployProxy(validatorV1Factory,
-      [1, pushContract.address, 1, 1, 1],
-      {kind: "uups"});
-    await validatorV1Proxy.deployed();
-    debug(`deployed proxy: ${validatorV1Proxy.address}`);
+    const valCt = await deployValidatorContract(pushCt);
 
-    let validatorV1Impl = await upgrades.erc1967.getImplementationAddress(validatorV1Proxy.address);
-    console.log(`deployed impl: ${validatorV1Impl}`);
-    debug('done');
+    const storeCt = await deployStorageContract(valCt);
+    await valCt.setStorageContract(storeCt);
 
-    const storageProxyAddr = await deployStorageContract(validatorV1Proxy);
+    await pushCt.mint(owner.address, ethers.utils.parseEther("100"));
+    await pushCt
+        .connect(owner)
+        .approve(valCt.address, ethers.utils.parseEther("1000000000000000"));
 
-    await validatorV1Proxy.setStorageContract(storageProxyAddr);
-    // const valFactory = await ethers.getContractFactory("ValidatorV1");
-    const valContract = validatorV1Proxy;
-    //
-    // await pushContract.mint(owner.address, ethers.utils.parseEther("100"));
-    // // owner can spend 1000000000000000
-    // await pushContract
-    //     .connect(owner)
-    //     .approve(valContract.address, ethers.utils.parseEther("1000000000000000"));
-
+    // todo remove
     return <State1>{
-      pushContract_: pushContract,
-      valContract_: valContract,
+      pushContract_: pushCt,
+      valContract_: valCt,
       owner_: owner,
       node1Wallet_: node1Wallet,
       node2Wallet_: node2Wallet,
@@ -89,7 +96,7 @@ export class State1 {
 }
 
 
-describe("vto Valdator ownership", function () {
+describe("vto Valdator ownership tests", function () {
   let valCt:ValidatorV1;
   let owner:SignerWithAddress;
   let acc1:SignerWithAddress;
@@ -133,15 +140,15 @@ describe("vto Valdator ownership", function () {
   });
 });
 
-describe("Validator Test1", function () {
+describe("vrn Validator register nodes tests", function () {
 
   it("Deploy Validator contract and Push Contract", async function () {
-    debug("ValidatorTest");
+    log("ValidatorTest");
     let {pushContract_, valContract_} = await State1.build();
     expect(pushContract_.address).to.be.properAddress;
     expect(valContract_.address).to.be.properAddress;
-    debug(`push contract at `, pushContract_.address);
-    debug(`validator contract at `, valContract_.address);
+    log(`push contract at `, pushContract_.address);
+    log(`validator contract at `, valContract_.address);
   });
 
   it("Register 1 Node, insufficient collateral", async function () {
@@ -160,7 +167,7 @@ describe("Validator Test1", function () {
         .withArgs(owner_.address, node1Wallet_.address, 0, 100, "http://snode1:3000");
       let nodeInfo = await valContract_.getNodeInfo(node1Wallet_.address);
       expect(nodeInfo.status).to.be.equal(0);
-      debug('nodeInfo:', nodeInfo);
+      log('nodeInfo:', nodeInfo);
     }
     {
       let t1 = valContract_.registerNodeAndStake(100, 0,
@@ -191,7 +198,7 @@ describe("Validator Test1", function () {
     expect(await pushContract_.balanceOf(valContract_.address)).to.be.equal(300);
     {
       let t2 = await valContract_.getNodes();
-      debug(t2);
+      log(t2);
     }
   })
 });
@@ -263,10 +270,10 @@ describe("Validator Tests :: A node reports on other node", function () {
     let message = "0xAA";
     let node1Signature = await ValidatorHelper.sign(node1Wallet_, message);
     let signatures = [node1Signature];
-    debug(`voteData=${message}, signatures=${signatures}`);
+    log(`voteData=${message}, signatures=${signatures}`);
     // simulate a read only method - just to get method output
     let result1 = await valContract_.callStatic.reportNode(message, signatures);
-    debug(`result=${result1}`);
+    log(`result=${result1}`);
     expect(result1).to.be.equal(0);
   })
 
@@ -297,7 +304,7 @@ describe("Validator Tests :: A node reports on other node", function () {
       let node1Signature = await ValidatorHelper.sign(node1Wallet_, reportThatNode2IsBad);
       let signers = [node1Wallet_.address];
       let signatures = [node1Signature];
-      debug(`voteData=${reportThatNode2IsBad}, signers=${signers}, signatures=${signatures}`);
+      log(`voteData=${reportThatNode2IsBad}, signers=${signers}, signatures=${signatures}`);
 
       let contractAsNode1 = valContract_.connect(node1Wallet_);
       {
@@ -323,7 +330,7 @@ describe("Validator Tests :: A node reports on other node", function () {
         await t.confirmTransaction(tx);
 
         let nodeInfo = await valContract_.getNodeInfo(node2Wallet_.address);
-        debug(nodeInfo);
+        log(nodeInfo);
         expect(nodeInfo.status).to.be.equal(2); // slashed
         expect(nodeInfo.nodeTokens).to.be.equal(198); // -1%
         expect(nodeInfo.counters.reportCounter).to.be.equal(0);
@@ -348,7 +355,7 @@ describe("Validator Tests :: A node reports on other node", function () {
 
         let nodeInfo = await valContract_.getNodeInfo(node2Wallet_.address);
         expect(nodeInfo.counters.reportCounter).to.be.equal(1);
-        debug(nodeInfo);
+        log(nodeInfo);
 
         await t.expectEventFirst(tx, {
           nodeWallet: node2Wallet_.address,
@@ -362,13 +369,13 @@ describe("Validator Tests :: A node reports on other node", function () {
         let tx = await contractAsNode1.reportNode(reportThatNode2IsBad, [node1Signature]);
         await t.confirmTransaction(tx);
         let nodeInfo = await valContract_.getNodeInfo(node2Wallet_.address);
-        debug('4th report');
-        debug(nodeInfo);
+        log('4th report');
+        log(nodeInfo);
         expect(nodeInfo.status).to.be.equal(3); // banned
         expect(nodeInfo.nodeTokens).to.be.equal(0); // because we unstaked automatically
         expect(nodeInfo.counters.reportCounter).to.be.equal(0);
         expect(nodeInfo.counters.slashCounter).to.be.equal(2);
-        debug('events ', (await tx.wait(1)).events);
+        log('events ', (await tx.wait(1)).events);
         await t.expectEvent(tx, 0, {
           nodeWallet: node2Wallet_.address,
           nodeStatus: NodeStatus.Reported,
@@ -399,7 +406,7 @@ describe("Validator Tests :: Test unstake", function () {
       let ownerBalanceBefore = await pushContract_.balanceOf(owner_.address);
       let valContractBalanceBefore = await pushContract_.balanceOf(valContract_.address);
       let valContractAllowanceForOwner = await pushContract_.allowance(owner_.address, valContract_.address);
-      debug(`before registerNodeAndStake: owner=${ownerBalanceBefore}, valContract=${valContractBalanceBefore}, valContractAllowanceForOwner=${valContractAllowanceForOwner}`);
+      log(`before registerNodeAndStake: owner=${ownerBalanceBefore}, valContract=${valContractBalanceBefore}, valContractAllowanceForOwner=${valContractAllowanceForOwner}`);
       expect(valContractAllowanceForOwner).to.be.greaterThan(100);
 
       let tx = await valContract_
@@ -410,7 +417,7 @@ describe("Validator Tests :: Test unstake", function () {
 
       let ownerBalanceAfter = await pushContract_.balanceOf(owner_.address);
       let valContractBalanceAfter = await pushContract_.balanceOf(valContract_.address);
-      debug(`after registerNodeAndStake:  owner=${ownerBalanceAfter}, valContract=${valContractBalanceAfter}`);
+      log(`after registerNodeAndStake:  owner=${ownerBalanceAfter}, valContract=${valContractBalanceAfter}`);
       expect((valContractBalanceAfter.sub(valContractBalanceBefore))).to.be.equal(100);
       expect((ownerBalanceAfter.sub(ownerBalanceBefore))).to.be.equal(-100);
 
@@ -437,7 +444,7 @@ describe("Validator Tests :: Test unstake", function () {
 
       let ownerBalanceBefore = await pushContract_.balanceOf(owner_.address);
       let valContractBalanceBefore = await pushContract_.balanceOf(valContract_.address);
-      debug(`before unstake: owner=${ownerBalanceBefore}, valContract=${valContractBalanceBefore}`);
+      log(`before unstake: owner=${ownerBalanceBefore}, valContract=${valContractBalanceBefore}`);
 
       let tx = await valContract_
         .connect(owner_)
@@ -450,7 +457,7 @@ describe("Validator Tests :: Test unstake", function () {
 
       let ownerBalanceAfter = await pushContract_.balanceOf(owner_.address);
       let valContractBalanceAfter = await pushContract_.balanceOf(valContract_.address); // todo !!!!
-      debug(`after unstake: owner=${ownerBalanceAfter}, valContract=${valContractBalanceAfter}`);
+      log(`after unstake: owner=${ownerBalanceAfter}, valContract=${valContractBalanceAfter}`);
       expect((valContractBalanceAfter.sub(valContractBalanceBefore))).to.be.equal(-100);
       expect((ownerBalanceAfter.sub(ownerBalanceBefore))).to.be.equal(+100);
 
