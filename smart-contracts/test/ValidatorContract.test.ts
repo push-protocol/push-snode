@@ -10,6 +10,7 @@ import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {TestHelper as t} from "./uitlz/TestHelper";
 import {NodeStatus, ValidatorHelper} from "./ValidatorHelper";
 import {BigNumber, Contract} from "ethers";
+import {BitUtil} from "./uitlz/bitUtil";
 
 let log = console.log;
 
@@ -70,6 +71,8 @@ let acc1: SignerWithAddress;
 let acc2: SignerWithAddress;
 let vnode1: SignerWithAddress;
 let vnode2: SignerWithAddress;
+let snode1: SignerWithAddress;
+let snode2: SignerWithAddress;
 
 class DeployInfo {
   pushCt: PushToken;
@@ -113,6 +116,9 @@ async function beforeEachInit() {
   vnode1 = signers[3];
   vnode2 = signers[4];
 
+  snode1 = signers[5];
+  snode2 = signers[6];
+
 }
 
 
@@ -150,6 +156,8 @@ describe("vto Valdator - ownership tests", function () {
 });
 
 describe("vrn Validator - register nodes tests", function () {
+
+  beforeEach(beforeEachInit);
 
   it("Deploy Validator contract and Push Contract", async function () {
     expect(pushCt.address).to.be.properAddress;
@@ -193,9 +201,9 @@ describe("vrn Validator - register nodes tests", function () {
     expect(await pushCt.balanceOf(valCt.address)).to.be.equal(100);
     {
       let t1 = valCt.registerNodeAndStake(200, 0,
-        "http://snode2:3000", node2Wallet_.address);
+        "http://snode2:3000", vnode2.address);
       await expect(t1).to.emit(valCt, "NodeAdded")
-        .withArgs(owner.address, node2Wallet_.address, 0, 200, "http://snode2:3000");
+        .withArgs(owner.address, vnode2.address, 0, 200, "http://snode2:3000");
       let nodeInfo = await valCt.getNodeInfo(vnode1.address);
       expect(nodeInfo.status).to.be.equal(0);
     }
@@ -207,7 +215,10 @@ describe("vrn Validator - register nodes tests", function () {
   })
 });
 
+
 describe("vnro Validator - node reports on other node", function () {
+
+  beforeEach(beforeEachInit);
 
   it("report-tc1", async function () {
     let message = "0xAA";
@@ -337,22 +348,45 @@ describe("vnro Validator - node reports on other node", function () {
     }
   })
 
-  // STORAGE NODE ---
+  // STORAGE NODE ---------------------------------------------------------------------------------
 
-  it("asn add storage node", async function () {
+  it("asn add storage node to both Validator and Storage contracts", async function () {
     // register node1, node2
+    const allShards = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+      10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+      20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
+      30, 31];
     {
-      let t1 = valCt.registerNodeAndStake(100, 0,
-        "", vnode1.address);
+      let t1 = valCt.registerNodeAndStake(100, NodeType.SNode, "", snode1.address);
       await expect(t1).to.emit(valCt, "NodeAdded")
-        .withArgs(owner.address, vnode1.address, 0, 100, "http://snode1:3000");
-      let nodeInfo = await valCt.getNodeInfo(vnode1.address);
+        .withArgs(owner.address, snode1.address, NodeType.SNode, 100, "");
+      let nodeInfo = await valCt.getNodeInfo(snode1.address);
       expect(nodeInfo.status).to.be.equal(0);
+
+      const bitmask = await storeCt.getNodeShardsByAddr(snode1.address);
+      assert.deepEqual(BitUtil.bitsToPositions(bitmask), allShards);
     }
-    expect(await pushCt.balanceOf(valCt.address)).to.be.equal(100);
+    {
+      let t1 = valCt.registerNodeAndStake(100, NodeType.SNode, "", snode2.address);
+      await expect(t1).to.emit(valCt, "NodeAdded")
+        .withArgs(owner.address, snode2.address, NodeType.SNode, 100, "");
+      let nodeInfo = await valCt.getNodeInfo(snode2.address);
+      expect(nodeInfo.status).to.be.equal(0);
+
+      const bitmask1 = await storeCt.getNodeShardsByAddr(snode1.address);
+      log(bitmask1.toString(2));
+      assert.deepEqual(BitUtil.bitsToPositions(bitmask1), allShards);
+      const bitmask2 = await storeCt.getNodeShardsByAddr(snode1.address);
+      log(bitmask2.toString(2));
+      assert.deepEqual(BitUtil.bitsToPositions(bitmask2), allShards);
+    }
+    expect(await pushCt.balanceOf(valCt.address)).to.be.equal(200);
   });
 
+
   describe("vuns Validator - Test unstake", function () {
+
+    beforeEach(beforeEachInit);
 
     it("unstake-test-1 :: register 1 node / unstake to bad address / unstake to owner address", async function () {
       // register 1 node (+ check all amounts before and after)
