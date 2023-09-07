@@ -528,7 +528,6 @@ describe('StorageTestBig', function () {
 
       // nodes = 40..1 , rf = 1..10 10..1
       for (let nodeCount = NODES_TO_TRY; nodeCount >= 1; nodeCount--) {
-        await removeNode(nodeCount);
         for (let rf = 1; rf <= Math.min(nodeCount, RF_TO_TRY); rf++) {
           console.log('%s testing shardcount: %d nodecount: %d rf: %d', '-'.repeat(30), shardCount, nodeCount, rf);
           if (nodeCount >= rf) {
@@ -541,6 +540,7 @@ describe('StorageTestBig', function () {
             await setRfAndShuffle(rf);
           }
         }
+        await removeNode(nodeCount);
       }
     }
   }).timeout(600000);

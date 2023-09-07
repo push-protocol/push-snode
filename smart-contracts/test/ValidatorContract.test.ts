@@ -9,12 +9,12 @@ import {PushToken, ValidatorV1} from "../typechain-types";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {TestHelper as t} from "./uitlz/TestHelper";
 import {NodeStatus, ValidatorHelper} from "./ValidatorHelper";
-import {BigNumber} from "ethers";
+import {BigNumber, Contract} from "ethers";
 
 let log = console.log;
 
 
-async function deployPushTokenFake():Promise<PushToken> {
+async function deployPushTokenFake(): Promise<PushToken> {
   const ptFactory = await ethers.getContractFactory("PushToken");
   const pushContract = await ptFactory.deploy();
   return pushContract;
@@ -34,7 +34,7 @@ async function deployValidatorContract(pushCt: PushToken) {
   return validatorV1Proxy;
 }
 
-async function deployStorageContract(valCt:ValidatorV1): Promise<string> {
+async function deployStorageContract(valCt: ValidatorV1): Promise<string> {
   log('deploying StorageV2')
   let protocolVersion = 1;
   let rfTarget = 5;
@@ -50,6 +50,11 @@ async function deployStorageContract(valCt:ValidatorV1): Promise<string> {
   return proxyCt.address;
 }
 
+export enum NodeType {
+  VNode = 0, // validator 0
+  SNode = 1, // storage 1
+  DNode = 2 // delivery 2
+}
 
 
 export class State1 {
@@ -79,8 +84,8 @@ export class State1 {
 
     await pushCt.mint(owner.address, ethers.utils.parseEther("100"));
     await pushCt
-        .connect(owner)
-        .approve(valCt.address, ethers.utils.parseEther("1000000000000000"));
+      .connect(owner)
+      .approve(valCt.address, ethers.utils.parseEther("1000000000000000"));
 
     // todo remove
     return <State1>{
@@ -97,10 +102,10 @@ export class State1 {
 
 
 describe("vto Valdator - ownership tests", function () {
-  let valCt:ValidatorV1;
-  let owner:SignerWithAddress;
-  let acc1:SignerWithAddress;
-  let acc2:SignerWithAddress;
+  let valCt: ValidatorV1;
+  let owner: SignerWithAddress;
+  let acc1: SignerWithAddress;
+  let acc2: SignerWithAddress;
 
   beforeEach(async () => {
     const s = await loadFixture(State1.build);
@@ -144,7 +149,7 @@ describe("vrn Validator - register nodes tests", function () {
 
   it("Deploy Validator contract and Push Contract", async function () {
     log("ValidatorTest");
-    let {pushContract_, valContract_} = await State1.build();
+    let {pushContract_, valContract_} = await loadFixture(State1.build);
     expect(pushContract_.address).to.be.properAddress;
     expect(valContract_.address).to.be.properAddress;
     log(`push contract at `, pushContract_.address);
@@ -152,14 +157,14 @@ describe("vrn Validator - register nodes tests", function () {
   });
 
   it("Register 1 Node, insufficient collateral", async function () {
-    const {valContract_, node1Wallet_} = await State1.build();
+    const {valContract_, node1Wallet_} = await loadFixture(State1.build);
     await expect(valContract_.registerNodeAndStake(50, 0,
       "http://snode1:3000", node1Wallet_.address))
       .to.be.revertedWith('Insufficient collateral for VNODE');
   })
 
   it("Register 1 Node, but not a duplicate public key", async function () {
-    const {valContract_, owner_, node1Wallet_, node2Wallet_} = await State1.build(); //await loadFixture(chain1);
+    const {valContract_, owner_, node1Wallet_, node2Wallet_} = await loadFixture(State1.build);
     {
       let t1 = valContract_.registerNodeAndStake(100, 0,
         "http://snode1:3000", node1Wallet_.address);
@@ -177,7 +182,7 @@ describe("vrn Validator - register nodes tests", function () {
   })
 
   it("Register 2 Nodes", async function () {
-    const {valContract_, pushContract_, owner_, node1Wallet_, node2Wallet_} = await State1.build();
+    const {valContract_, pushContract_, owner_, node1Wallet_, node2Wallet_} = await loadFixture(State1.build);
     {
       let t1 = valContract_.registerNodeAndStake(100, 0,
         "http://snode1:3000", node1Wallet_.address);
@@ -207,7 +212,7 @@ describe("vnro Validator - node reports on other node", function () {
 
   it("report-tc1", async function () {
     // todo improve this test
-    const {valContract_, pushContract_, owner_, node1Wallet_, node2Wallet_} = await State1.build(); //await loadFixture(chain1);
+    const {valContract_, pushContract_, owner_, node1Wallet_, node2Wallet_} = await loadFixture(State1.build);
 
     let message = "0xAA";
     let node1Signature = await ValidatorHelper.sign(node1Wallet_, message);
@@ -222,7 +227,7 @@ describe("vnro Validator - node reports on other node", function () {
 
   it("report-tc2 / register 2 nodes / report / report / slash / report / report / ban", async function () {
     // register node1, node2
-    const {valContract_, pushContract_, owner_, node1Wallet_, node2Wallet_} = await State1.build(); //await loadFixture(chain1);
+    const {valContract_, pushContract_, owner_, node1Wallet_, node2Wallet_} = await loadFixture(State1.build);
     {
       let t1 = valContract_.registerNodeAndStake(100, 0,
         "http://snode1:3000", node1Wallet_.address);
@@ -341,7 +346,7 @@ describe("vnro Validator - node reports on other node", function () {
 describe("vuns Validator - Test unstake", function () {
 
   it("unstake-test-1 :: register 1 node / unstake to bad address / unstake to owner address", async function () {
-    const {valContract_, pushContract_, owner_, node1Wallet_, node2Wallet_} = await State1.build(); //await loadFixture(chain1);
+    const {valContract_, pushContract_, owner_, node1Wallet_, node2Wallet_} = await loadFixture(State1.build);
     // register 1 node (+ check all amounts before and after)
     {
       let ownerBalanceBefore = await pushContract_.balanceOf(owner_.address);

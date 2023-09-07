@@ -3,7 +3,7 @@
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import "@nomicfoundation/hardhat-chai-matchers";
 import "@nomiclabs/hardhat-ethers";
-import {expect} from "chai";
+import {expect, assert} from "chai";
 import {ethers} from "hardhat";
 import {PushToken, ValidatorV1} from "../typechain-types";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
@@ -40,9 +40,10 @@ function getEthSignedMessageHashJS(messageHash:string) {
  * https://solidity-by-example.org/signature/
  * https://github.com/t4sk/hello-erc20-permit/blob/main/test/verify-signature.js
  */
-describe.skip("SignatureTest", function () {
+describe("SignatureTest", function () {
 
     it("tc1", async function () {
+        console.log('started')
         // signers
         const [owner, node1Wallet] = await ethers.getSigners();
         // deploy contract
@@ -53,12 +54,12 @@ describe.skip("SignatureTest", function () {
         let message = "0xAA";
 
         console.log(`signingAddress: ${node1Wallet.address}`);
-        const hash = await contract.getMessageHash(message);
-        const sig = await node1Wallet.signMessage(ethers.utils.arrayify(hash));
-        const ethHash = await contract.getEthSignedMessageHash(hash);
+        const hashCalculatedByContract = await contract.getMessageHash(message);
+        const sig = await node1Wallet.signMessage(ethers.utils.arrayify(hashCalculatedByContract));
+        const ethHash = await contract.getEthSignedMessageHash(hashCalculatedByContract);
 
-        const hash2 = getMessageHashJS(message);
-        expect(hash2).to.be.equal(hash);
+        const hashCalculatedByJs = getMessageHashJS(message);
+        assert.equal(hashCalculatedByJs, hashCalculatedByContract);
 
 
         console.log("signer          ", node1Wallet.address)
