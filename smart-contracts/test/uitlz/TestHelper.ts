@@ -1,6 +1,6 @@
 import {BigNumber, ContractTransaction} from "ethers";
 import {expect, assert} from "chai";
-import {ValidatorV1} from "../typechain-types";
+import {ValidatorV1} from "../../typechain-types";
 import {Event} from "@ethersproject/contracts/src.ts";
 
 export class TestHelper {

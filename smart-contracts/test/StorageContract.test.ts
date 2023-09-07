@@ -8,7 +8,7 @@ import {ethers} from "hardhat";
 import {Contract, ContractTransaction} from "ethers";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {BitUtil} from "./uitlz/bitUtil";
-import {TestHelper as t} from "./TestHelper";
+import {TestHelper as t} from "./uitlz/TestHelper";
 import {CollectionUtil} from "./uitlz/collectionUtil";
 import {NodeStatus} from "./ValidatorHelper";
 
