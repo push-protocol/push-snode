@@ -53,8 +53,6 @@ contract StorageV2 is Ownable2StepUpgradeable, UUPSUpgradeable {
     // also this should match data type in mapNodeToShards (uint32/64/128/256)
     uint8 public constant SHARD_COUNT = 32;
 
-    uint8 public constant SET_ON = 1; // for set we use uint8(1) as on, and uint8(0) as off
-    uint8 public constant SET_OFF = 0;
     uint8 public constant NULL_SHARD = 255; // shard id that does not exists
     uint8 public constant MAX_NODE_ID = 254; // max node
     uint8 public constant NULL_NODE = 0;
@@ -92,6 +90,7 @@ contract StorageV2 is Ownable2StepUpgradeable, UUPSUpgradeable {
     // other free values of nodeId (added after delete operation)
     uint8[] private unusedNodeIdList;
 
+    // this is a security check that only validator contract calls our methods
     address public validatorContract;
 
     uint16 public protocolVersion;
@@ -156,6 +155,10 @@ contract StorageV2 is Ownable2StepUpgradeable, UUPSUpgradeable {
             nodeMasks[i] = shardmask;
         }
         return nodeMasks;
+    }
+
+    function setValidatorContract(address addr_) public onlyOwner {
+        validatorContract = addr_;
     }
 
     // ----------------------------- VALIDATOR FUNCTIONS --------------------------------------------------
@@ -314,7 +317,7 @@ contract StorageV2 is Ownable2StepUpgradeable, UUPSUpgradeable {
         if (nodeIdList.length > 0) {
             // 1 take unused and share
             uint8[] memory countersMap_ = buildCounters(nodeList_, maxNode_, nodeShardsBitmap_);
-            uint assignedCounter_ = distributeUnused(unusedArr_, nodeList_, countersMap_, nodeShardsBitmap_, nodeModifiedSet_, 0);
+            distributeUnused(unusedArr_, nodeList_, countersMap_, nodeShardsBitmap_, nodeModifiedSet_, 0);
             uint avgPerNode_;
             uint demand_;
             (avgPerNode_, demand_) = calculateAvgPerNode(nodeList_, countersMap_);
@@ -356,7 +359,7 @@ contract StorageV2 is Ownable2StepUpgradeable, UUPSUpgradeable {
     }
 
     function buildUnused(uint8[] memory nodeList_, uint32[] memory nodeShardsBitmap_, uint8[] memory nodeModifiedSet_,
-        uint _rf, bool rfChanged_, bool nodeRemoved_, uint32 removedNodeShardmask_) private returns (uint8[] memory){
+        uint _rf, bool rfChanged_, bool nodeRemoved_, uint32 removedNodeShardmask_) private pure returns (uint8[] memory){
         uint8[] memory unusedArr_;
         if (!rfChanged_ && !nodeRemoved_) {
             // do nothing - number of unused doesn't change
@@ -456,7 +459,7 @@ contract StorageV2 is Ownable2StepUpgradeable, UUPSUpgradeable {
         sortCounters(nodesList_, countersMap_, 0, int(nodesList_.length - 1));
     }
 
-    function resortCountersRow(uint8[] memory nodeList_, uint8[] memory countersMap_, uint pos_, bool increment_) private {
+    function resortCountersRow(uint8[] memory nodeList_, uint8[] memory countersMap_, uint pos_, bool increment_) private pure {
         int cur = int(pos_);
         if (increment_) {
             while ((cur + 1) >= 0 && (cur + 1) <= int(nodeList_.length - 1)
@@ -480,7 +483,7 @@ contract StorageV2 is Ownable2StepUpgradeable, UUPSUpgradeable {
         uint8[] memory nodeList_,
         uint8 maxNode_,
         uint32[] memory nodeShardsBitmap_
-    ) private view returns (uint8[] memory) {
+    ) private pure returns (uint8[] memory) {
         uint8[] memory _countersMap = new uint8[](maxNode_ + 1);
         // init nodeArr
         for (uint i = 0; i < nodeList_.length; i++) {
@@ -541,7 +544,7 @@ contract StorageV2 is Ownable2StepUpgradeable, UUPSUpgradeable {
     }
 
     // convers bit shard mask (ex: 0b1101) to shard numbers (ex: [0,2,3]) and gets a random one (ex: 2)
-    function bitMaskToRandomShard(uint32 shardmask_, uint8[SHARD_COUNT] memory shardList_) private returns (uint8) {
+    function bitMaskToRandomShard(uint32 shardmask_, uint8[SHARD_COUNT] memory shardList_) private view returns (uint8) {
         uint8 pos_ = 0;
         uint8 shard_ = 0;
         while (shardmask_ != 0) {
