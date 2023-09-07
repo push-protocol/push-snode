@@ -4,25 +4,64 @@ pragma solidity ^0.8.17;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "./Storage.sol";
 
 /*
 Validator smart contract
 
-Enables a network of Validators
+# Enables a network of Validator (V), Storage (S), Delivery (D) nodes
+- V performs a multi-sig on a message block within a specified group
+- D unpacks message block (a threshold amount of sigs required),
+and for every single message: delivers it to the end-users
+- S unpacks message block (a threshold amount of sigs required),
+and indexes every single message: the message gets copied to every person's inbox
+So that later V can query a group of storage nodes responsible for some data range
+and show that inbox to the UI.
+
+# Contracts
+All the stacking, node management, slashing is done in this contrect Validator.sol
+S has it's own Storage.sol contract, which manages only S shard assignments.
+
+
 */
 contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
 
-    uint16 private protocolVersion;
+    // ----------------------------- STATE --------------------------------------------------
 
-    // contract-wide variables
-    uint256 public vnodeCollateralInPushTokens;
-    uint32 public REPORT_COUNT_TO_SLASH;
-    uint32 public SLASH_COLL_PERCENTAGE;
-    uint32 public SLASH_COUNT_TO_BAN;
-    uint32 public BAN_COLL_PERCENTAGE;
-    uint32 public MIN_NODES_FOR_REPORT;
+    uint16 public protocolVersion;
 
-    // backend-wide variables
+    /*  staking params (effectively constant ) */
+
+    // number of push tokens (18 digits) to stake as Validator (V)
+    uint256 public minStakeV;
+    // number of push tokens (18 digits) to stake as Storage (S)
+    uint256 public minStakeS;
+    // number of push tokens (18 digits) to stake as Delivery (D)
+    uint256 public minStakeD;
+
+    /* validator slashing params  (effectively constant)
+
+    report = bad behaviour, after REPORT_NODES would report REPORT_CNT_MAX times
+    we perform a slash
+
+    slash = reduces node collateral for SLASH_PERCENT %
+    after SLASH_CNT_MAX slashes the node would get a bat
+
+    ban = reduces node collateral for BAN_PERCENT, node address is banned forever
+    */
+    uint32 public REPORT_NODES;
+    uint32 public REPORT_CNT_MAX;
+
+    uint32 public SLASH_PERCENT;
+    uint32 public SLASH_CNT_MAX;
+
+    uint32 public BAN_PERCENT;
+
+    /* validator validation params  (effectively constant only for V backend)
+    these parameters control how nodejs processes communicate
+    for the contract these a simply constants; all the logic is in JS
+    */
+
     // how many attesters should sign the message block, after validator proposes a block
     uint8 public attestersRequired;
     // how many networkRandom objects are required to compute a random value
@@ -30,27 +69,24 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     // how many nodes should see the emitter of that networkRandom ; so that we could count on this network random
     uint8 public nodeRandomPingCount;
 
+    // ----------------------------- CONTRACT STATE --------------------------------------------------
 
-    // token storages
+    /* registered nodes params */
+
+    // push token used for staking/slashing etc
     IERC20 pushToken;
 
+    // storage contract manages storage node state
+    address public storageContract;
+
     // node colleciton
-    address[] nodes;
-    mapping(address => NodeInfo) nodeMap;
-    uint256 totalStaked;      // push tokens owned by this contract; which have an owner
-    uint256 totalPenalties;   // push tokens owned by this contract; comes from penalties
+    address[] public nodes;
+    mapping(address => NodeInfo) public nodeMap;
+    uint public totalStaked;      // push tokens owned by this contract; which have an owner
+    uint public totalPenalties;   // push tokens owned by this contract; comes from penalties
 
-    /* storage node mapping
-    namespace 'notif'
-    0x25 -> 0x1, 0x2, 0x3 ;
-    shards are in 0..0x20; nodeids are in 0x..0xFF; we'll use 2 bytes for safety
-    shard 0x25 is hosted on 0x1, 0x2, 0x3
-    */
-    mapping(uint8 => uint16[]) notifShardToNodeId; // todo support shards, and reshard on every storage node registration
-    // this is the next free index, which will be assigned to a new node
-    uint16 notifShardsMax;
 
-    /* EVENTS */
+    // ----------------------------- EVENTS  --------------------------------------------------
     event NodeAdded(address indexed ownerWallet, address indexed nodeWallet, NodeType nodeType, uint256 nodeTokens, string nodeApiBaseUrl);
     event NodeStatusChanged(address indexed nodeWallet, NodeStatus nodeStatus, uint256 nodeTokens);
 
@@ -58,11 +94,10 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     event NodeRandomMinCountUpdated(uint32 value);
     event NodeRandomPingCountUpdated(uint32 value);
 
-    /* TYPES */
-
+    // ----------------------------- TYPES  --------------------------------------------------
 
     struct NodeInfo {
-        uint16 shortAddr;
+        uint16 shortAddr; // todo
         address ownerWallet;
         address nodeWallet;       // eth wallet
         NodeType nodeType;
@@ -110,15 +145,7 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         address target;
     }
 
-    /* METHODS */
-
-    function decodeVoteMessage(bytes memory data) private pure returns (VoteMessage memory) {
-        (VoteAction vote, address target) = abi.decode(data, (VoteAction, address));
-        VoteMessage memory result;
-        result.vote = vote;
-        result.target = target;
-        return result;
-    }
+    // ----------------------------- UPGRADABLE  --------------------------------------------------
 
     // an empty constructor; constructor is replaced with initialize()
     constructor() {
@@ -146,54 +173,80 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         require(nodeRandomPingCount_ > 0, "invalid nodeRandomFilterPingsRequired amount");
         nodeRandomPingCount = nodeRandomPingCount_;
 
-        notifShardsMax = 31;
-        vnodeCollateralInPushTokens = 100;
-        REPORT_COUNT_TO_SLASH = 2;
-        SLASH_COLL_PERCENTAGE = 1;
-        SLASH_COUNT_TO_BAN = 2;
-        BAN_COLL_PERCENTAGE = 10;
-        MIN_NODES_FOR_REPORT = 1;
+        minStakeV = 100;
+        minStakeS = 100;
+        minStakeD = 100;
+        REPORT_CNT_MAX = 2;
+        SLASH_PERCENT = 1;
+        SLASH_CNT_MAX = 2;
+        BAN_PERCENT = 10;
+        REPORT_NODES = 1;
         // todo update this on node join
     }
+
+    function _authorizeUpgrade(address) internal override onlyOwner {}
+
+    function getProtocolVersion() public view returns (uint16) {
+        return protocolVersion;
+    }
+
+    function getCodeVersion() public pure returns (uint16){
+        return 2;
+    }
+    // ----------------------------- ADMIN FUNCTIONS --------------------------------------------------
+
+    function setStorageContract(address addr_) public onlyOwner {
+        storageContract = addr_;
+    }
+
+    // ----------------------------- IMPL  --------------------------------------------------
+
 
     // Registers a new validator node
     // Locks PUSH tokens ($_token) with $_collateral amount.
     // A node will run from a _nodeWallet
-    function registerNodeAndStake(uint256 _nodeTokens,
-        NodeType _nodeType, string memory _nodeApiBaseUrl, address _nodeWallet) public {
-        uint256 coll = _nodeTokens;
-        if (_nodeType == NodeType.VNode) {
-            require(coll >= vnodeCollateralInPushTokens, "Insufficient collateral for VNODE");
-        } else if (_nodeType == NodeType.DNode) {
-            require(coll >= vnodeCollateralInPushTokens, "Insufficient collateral for DNODE");
+    // ACCESS: Any node can call this
+    function registerNodeAndStake(uint256 nodeTokens_,
+        NodeType nodeType_, string memory nodeApiBaseUrl_, address nodeWallet_) public {
+        uint256 coll = nodeTokens_;
+        if (nodeType_ == NodeType.VNode) {
+            require(coll >= minStakeV, "Insufficient collateral for VNODE");
+        } else if (nodeType_ == NodeType.DNode) {
+            require(coll >= minStakeD, "Insufficient collateral for DNODE");
+        } else if (nodeType_ == NodeType.SNode) {
+            require(coll >= minStakeS, "Insufficient collateral for SNODE");
         } else {
             revert("unsupported nodeType ");
         }
-        NodeInfo storage old = nodeMap[_nodeWallet];
+        NodeInfo storage old = nodeMap[nodeWallet_];
         if (old.ownerWallet != address(0)) {
             revert("a node with pubKey is already defined");
         }
         // check that collateral is allowed to spend
         uint256 allowed = pushToken.allowance(msg.sender, address(this));
-        require(allowed >= _nodeTokens, "_nodeTokens cannot be transferred, check allowance");
+        require(allowed >= nodeTokens_, "_nodeTokens cannot be transferred, check allowance");
         // new mapping
         NodeInfo memory n;
         n.ownerWallet = msg.sender;
-        n.nodeWallet = _nodeWallet;
-        n.nodeType = _nodeType;
+        n.nodeWallet = nodeWallet_;
+        n.nodeType = nodeType_;
         n.nodeTokens = coll;
-        n.nodeApiBaseUrl = _nodeApiBaseUrl;
-        nodes.push(_nodeWallet);
-        nodeMap[_nodeWallet] = n;
+        n.nodeApiBaseUrl = nodeApiBaseUrl_;
+        nodes.push(nodeWallet_);
+        nodeMap[nodeWallet_] = n;
         // take collateral
         require(pushToken.transferFrom(msg.sender, address(this), coll), "failed to transfer tokens to contract");
         totalStaked += coll;
         // post actions
+        if(nodeType_ == NodeType.SNode) {
+            // try to register this node for shard mappings
+            require(storageContract != address(0), 'no storage contract defined');
+            StorageV2 s = StorageV2(storageContract);
+            s.addNode(nodeWallet_);
+        }
         //        MIN_NODES_FOR_REPORT = (uint32)(1 + (nodes.length / 2));
-        emit NodeAdded(msg.sender, _nodeWallet, _nodeType, coll, _nodeApiBaseUrl);
+        emit NodeAdded(msg.sender, nodeWallet_, nodeType_, coll, nodeApiBaseUrl_);
     }
-
-
 
     /* Complain on an existing node;
        N attesters can request to report malicious activity for a specific node
@@ -203,6 +256,7 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
 
        Returns 1 (number of affected nodes) or 0 (if nothing happened)
      */
+    // ACCESS: Any node can call this
     function reportNode(bytes memory _message, bytes[] memory _signatures) public returns (uint8) {
         uint validSigCount = 0;
         NodeInfo storage callerNodeId = nodeMap[msg.sender];
@@ -216,7 +270,7 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
                 validSigCount++;
             }
         }
-        if (validSigCount < MIN_NODES_FOR_REPORT) {
+        if (validSigCount < REPORT_NODES) {
             return 0;
         }
         VoteMessage memory vm = decodeVoteMessage(_message);
@@ -225,11 +279,11 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         if (targetNode.nodeWallet == address(0)) {
             revert("a node with _targetPubKey does not exists");
         }
-        return doReportNode(vm, targetNode);
+        return _reportNode(vm, targetNode);
     }
 
     // note: reading storage value multiple times which is sub-optimal, but the code looks much simpler
-    function doReportNode(VoteMessage memory _vm, NodeInfo storage targetNode) private returns (uint8){
+    function _reportNode(VoteMessage memory _vm, NodeInfo storage targetNode) private returns (uint8){
         require(targetNode.nodeType == NodeType.VNode, "report only for VNodes");
         NodeStatus ns = targetNode.status;
         // 2 check count
@@ -239,10 +293,10 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
             revert("unsupported");
         }
         if (ns == NodeStatus.OK || ns == NodeStatus.Slashed) {
-            if (targetNode.counters.reportCounter >= REPORT_COUNT_TO_SLASH) {
+            if (targetNode.counters.reportCounter >= REPORT_CNT_MAX) {
                 doSlash(targetNode);
             }
-            if (targetNode.counters.slashCounter >= SLASH_COUNT_TO_BAN) {
+            if (targetNode.counters.slashCounter >= SLASH_CNT_MAX) {
                 doBan(targetNode);
             }
         } else if (ns == NodeStatus.BannedAndUnstaked) {
@@ -289,6 +343,14 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         return delta;
     }
 
+    function decodeVoteMessage(bytes memory data) private pure returns (VoteMessage memory) {
+        (VoteAction vote, address target) = abi.decode(data, (VoteAction, address));
+        VoteMessage memory result;
+        result.vote = vote;
+        result.target = target;
+        return result;
+    }
+
     function getNodeInfo(address _nodeWallet) public view returns (NodeInfo memory) {
         return nodeMap[_nodeWallet];
     }
@@ -306,30 +368,15 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         targetNode.status = NodeStatus.Slashed;
         targetNode.counters.reportCounter = 0;
         targetNode.counters.slashCounter++;
-        uint256 coll = reduceCollateral(targetNode.nodeWallet, SLASH_COLL_PERCENTAGE);
+        uint256 coll = reduceCollateral(targetNode.nodeWallet, SLASH_PERCENT);
         emit NodeStatusChanged(targetNode.nodeWallet, NodeStatus.Slashed, coll);
     }
 
     function doBan(NodeInfo storage targetNode) private {
-        reduceCollateral(targetNode.nodeWallet, BAN_COLL_PERCENTAGE);
+        reduceCollateral(targetNode.nodeWallet, BAN_PERCENT);
         doUnstake(targetNode);
         targetNode.status = NodeStatus.BannedAndUnstaked;
         emit NodeStatusChanged(targetNode.nodeWallet, NodeStatus.BannedAndUnstaked, 0);
-    }
-
-
-    /*****************/
-    /* UUPS required */
-    /*****************/
-
-    function _authorizeUpgrade(address) internal override onlyOwner {}
-
-    function getProtocolVersion() public view returns (uint16) {
-        return protocolVersion;
-    }
-
-    function getCodeVersion() public pure returns (uint16){
-        return 2;
     }
 
     function updateAttestersRequired(uint8 amount) public onlyOwner {
@@ -351,7 +398,6 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     }
 }
 
-
 // a lib that abstracts privKey signature and pubKey+signature checks
 library SigUtil {
 
@@ -365,7 +411,7 @@ library SigUtil {
         "\x19Ethereum Signed Message\n" + len(msg) + msg
         */
         return
-        keccak256(
+            keccak256(
             abi.encodePacked("\x19Ethereum Signed Message:\n32", _messageHash)
         );
     }
@@ -408,13 +454,5 @@ library SigUtil {
         bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
         return recoverSigner(ethSignedMessageHash, _signature);
     }
-
-    /**********/
-    /* Errors */
-    /**********/
-
-    // todo if(!condition) revert Error1();
-    // this produces smaller bytecode
-    error Error1();
 
 }
