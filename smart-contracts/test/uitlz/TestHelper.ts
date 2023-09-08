@@ -48,6 +48,11 @@ export class TestHelper {
     // console.log('tx logs', receipt.logs);
   }
 
+  static async logEvents(tx: ContractTransaction) {
+    const receipt = await tx.wait();
+    console.log(receipt.events);
+  }
+
   static async filterEventsFromTransaction(contract: ValidatorV1, tx: ContractTransaction,
                                            eventName: string): Promise<Event[]> {
     const receipt = await tx.wait();

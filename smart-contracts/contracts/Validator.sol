@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./Storage.sol";
+import "hardhat/console.sol";
 
 /*
 Validator smart contract
@@ -22,7 +23,11 @@ and show that inbox to the UI.
 All the stacking, node management, slashing is done in this contrect Validator.sol
 S has it's own Storage.sol contract, which manages only S shard assignments.
 
+todo recalculate on addNode:
+  REPORT_NODES,REPORT_CNT_MAX,SLASH_CNT_MAX
+  attestersRequired,nodeRandomMinCount,nodeRandomPingCount
 
+todo ensure NodeInfo storage targetNode_ , is used carefully in all methods
 */
 contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
 
@@ -199,13 +204,15 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         storageContract = addr_;
     }
 
-    // ----------------------------- IMPL  --------------------------------------------------
+    // ----------------------------- NODE PUBLIC FUNCTIONS  --------------------------------------------------
 
 
-    // Registers a new validator node
-    // Locks PUSH tokens ($_token) with $_collateral amount.
-    // A node will run from a _nodeWallet
-    // ACCESS: Any node can call this
+    /*
+    Registers a new validator node
+    Locks PUSH tokens ($_token) with $_collateral amount.
+    A node will run from a _nodeWallet
+    ACCESS: Any node can call this
+    */
     function registerNodeAndStake(uint256 nodeTokens_,
         NodeType nodeType_, string memory nodeApiBaseUrl_, address nodeWallet_) public {
         uint256 coll = nodeTokens_;
@@ -226,6 +233,7 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         uint256 allowed = pushToken.allowance(msg.sender, address(this));
         require(allowed >= nodeTokens_, "_nodeTokens cannot be transferred, check allowance");
         // new mapping
+        console.log('node owner is ', msg.sender);
         NodeInfo memory n;
         n.ownerWallet = msg.sender;
         n.nodeWallet = nodeWallet_;
@@ -247,6 +255,21 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         //        MIN_NODES_FOR_REPORT = (uint32)(1 + (nodes.length / 2));
         emit NodeAdded(msg.sender, nodeWallet_, nodeType_, coll, nodeApiBaseUrl_);
     }
+
+
+    /*
+    Remove node (if you are the node owner)
+    ACCESS: Any node can call this
+    */
+    function unstakeNode(address nodeWallet_) public {
+        NodeInfo storage node = nodeMap[nodeWallet_];
+        require(node.nodeWallet != address(0), "node does not exists");
+        require(node.ownerWallet == msg.sender || owner() == msg.sender, "only owner can unstake a node");
+        _unstakeNode(node);
+        node.status = NodeStatus.Unstaked;
+        emit NodeStatusChanged(node.nodeWallet, NodeStatus.Unstaked, 0);
+    }
+
 
     /* Complain on an existing node;
        N attesters can request to report malicious activity for a specific node
@@ -282,6 +305,9 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         return _reportNode(vm, targetNode);
     }
 
+    // ----------------------------- IMPL  --------------------------------------------------
+
+
     // note: reading storage value multiple times which is sub-optimal, but the code looks much simpler
     function _reportNode(VoteMessage memory _vm, NodeInfo storage targetNode) private returns (uint8){
         require(targetNode.nodeType == NodeType.VNode, "report only for VNodes");
@@ -308,38 +334,33 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     /*
      Returns remaining collateral
     */
-    function reduceCollateral(address _nodeWallet, uint32 _percentage) private returns (uint256) {
-        require(_nodeWallet != address(0));
-        require(_percentage >= 0 && _percentage <= 100, "percentage should be in [0, 100]");
+    function reduceCollateral(address nodeWallet_, uint32 percentage_) private returns (uint256) {
+        require(nodeWallet_ != address(0));
+        require(percentage_ >= 0 && percentage_ <= 100, "percentage should be in [0, 100]");
         // reduce only nodeTokens; we do not transfer any tokens; it will affect only 'unstake'
-        NodeInfo storage node = nodeMap[_nodeWallet];
-        uint256 currentAmount = node.nodeTokens;
-        uint256 newAmount = (currentAmount * (100 - _percentage)) / 100;
-        uint256 delta = currentAmount - newAmount;
-        node.nodeTokens = newAmount;
-        totalStaked -= delta;
-        totalPenalties += delta;
-        return newAmount;
-    }
-
-
-    function unstakeNode(address _nodeWallet) external {
-        NodeInfo storage node = nodeMap[_nodeWallet];
-        require(node.nodeWallet != address(0), "node does not exists");
-        require(node.ownerWallet == msg.sender, "only owner can unstake a node");
-        doUnstake(node);
-        node.status = NodeStatus.Unstaked;
-        emit NodeStatusChanged(node.nodeWallet, NodeStatus.Unstaked, 0);
+        NodeInfo storage node = nodeMap[nodeWallet_];
+        uint256 currentAmount_ = node.nodeTokens;
+        uint256 newAmount_ = (currentAmount_ * (100 - percentage_)) / 100;
+        uint256 delta_ = currentAmount_ - newAmount_;
+        node.nodeTokens = newAmount_;
+        totalStaked -= delta_;
+        totalPenalties += delta_;
+        return newAmount_;
     }
 
     /*
     Returns unstaked amount
     */
-    function doUnstake(NodeInfo storage targetNode) private returns (uint256){
-        uint256 delta = targetNode.nodeTokens;
-        require(pushToken.transfer(targetNode.ownerWallet, delta), "failed to trasfer funds back to owner");
-        targetNode.nodeTokens = 0;
+    function _unstakeNode(NodeInfo storage targetNode_) private returns (uint256){
+        uint256 delta = targetNode_.nodeTokens;
+        require(pushToken.transfer(targetNode_.ownerWallet, delta), "failed to trasfer funds back to owner");
+        targetNode_.nodeTokens = 0;
         totalStaked -= delta;
+        if(targetNode_.nodeType == NodeType.SNode) {
+            require(storageContract != address(0), 'no storage contract defined');
+            StorageV2 s = StorageV2(storageContract);
+            s.removeNode(targetNode_.nodeWallet);
+        }
         return delta;
     }
 
@@ -374,7 +395,7 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
 
     function doBan(NodeInfo storage targetNode) private {
         reduceCollateral(targetNode.nodeWallet, BAN_PERCENT);
-        doUnstake(targetNode);
+        _unstakeNode(targetNode);
         targetNode.status = NodeStatus.BannedAndUnstaked;
         emit NodeStatusChanged(targetNode.nodeWallet, NodeStatus.BannedAndUnstaked, 0);
     }

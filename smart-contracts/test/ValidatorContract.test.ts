@@ -95,11 +95,12 @@ async function initBlockchain(): Promise<DeployInfo> {
   const storeCt = await deployStorageContract(valCt);
   await valCt.setStorageContract(storeCt.address);
 
-  await pushCt.mint(owner_.address, ethers.utils.parseEther("100"));
-  await pushCt
-    .connect(owner_)
-    .approve(valCt.address, ethers.utils.parseEther("1000000000000000"));
-
+  for (let s of [owner_, signers[1], signers[2]]) {
+    await pushCt.mint(s.address, ethers.utils.parseEther("100"));
+    await pushCt
+      .connect(s)
+      .approve(valCt.address, ethers.utils.parseEther("100"));//1000000000000000
+  }
   return {pushCt, valCt, storeCt, signers};
 }
 
@@ -122,11 +123,11 @@ async function beforeEachInit() {
 }
 
 
-describe("vto Valdator - ownership tests", function () {
+describe("Valdator - ownership tests / vot", function () {
 
   beforeEach(beforeEachInit);
 
-  it('tdi transfer to a different owner', async function () {
+  it('transfer to a different owner / tdi', async function () {
     const oldOwner = await valCt.owner();
     assert.notEqual(oldOwner, acc1.address);
 
@@ -155,7 +156,7 @@ describe("vto Valdator - ownership tests", function () {
   });
 });
 
-describe("vrn Validator - register nodes tests", function () {
+describe("Validator - register nodes tests / vrn", function () {
 
   beforeEach(beforeEachInit);
 
@@ -216,7 +217,7 @@ describe("vrn Validator - register nodes tests", function () {
 });
 
 
-describe("vnro Validator - node reports on other node", function () {
+describe("Validator - node reports on other node / vnro", function () {
 
   beforeEach(beforeEachInit);
 
@@ -347,48 +348,87 @@ describe("vnro Validator - node reports on other node", function () {
       }
     }
   })
+})
 
-  // STORAGE NODE ---------------------------------------------------------------------------------
+describe("Storage", function () {
 
-  it("asn add storage node to both Validator and Storage contracts", async function () {
+  beforeEach(beforeEachInit);
+
+  it("add storage node to both Validator and Storage contracts / asn1", async function () {
     // register node1, node2
     const allShards = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
       10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
       20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
       30, 31];
     {
-      let t1 = valCt.registerNodeAndStake(100, NodeType.SNode, "", snode1.address);
+      // add snode1 with owner acc1
+      log('valCt: ', valCt.address);
+      log('valCt owner: ', owner.address);
+      log('snode1 owner1: ', acc1.address);
+      log('snode1: ', snode1.address);
+      let t1 = await valCt.connect(acc1)
+        .registerNodeAndStake(100, NodeType.SNode, "", snode1.address);
       await expect(t1).to.emit(valCt, "NodeAdded")
-        .withArgs(owner.address, snode1.address, NodeType.SNode, 100, "");
+        .withArgs(acc1.address, snode1.address, NodeType.SNode, 100, "");
+
       let nodeInfo = await valCt.getNodeInfo(snode1.address);
       expect(nodeInfo.status).to.be.equal(0);
 
       const bitmask = await storeCt.getNodeShardsByAddr(snode1.address);
       assert.deepEqual(BitUtil.bitsToPositions(bitmask), allShards);
     }
+
     {
-      let t1 = valCt.registerNodeAndStake(100, NodeType.SNode, "", snode2.address);
+      // add snode2 with owner acc2
+      log('valCt: ', valCt.address);
+      log('valCt owner: ', owner.address);
+      log('snode1 owner2: ', acc2.address);
+      log('snode2: ', snode2.address);
+      let t1 = await valCt.connect(acc2)
+        .registerNodeAndStake(200, NodeType.SNode, "", snode2.address);
       await expect(t1).to.emit(valCt, "NodeAdded")
-        .withArgs(owner.address, snode2.address, NodeType.SNode, 100, "");
+        .withArgs(acc2.address, snode2.address, NodeType.SNode, 200, "");
+
       let nodeInfo = await valCt.getNodeInfo(snode2.address);
       expect(nodeInfo.status).to.be.equal(0);
 
-      const bitmask1 = await storeCt.getNodeShardsByAddr(snode1.address);
-      log(bitmask1.toString(2));
-      assert.deepEqual(BitUtil.bitsToPositions(bitmask1), allShards);
-      const bitmask2 = await storeCt.getNodeShardsByAddr(snode1.address);
-      log(bitmask2.toString(2));
-      assert.deepEqual(BitUtil.bitsToPositions(bitmask2), allShards);
+      const bitmask = await storeCt.getNodeShardsByAddr(snode2.address);
+      assert.deepEqual(BitUtil.bitsToPositions(bitmask), allShards);
     }
-    expect(await pushCt.balanceOf(valCt.address)).to.be.equal(200);
+    // total funds locked = sum of both nodes stakes,
+    // all nodes are visible in all contracts
+    expect(await pushCt.balanceOf(valCt.address)).to.be.equal(300);
+    assert.deepEqual(await valCt.getNodes(), [snode1.address, snode2.address])
+    assert.deepEqual(await storeCt.getNodeAddresses(), [snode1.address, snode2.address])
+
+
+    {
+      // remove node1
+      const t1 = await valCt.connect(acc1).unstakeNode(snode1.address);
+      await t.confirmTransaction(t1);
+      const t2 = await valCt.connect(acc1).unstakeNode(snode1.address); // try unstake 2nd time
+      expect(t2).to.be.reverted;
+      const t3 = valCt.connect(acc2).unstakeNode(snode1.address); // try unstake: not a node owner
+      expect(t3).to.be.reverted;
+    }
+    {
+      // remove node2
+      const t1 = await valCt.connect(acc2).unstakeNode(snode2.address);
+      await t.confirmTransaction(t1);
+      const t2 = valCt.connect(acc2).unstakeNode(snode2.address); // try unstake 2nd time
+      expect(t2).to.be.reverted;
+      const t3 = valCt.connect(acc1).unstakeNode(snode2.address); // try unstake: not a node owner
+      expect(t3).to.be.reverted;
+    }
+
   });
 
 
-  describe("vuns Validator - Test unstake", function () {
+  describe("Validator - Test unstake / vtu", function () {
 
     beforeEach(beforeEachInit);
 
-    it("unstake-test-1 :: register 1 node / unstake to bad address / unstake to owner address", async function () {
+    it("register 1 node / unstake to bad address / unstake to owner address | unstake-test-1", async function () {
       // register 1 node (+ check all amounts before and after)
       {
         let ownerBalanceBefore = await pushCt.balanceOf(owner.address);

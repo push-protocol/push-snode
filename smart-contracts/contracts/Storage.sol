@@ -46,6 +46,7 @@ map after:  Map(3) {
   3 => Set(7) { 1, 2, 3, 4, 7, 9, 10 }
 }
 
+todo getNodeShardsByAddr return an array instead of bitmap?
 */
 contract StorageV2 is Ownable2StepUpgradeable, UUPSUpgradeable {
     // number of shards;
@@ -239,6 +240,16 @@ contract StorageV2 is Ownable2StepUpgradeable, UUPSUpgradeable {
 
     function nodeCount() public view returns (uint8) {
         return uint8(nodeIdList.length);
+    }
+
+    function getNodeAddresses() public view returns (address[] memory) {
+        uint size = nodeIdList.length;
+        address[] memory nodeAddrArr = new address[](size);
+        for (uint i = 0; i < size; i++) {
+            uint8 nodeId = nodeIdList[i];
+            nodeAddrArr[i] = mapNodeIdToAddr[nodeId];
+        }
+        return nodeAddrArr;
     }
 
     function getBit(uint32 self_, uint8 index_) private pure returns (uint8) {
