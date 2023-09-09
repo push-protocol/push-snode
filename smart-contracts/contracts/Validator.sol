@@ -249,7 +249,7 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         if(nodeType_ == NodeType.SNode) {
             // try to register this node for shard mappings
             require(storageContract != address(0), 'no storage contract defined');
-            StorageV2 s = StorageV2(storageContract);
+            StorageV1 s = StorageV1(storageContract);
             s.addNode(nodeWallet_);
         }
         //        MIN_NODES_FOR_REPORT = (uint32)(1 + (nodes.length / 2));
@@ -358,7 +358,7 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         totalStaked -= delta;
         if(targetNode_.nodeType == NodeType.SNode) {
             require(storageContract != address(0), 'no storage contract defined');
-            StorageV2 s = StorageV2(storageContract);
+            StorageV1 s = StorageV1(storageContract);
             s.removeNode(targetNode_.nodeWallet);
         }
         return delta;

@@ -40,10 +40,10 @@ async function deployValidatorContract(pushCt: PushToken): Promise<ValidatorV1> 
 }
 
 async function deployStorageContract(valCt: ValidatorV1): Promise<StorageV2> {
-  log('deploying StorageV2')
+  log('deploying StorageV1')
   let protocolVersion = 1;
   let rfTarget = 5;
-  const factory = await ethers.getContractFactory("StorageV2");
+  const factory = await ethers.getContractFactory("StorageV1");
   const proxyCt = await upgrades.deployProxy(factory,
     [protocolVersion, valCt.address, rfTarget],
     {kind: "uups"});

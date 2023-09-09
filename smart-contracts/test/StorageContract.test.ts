@@ -65,7 +65,7 @@ async function state1(): Promise<DeployInfo> {
   let protocolVersion = 1;
   let validatorContract = '0x' + '0'.repeat(40);
   let rfTarget = 5;
-  const factory = await ethers.getContractFactory("StorageV2");
+  const factory = await ethers.getContractFactory("StorageV1");
   const proxyCt: TypedStorageContract = <TypedStorageContract>await upgrades.deployProxy(factory,
     [protocolVersion, validatorContract, rfTarget],
     {kind: "uups"});

@@ -48,7 +48,7 @@ map after:  Map(3) {
 
 todo getNodeShardsByAddr return an array instead of bitmap?
 */
-contract StorageV2 is Ownable2StepUpgradeable, UUPSUpgradeable {
+contract StorageV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     // number of shards;
     // this value should not change after deploy
     // also this should match data type in mapNodeToShards (uint32/64/128/256)
