@@ -25,4 +25,17 @@ export class CollectionUtil {
   public static setToArray<V>(set: Set<V>): V[] {
     return Array.from(set.keys())
   }
+
+  public static intersectSets<T>(set1: Set<T>, set2: Set<T>): Set<T> {
+    return new Set([...set1].filter(x => set2.has(x)));
+  }
+
+  public static sortNumbersAsc(array:number[]) {
+    if(array==null || array.length==0) {
+      return;
+    }
+    array.sort((a, b) => {
+      return a - b;
+    })
+  }
 }

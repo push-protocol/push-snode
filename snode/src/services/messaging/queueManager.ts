@@ -1,5 +1,4 @@
 import {Inject, Service} from 'typedi'
-import {MySqlUtil} from '../../utilz/mySqlUtil'
 import {Logger} from 'winston'
 import schedule from 'node-schedule'
 import {ValidatorContractState} from '../messaging-common/validatorContractState'
@@ -7,6 +6,7 @@ import {WinstonUtil} from '../../utilz/winstonUtil'
 import {QueueServer} from '../messaging-dset/queueServer'
 import {QueueClient} from '../messaging-dset/queueClient'
 import StorageNode from "./storageNode";
+import {QueueClientHelper} from "../messaging-common/queueClientHelper";
 
 
 @Service()
@@ -14,7 +14,7 @@ export class QueueManager {
   public log: Logger = WinstonUtil.newLog(QueueManager)
 
   @Inject((type) => ValidatorContractState)
-  private contractState: ValidatorContractState;
+  private contract: ValidatorContractState;
   @Inject(type => StorageNode)
   private storageNode:StorageNode;
 
@@ -35,7 +35,7 @@ export class QueueManager {
   public async postConstruct() {
     this.log.debug('postConstruct')
     this.mblockClient = new QueueClient(this.storageNode, QueueManager.QUEUE_MBLOCK)
-    await this.initClientForEveryQueueForEveryValidator([QueueManager.QUEUE_MBLOCK])
+    await QueueClientHelper.initClientForEveryQueueForEveryValidator(this.contract, [QueueManager.QUEUE_MBLOCK])
     const qs = this
     schedule.scheduleJob(this.CLIENT_READ_SCHEDULE, async function () {
       const dbgPrefix = 'PollRemoteQueue'
@@ -48,46 +48,6 @@ export class QueueManager {
         qs.log.info(`CRON %s finished`, dbgPrefix);
       }
     })
-  }
-
-  // updates the dset_client table used for queries according to the contract data
-  private async initClientForEveryQueueForEveryValidator(queueNames:string[]) {
-    const nodeId = this.contractState.nodeId
-    const allValidators = this.contractState.getAllValidatorsExceptSelf()
-    for (const queueName of queueNames) {
-      for (const nodeInfo of allValidators) {
-        const targetNodeId = nodeInfo.nodeId
-        const targetNodeUrl = nodeInfo.url
-        const targetState = ValidatorContractState.isEnabled(nodeInfo) ? 1 : 0
-        await MySqlUtil.insert(
-          `INSERT INTO dset_client (queue_name, target_node_id, target_node_url, target_offset, state)
-           VALUES (?, ?, ?, 0, ?)
-           ON DUPLICATE KEY UPDATE target_node_url=?,
-                                   state=?`,
-          queueName,
-          targetNodeId,
-          targetNodeUrl,
-          targetState,
-          targetNodeUrl,
-          targetState
-        )
-        const targetOffset = await MySqlUtil.queryOneValue<number>(
-          `SELECT target_offset
-           FROM dset_client
-           where queue_name = ?
-             and target_node_id = ?`,
-          queueName,
-          targetNodeId
-        )
-        this.log.info(
-          'client polls (%s) queue: %s node: %s from offset: %d ',
-          targetState,
-          queueName,
-          targetNodeId,
-          targetOffset
-        )
-      }
-    }
   }
 
   public getQueue(queueName: string): QueueServer {

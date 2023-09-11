@@ -1,3 +1,5 @@
+import {CollectionUtil} from "./collectionUtil";
+
 export class BitUtil {
   /**
    * XORs 2 buffers, byte by byte: src = src XOR add
@@ -35,5 +37,24 @@ export class BitUtil {
 
   public static base64ToStr(value: string): string {
     return Buffer.from(value, 'base64').toString('utf8')
+  }
+
+  public static getBit(number:number, bitOffset:number) {
+    return (number & (1 << bitOffset)) === 0 ? 0 : 1;
+  }
+
+  public static bitsToPositions(number: number): number[] {
+    // return null;
+    const result: number[] = [];
+    let position = 0;
+    while (number !== 0) {
+      if ((number & 1) === 1) {
+        result.push(position);
+      }
+      number = number >>> 1;
+      position++;
+    }
+    CollectionUtil.sortNumbersAsc(result);
+    return result;
   }
 }

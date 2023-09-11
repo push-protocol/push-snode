@@ -7,7 +7,11 @@ export class NumUtil {
     if (isNaN(valN)) {
       return defaultValue
     }
-    return Number.isInteger(valN) ? valN : Math.round(valN)
+    return this.isRoundedInteger(valN) ? valN : Math.round(valN)
+  }
+
+  static isRoundedInteger(valN: number) {
+    return Number.isInteger(valN);
   }
 
   public static toString(value: number) {

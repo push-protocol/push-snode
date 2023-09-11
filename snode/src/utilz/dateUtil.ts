@@ -38,11 +38,12 @@ export default class DateUtil {
   }
 
   public static currentTimeMillis(): number {
-    return new Date().getTime()
+    return Date.now()
   }
 
   public static currentTimeSeconds(): number {
-    return Math.round(new Date().getTime() / 1000)
+    // new Date().getTime()
+    return Math.round( Date.now()/ 1000)
   }
 
   public static millisToDate(timestamp: number): Date {

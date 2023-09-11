@@ -24,7 +24,7 @@ export class ValidatorContractState {
   public contractCli: ValidatorCtClient
 
   public async postConstruct() {
-    this.log.info('ValidatorContractState.postConstruct()')
+    this.log.info('postConstruct()')
     this.contractFactory = new ContractClientFactory()
     this.contractCli = await this.contractFactory.buildRWClient(this.log)
     await this.contractCli.connect()
@@ -111,12 +111,12 @@ class ContractClientFactory {
   }
 
   private static loadValidatorContractAbi(configDir: string, fileNameInConfigDir: string): string {
-    const fileAbsolute = path.resolve(configDir, `./${fileNameInConfigDir}`)
-    const file = fs.readFileSync(fileAbsolute, 'utf8')
-    const json = JSON.parse(file)
-    const abi = json.abi
-    console.log(`abi size:`, abi.length)
-    return abi
+    const fileAbsolute = path.resolve(configDir, `./${fileNameInConfigDir}`);
+    const file = fs.readFileSync(fileAbsolute, 'utf8');
+    const json = JSON.parse(file);
+    const abi = json.abi;
+    console.log(`abi size:`, abi.length);
+    return abi;
   }
 
   // creates a client which can only read blockchain state
@@ -147,9 +147,9 @@ export class ValidatorCtClient {
 
   // contract state
   nodeMap: Map<string, NodeInfo> = new Map<string, NodeInfo>()
-  public attestersRequired: number
-  public nodeRandomMinCount: number
-  public nodeRandomPingCount: number
+  public attestersRequired: number;
+  public nodeRandomMinCount: number;
+  public nodeRandomPingCount: number;
 
   constructor(contract: ethers.Contract, log: Logger) {
     this.contract = contract

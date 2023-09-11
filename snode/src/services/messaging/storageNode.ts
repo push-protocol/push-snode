@@ -1,5 +1,4 @@
-import {Service, Container, Inject} from 'typedi'
-import config from '../../config'
+import {Inject, Service} from 'typedi'
 import StrUtil from "../../utilz/strUtil";
 import {ValidatorContractState} from "../messaging-common/validatorContractState";
 import {Logger} from "winston";
@@ -13,6 +12,7 @@ import {Check} from "../../utilz/check";
 import {WinstonUtil} from "../../utilz/winstonUtil";
 import DateUtil from "../../utilz/dateUtil";
 import DbHelper from "../../helpers/dbHelper";
+import {StorageContractState} from "../messaging-common/storageContractState";
 
 
 @Service()
@@ -20,7 +20,10 @@ export default class StorageNode implements Consumer<QItem> {
   public log: Logger = WinstonUtil.newLog(StorageNode)
 
   @Inject()
-  private contract: ValidatorContractState;
+  private valContractState: ValidatorContractState;
+
+  @Inject()
+  private storageContractState: StorageContractState;
 
   @Inject(type => QueueManager)
   private queueManager: QueueManager;
@@ -32,7 +35,8 @@ export default class StorageNode implements Consumer<QItem> {
 
   public async postConstruct() {
     // MySqlUtil.init(dbHelper.pool); todo postgres !!!!!!!!!!!!!!
-    await this.contract.postConstruct();
+    await this.valContractState.postConstruct();
+    await this.storageContractState.postConstruct();
     await this.queueManager.postConstruct();
   }
 
@@ -52,39 +56,61 @@ export default class StorageNode implements Consumer<QItem> {
     // check contents
     // since this check is not for historical data, but for realtime data,
     // so we do not care about old blocked validators which might occur in the historical queue
-    let activeValidators = CollectionUtil.arrayToFields(this.contract.getActiveValidators(), 'nodeId');
+    let activeValidators = CollectionUtil.arrayToFields(this.valContractState.getActiveValidators(), 'nodeId');
     let check1 = MessageBlockUtil.checkBlock(mb, activeValidators);
     if (!check1.success) {
       this.log.error('item validation failed: ', check1.err);
       return false;
     }
     // check database
-    let isNew = await this.blockStorage.accept(item);
-    if(!isNew) {
+    let shardSet = MessageBlockUtil.calculateAffectedShards(mb);
+    let isNew = await this.blockStorage.saveBlockWithShardData(mb, calculatedHash, shardSet);
+    if (!isNew) {
       // this is not an error, because we read duplicates from every validator
       this.log.debug('block %s already exists ', mb.id);
       return false;
     }
     // send block
-    await this.unpackBlock(mb);
+    await this.unpackBlockToInboxes(mb, shardSet);
+  }
+
+  // todo see DbHelper checkThatShardIsOnThisNode
+  public getNodeShards(): Set<number> {
+    let set = new Set<number>();
+    for (let i = 0; i < 128; i++) {
+      set.add(i);
+    }
+    return set;
   }
 
   // sends the block contents (internal messages from every response)
   // to every recipient's inbox
-  public async unpackBlock(mb: MessageBlock) {
-    // todo calculate shard
-
-
-    let now = Date.now() / 1000;
-    let nowStr = now + '';
-    const currentNodeId = this.contract.nodeId;
-    for (const feedItem of mb.responses) {
-      let targetWallets = feedItem.header.recipients;
-      for (const targetWallet of targetWallets) {
-        await this.putToInbox('inbox', targetWallet, nowStr, currentNodeId, feedItem.payload);
+  public async unpackBlockToInboxes(mb: MessageBlock, shardSet: Set<number>) {
+    // this is the list of shards that we support on this node
+    const nodeShards = this.getNodeShards();
+    this.log.debug('storage node supports %s shards: %o', nodeShards.size, nodeShards);
+    let shardsToProcess = CollectionUtil.intersectSets(shardSet, nodeShards);
+    this.log.debug('block %s has %d inboxes to unpack', mb.id, shardsToProcess)
+    if (shardsToProcess.size == 0) {
+      this.log.debug('finished');
+      return;
+    }
+    let nowStr = DateUtil.currentTimeSeconds() + '';
+    const currentNodeId = this.valContractState.nodeId;
+    for (let i = 0; i < mb.responses.length; i++) {
+      const feedItem = mb.responses[i];
+      const targetWallets: string[] = MessageBlockUtil.calculateRecipients(mb, i);
+      for (let i1 = 0; i1 < targetWallets.length; i1++) {
+        const targetAddr = targetWallets[i1];
+        const targetShard = MessageBlockUtil.calculateAffectedShard(targetAddr);
+        if (!shardsToProcess.has(targetShard)) {
+          continue;
+        }
+        await this.putToInbox('inbox', targetAddr, nowStr, currentNodeId, feedItem.payload);
       }
     }
   }
+
 
   /**
    *
@@ -94,16 +120,16 @@ export default class StorageNode implements Consumer<QItem> {
    * @param nodeId current node id, ex: 0xAAAAAAA
    * @param fpayload payload format
    */
-  public async putToInbox(nsName:string, nsIndex:string,
-                          ts:string,
-                          nodeId:string,
-                          fpayload:FPayload) {
+  public async putToInbox(nsName: string, nsIndex: string,
+                          ts: string,
+                          nodeId: string,
+                          fpayload: FPayload) {
     const key = fpayload.data.sid;
     fpayload.recipients = null; // null recipients field because we don't need that
     this.log.debug(`nsName=${nsName} nsIndex=${nsIndex} ts=${ts} key=${key} nodeId=${nodeId} fpayload=${fpayload}`);
     let shardId = DbHelper.calculateShardForNamespaceIndex(nsName, nsIndex);
     this.log.debug(`nodeId=${nodeId} shardId=${shardId}`);
-    const success = await DbHelper.checkThatShardIsOnThisNode(nsName, shardId, nodeId);
+    const success = await DbHelper.checkThatShardIsOnThisNode(nsName, shardId, nodeId);// todo REMOVE !!!!!!!!!!
     if (!success) {
       let errMsg = `${nsName}.${nsIndex} maps to shard ${shardId} which is missing on node ${nodeId}`;
       console.log(errMsg);
@@ -131,7 +157,6 @@ export default class StorageNode implements Consumer<QItem> {
         this.log.debug(createtable);
       }
     }
-    var storageTable = await DbHelper.findStorageTableByDate(nsName, shardId, date);
     const storageValue = await DbHelper.putValueInTable(nsName, shardId, nsIndex, storageTable,
       ts, key, JSON.stringify(fpayload));
     this.log.debug(`found value: ${storageValue}`)

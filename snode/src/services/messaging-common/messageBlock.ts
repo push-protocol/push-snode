@@ -9,14 +9,15 @@
  { s1, 0xD}, { s2, 0xE}, { s3, 0xF},
  { d1, 0x1}, { d2, 0x2}, { d3, 0x3} ]
  */
-import { CollectionUtil } from '../../utilz/collectionUtil'
+import {CollectionUtil} from '../../utilz/collectionUtil'
 import StrUtil from '../../utilz/strUtil'
-import { EthSig } from '../../utilz/ethSig'
-import { Logger } from 'winston'
-import { WinstonUtil } from '../../utilz/winstonUtil'
-import { ObjectHasher } from '../../utilz/objectHasher'
-import { EthUtil } from '../../utilz/EthUtil'
-import { Check } from '../../utilz/check'
+import {EthSig} from '../../utilz/ethSig'
+import {Logger} from 'winston'
+import {WinstonUtil} from '../../utilz/winstonUtil'
+import {ObjectHasher} from '../../utilz/objectHasher'
+import {EthUtil} from '../../utilz/EthUtil'
+import {Check} from '../../utilz/check'
+import {NumUtil} from "../../utilz/numUtil";
 
 /*
 ex:
@@ -339,27 +340,44 @@ export class MessageBlockUtil {
    */
   static calculateAffectedShards(block: Readonly<MessageBlock>): Set<number> {
     const shards = new Set<number>()
-    for (const response of block.responses) {
-      for (const recipient of response.header.recipientsResolved) {
-        const recipientAddr = recipient.addr
-        let shardId: number = null
-        // 1) try to get first byte from caip address
-        // eip155:5:0xD8634C39BBFd4033c0d3289C4515275102423681 -> D8
-        // and use it as shard
-        const addrObj = EthUtil.parseCaipAddress(recipientAddr)
-        if (addrObj != null && !StrUtil.isEmpty(addrObj.addr)) {
-          Check.isTrue(recipientAddr.startsWith('0x'))
-          shardId = Number.parseInt(addrObj.addr.substring(2, 4).toLowerCase(), 16)
-        }
-        // 2) try to get sha256 otherwise
+    for (const fi of block.responses) {
+      for (const recipient of fi.header.recipientsResolved) {
+        let shardId = this.calculateAffectedShard(recipient.addr);
         if (shardId == null) {
-          shardId = Number.parseInt(ObjectHasher.hashToSha256(recipientAddr.substring(0, 2)))
+          this.log.error('cannot calculate shardId for recipient %o in %o', recipient, fi);
+          continue;
         }
-        Check.notNull(shardId)
         shards.add(shardId)
       }
     }
     return shards
+  }
+
+  // 1) try to get first byte from caip address
+  // eip155:5:0xD8634C39BBFd4033c0d3289C4515275102423681 -> d8 -> 216
+  // and use it as shard
+  // 2) take sha256(addr) ->
+  public static calculateAffectedShard(recipientAddr: string): number | null {
+    if (StrUtil.isEmpty(recipientAddr)) {
+      return null;
+    }
+    let shardId: number = null
+    const addrObj = EthUtil.parseCaipAddress(recipientAddr)
+    if (addrObj != null
+      && !StrUtil.isEmpty(addrObj.addr)
+      && addrObj.addr.startsWith('0x')
+      && addrObj.addr.length > 4) {
+      const firstByteAsHex = addrObj.addr.substring(2, 4).toLowerCase();
+      shardId = Number.parseInt(firstByteAsHex, 16);
+    }
+    // 2) try to get sha256 otherwise
+    if (shardId == null) {
+      const firstByteAsHex = ObjectHasher.hashToSha256(recipientAddr).toLowerCase().substring(0, 2);
+      shardId = Number.parseInt(firstByteAsHex, 16);
+    }
+    Check.notNull(shardId);
+    Check.isTrue(shardId >= 0 && shardId <= 255 && NumUtil.isRoundedInteger(shardId));
+    return shardId;
   }
 
   public static checkBlock(block: MessageBlock, validatorsFromContract: Set<string>): CheckResult {
@@ -430,10 +448,10 @@ export class CheckResult {
   err: string
 
   static failWithText(err: string): CheckResult {
-    return { success: false, err: err }
+    return {success: false, err: err}
   }
 
   static ok(): CheckResult {
-    return { success: true, err: '' }
+    return {success: true, err: ''}
   }
 }
