@@ -1,10 +1,11 @@
 import {task} from "hardhat/config";
-import {TaskUtil} from "./utilz/TaskUtil";
+import {RegisterUtil} from "../src/RegisterUtil";
 import {HardhatRuntimeEnvironment} from "hardhat/types";
+import {NodeType} from "../src/DeployerUtil";
 
 let info = console.log;
 
-task("v:registerValidator", "")
+task("v:registerValidator", "adds a new validator node")
     .addParam("validatorProxyCt", "validatorCt proxy address")
     .addParam("pushCt", "push token contract")
     .addPositionalParam("nodeAddress", "")
@@ -22,11 +23,11 @@ task("v:registerValidator", "")
         const nodeUrl = args.nodeUrl;
         const nodeAmount = args.nodeAmount;
         info(`nodeAddress=${nodeAddress}, nodeUrl=${nodeUrl}, nodeAmount=${nodeAmount}`);
-        await TaskUtil.registerNode(hre, pushCt, validatorProxyCt, nodeOwner, nodeAddress, nodeAmount, nodeUrl, 0);
+        await RegisterUtil.registerNode(hre, pushCt, validatorProxyCt, nodeOwner, nodeAddress, nodeAmount, nodeUrl, 0);
         info(`success`);
     });
 
-task("v:registerDelivery", "redeploys a new validatorCt")
+task("v:registerDelivery", "adds a new delivery node")
     .addParam("validatorProxyCt", "validatorCt proxy address")
     .addParam("pushCt", "push token contract")
     .addPositionalParam("nodeAddress", "")
@@ -43,9 +44,30 @@ task("v:registerDelivery", "redeploys a new validatorCt")
         const nodeUrl = '';
         const nodeAmount = args.nodeAmount;
         info(`nodeAddress=${nodeAddress}, nodeUrl=${nodeUrl}, nodeAmount=${nodeAmount}`);
-        await TaskUtil.registerNode(hre, pushCt, validatorProxyCt, nodeOwner, nodeAddress, nodeAmount, nodeUrl, 2);
+        await RegisterUtil.registerNode(hre, pushCt, validatorProxyCt, nodeOwner, nodeAddress, nodeAmount, nodeUrl, 2);
         info(`success`);
     });
+
+task("v:registerStorage", "adds a new storage node")
+  .addParam("validatorProxyCt", "validatorCt proxy address")
+  .addParam("pushCt", "push token contract")
+  .addPositionalParam("nodeAddress", "")
+  .addPositionalParam("nodeAmount", "")
+  .setAction(async (args, hre) => {
+    const validatorProxyCt = args.validatorProxyCt;
+    info(`validatorProxyCt is ${validatorProxyCt}`);
+    const pushCt = args.pushCt;
+    info(`pushCt is ${pushCt}`);
+    const [nodeOwner] = await hre.ethers.getSigners();
+    info(`nodeOwner is ${nodeOwner.address}`);
+
+    const nodeAddress = args.nodeAddress;
+    const nodeUrl = '';
+    const nodeAmount = args.nodeAmount;
+    info(`nodeAddress=${nodeAddress}, nodeUrl=${nodeUrl}, nodeAmount=${nodeAmount}`);
+    await RegisterUtil.registerNode(hre, pushCt, validatorProxyCt, nodeOwner, nodeAddress, nodeAmount, nodeUrl, NodeType.SNode);
+    info(`success`);
+  });
 
 
 task("push:balanceOf", "prints account balance @ PUSH token")

@@ -4,17 +4,19 @@ import "@nomicfoundation/hardhat-chai-matchers";
 import "@nomiclabs/hardhat-ethers";
 import {expect} from "chai";
 import {assert} from "chai";
-import {ethers} from "hardhat";
+import hre, {ethers} from "hardhat";
 import {Contract, ContractTransaction} from "ethers";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {BitUtil} from "./uitlz/bitUtil";
 import {TestHelper as t} from "./uitlz/TestHelper";
 import {CollectionUtil} from "./uitlz/collectionUtil";
 import {NodeStatus} from "./ValidatorHelper";
+import {DeployerUtil} from "../src/DeployerUtil";
+import {StorageV1} from "../typechain-types";
 
 let debug = console.log;
-let ct: StorageContract & Contract;
-let ctAsOwner: StorageContract & Contract;
+let ct: StorageV1;
+let ctAsOwner: StorageV1;
 
 let nodes = [null];
 for (let i = 1; i <= 254; i++) {
@@ -50,7 +52,7 @@ interface StorageContract {
 
 }
 
-type TypedStorageContract = StorageContract & Contract;
+type TypedStorageContract = StorageV1 & Contract;
 
 class DeployInfo {
   storageCt: TypedStorageContract;
@@ -65,18 +67,12 @@ async function state1(): Promise<DeployInfo> {
   let protocolVersion = 1;
   let validatorContract = '0x' + '0'.repeat(40);
   let rfTarget = 5;
-  const factory = await ethers.getContractFactory("StorageV1");
-  const proxyCt: TypedStorageContract = <TypedStorageContract>await upgrades.deployProxy(factory,
-    [protocolVersion, validatorContract, rfTarget],
-    {kind: "uups"});
-  await proxyCt.deployed();
-  debug(`deployed proxy: ${proxyCt.address}`);
-  let implCt = await upgrades.erc1967.getImplementationAddress(proxyCt.address);
-  debug(`deployed impl: ${implCt}`);
+  let storageCt = await DeployerUtil.deployStorageContract(hre, validatorContract);
+
 
   // const storageCtFactory = await ethers.getContractFactory("StorageV1");
   // const storageCt = await storageCtFactory.deploy();
-  return {storageCt: proxyCt, owner};
+  return {storageCt, owner};
 }
 
 
@@ -174,8 +170,8 @@ async function assertNodeListLength(e: number) {
 
 async function beforeEachInit() {
   const state = await loadFixture(state1);
-  ct = <StorageContract & Contract>state.storageCt;
-  ctAsOwner = <StorageContract & Contract>ct.connect(state.owner);
+  ct = state.storageCt;
+  ctAsOwner = ct.connect(state.owner);
   expect(ct.address).to.be.properAddress;
 }
 

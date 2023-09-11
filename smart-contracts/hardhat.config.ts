@@ -46,4 +46,4 @@ export default config;
 /* TASKS */
 import "./tasks/deployTasks"
 import "./tasks/keyTasks"
-import "./tasks/validatorTasks"
+import "./tasks/registerTasks"

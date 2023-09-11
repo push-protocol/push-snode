@@ -1,56 +1,61 @@
 import {subtask, task, types} from "hardhat/config"
+import {PushToken, StorageV1, ValidatorV1} from "../typechain-types";
+import {ethers} from "hardhat";
+import {DeployerUtil} from "../src/DeployerUtil";
 
-let info = console.log;
+let log = console.log;
 
 task("v:deployTestPushTokenCt", "register a test push token; owner emits 10k for himself")
-    .setAction(async (taskArgs, hre) => {
-        const ethers = hre.ethers;
-        const [owner] = await hre.ethers.getSigners();
-        info(`owner is ${owner.address}`);
+  .setAction(async (taskArgs, hre) => {
+    const ethers = hre.ethers;
+    const [owner] = await hre.ethers.getSigners();
+    log(`owner is ${owner.address}`);
 
-        const pushTokenFactory = await ethers.getContractFactory("PushToken");
-        const pushToken = await pushTokenFactory.deploy();
-        await pushToken.deployed();
-        info(`pushToken deployed`);
+    const pushToken = await DeployerUtil.deployPushTokenFake(hre);
+    log(`pushToken deployed`);
 
-        const mintAmount = "100000";
-        const amount = ethers.utils.parseEther(mintAmount);
-        await pushToken.mint(owner.address, amount);
-        let finalBalance = await pushToken.balanceOf(owner.address);
-        info(`minted ${mintAmount} for owner ${owner.address}, balance is ${finalBalance}`);
-        info(`pushToken address: ${pushToken.address}`);
-    });
+    const mintAmount = "100000";
+    const amount = ethers.utils.parseEther(mintAmount);
+    await pushToken.mint(owner.address, amount);
+    let finalBalance = await pushToken.balanceOf(owner.address);
+    log(`minted ${mintAmount} for owner ${owner.address}, balance is ${finalBalance}`);
+    log(`pushToken address: ${pushToken.address}`);
+  });
 
 
 task("v:deployValidatorCt", "deploys validatorCt")
-    .addPositionalParam("pushCt", "push token contract")
-    .setAction(async (taskArgs, hre) => {
-        const ethers = hre.ethers;
-        const [owner] = await hre.ethers.getSigners();
-        const pushCt = taskArgs.pushCt;
-        info(`owner is ${owner.address}`);
-        info(`pushcontract is ${pushCt}`);
+  .addPositionalParam("pushCt", "push token contract")
+  .setAction(async (taskArgs, hre) => {
+    const ethers = hre.ethers;
+    const [owner] = await hre.ethers.getSigners();
+    const pushCt = taskArgs.pushCt;
+    log(`owner is ${owner.address}`);
+    log(`pushcontract is ${pushCt}`);
 
-        const validatorV1Factory = await ethers.getContractFactory("ValidatorV1");
-        const validatorV1Proxy = await upgrades.deployProxy(validatorV1Factory,
-            [1, pushCt, 1, 1, 1],
-            {kind: "uups"});
-        await validatorV1Proxy.deployed();
-        info(`deployed proxy: ${validatorV1Proxy.address}`);
-        let validatorV1Impl = await upgrades.erc1967.getImplementationAddress(validatorV1Proxy.address);
-        console.log(`deployed impl: ${validatorV1Impl}`);
-    });
+    const validatorCt = await DeployerUtil.deployValidatorContract(hre, pushCt);
+  });
 
 
 task("v:updateValidatorCt", "redeploys a new validatorCt")
-    .addPositionalParam("validatorProxyCt", "validatorCt proxy address")
-    .setAction(async (taskArgs, hre) => {
-        const ethers = hre.ethers;
-        const [owner] = await hre.ethers.getSigners();
-        const validatorProxyCt = taskArgs.validatorProxyCt;
-        info(`owner is ${owner.address}`);
-        info(`proxy is ${validatorProxyCt}`);
-        const validatorV1Factory = await ethers.getContractFactory("ValidatorV1");
-        const abi = await upgrades.upgradeProxy(validatorProxyCt, validatorV1Factory, {kind: 'uups'});
-        info(`updated proxy at address: ${abi.address}`);
-    });
+  .addPositionalParam("validatorProxyCt", "validatorCt proxy address")
+  .setAction(async (taskArgs, hre) => {
+    await DeployerUtil.updateValidatorContract(hre, taskArgs.validatorProxyCt);
+  });
+
+
+task("v:deployStorageCt", "deploys validatorCt and registers it into validator contract")
+  .addPositionalParam("validatorContract", "validator contract")
+  .setAction(async (taskArgs, hre) => {
+    const ethers = hre.ethers;
+    const [owner] = await hre.ethers.getSigners();
+    const pushCt = taskArgs.pushCt;
+    const valCtAddr: string = taskArgs.validatorContract;
+    log('deploying storage contract')
+    const storeCt = await DeployerUtil.deployStorageContract(hre, valCtAddr);
+    log(`deployed`);
+
+    log(`registering storage contract ${storeCt.address} into validator at ${valCtAddr}`)
+    const valCt = await ethers.getContractAt("ValidatorV1", valCtAddr, owner);
+    await valCt.setStorageContract(storeCt.address);
+    log(`validatorContract successfully registered new address: `, await valCt.storageContract());
+  });

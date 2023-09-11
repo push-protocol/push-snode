@@ -5,16 +5,18 @@ import "@nomicfoundation/hardhat-chai-matchers";
 import "@nomiclabs/hardhat-ethers";
 import {expect, assert} from "chai";
 import {ethers} from "hardhat";
-import {PushToken, StorageV2, ValidatorV1} from "../typechain-types";
+import hre from "hardhat";
+import {PushToken, StorageV1, ValidatorV1} from "../typechain-types";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {TestHelper as t} from "./uitlz/TestHelper";
 import {NodeStatus, ValidatorHelper} from "./ValidatorHelper";
 import {BigNumber, Contract} from "ethers";
 import {BitUtil} from "./uitlz/bitUtil";
+import {DeployerUtil, NodeType} from "../src/DeployerUtil";
 
 let log = console.log;
 
-
+/*
 async function deployPushTokenFake(): Promise<PushToken> {
   log('deploying PushToken');
   const ptFactory = await ethers.getContractFactory("PushToken");
@@ -53,13 +55,8 @@ async function deployStorageContract(valCt: ValidatorV1): Promise<StorageV2> {
   log(`deployed impl: ${implCt}`);
   log('done');
   return proxyCt;
-}
+}*/
 
-export enum NodeType {
-  VNode = 0, // validator 0
-  SNode = 1, // storage 1
-  DNode = 2 // delivery 2
-}
 
 // VARIABLES FOR TESTS
 let valCt: ValidatorV1;
@@ -88,11 +85,11 @@ async function initBlockchain(): Promise<DeployInfo> {
   const signers = await ethers.getSigners();
   const [owner_] = signers;
 
-  const pushCt = await deployPushTokenFake();
+  const pushCt = await DeployerUtil.deployPushTokenFake(hre);
 
-  const valCt = await deployValidatorContract(pushCt);
+  const valCt = await DeployerUtil.deployValidatorContract(hre, pushCt.address);
 
-  const storeCt = await deployStorageContract(valCt);
+  const storeCt = await DeployerUtil.deployStorageContract(hre, valCt.address);
   await valCt.setStorageContract(storeCt.address);
 
   for (let s of [owner_, signers[1], signers[2]]) {
@@ -152,7 +149,6 @@ describe("Valdator - ownership tests / vot", function () {
 
     const acceptTx = valCt.connect(acc2).acceptOwnership();
     await expect(acceptTx).to.be.reverted;
-
   });
 });
 

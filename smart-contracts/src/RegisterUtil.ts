@@ -3,7 +3,7 @@ import {HardhatRuntimeEnvironment} from "hardhat/types";
 
 let info = console.log;
 
-export class TaskUtil {
+export class RegisterUtil {
     /**
      *
      * @param pushAddr push smart contract (deployed)
