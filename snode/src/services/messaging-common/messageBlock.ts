@@ -336,13 +336,14 @@ export class MessageBlockUtil {
    * And for every recipient finds which shard will host this address
    *
    * @param block
+   * @param shardCount total amount of shards; see smart contract for this value
    * @returns a set of shard ids
    */
-  static calculateAffectedShards(block: Readonly<MessageBlock>): Set<number> {
+  static calculateAffectedShards(block: Readonly<MessageBlock>, shardCount:number): Set<number> {
     const shards = new Set<number>()
     for (const fi of block.responses) {
       for (const recipient of fi.header.recipientsResolved) {
-        let shardId = this.calculateAffectedShard(recipient.addr);
+        let shardId = this.calculateAffectedShard(recipient.addr, shardCount);
         if (shardId == null) {
           this.log.error('cannot calculate shardId for recipient %o in %o', recipient, fi);
           continue;
@@ -357,7 +358,9 @@ export class MessageBlockUtil {
   // eip155:5:0xD8634C39BBFd4033c0d3289C4515275102423681 -> d8 -> 216
   // and use it as shard
   // 2) take sha256(addr) ->
-  public static calculateAffectedShard(recipientAddr: string): number | null {
+  // shard count is a smart contract constant; normally it should never change
+  // lets read this value from a contract
+  public static calculateAffectedShard(recipientAddr: string, shardCount:number): number | null {
     if (StrUtil.isEmpty(recipientAddr)) {
       return null;
     }
@@ -377,7 +380,8 @@ export class MessageBlockUtil {
     }
     Check.notNull(shardId);
     Check.isTrue(shardId >= 0 && shardId <= 255 && NumUtil.isRoundedInteger(shardId));
-    return shardId;
+    Check.isTrue(shardCount >= 1);
+    return shardId % shardCount;
   }
 
   public static checkBlock(block: MessageBlock, validatorsFromContract: Set<string>): CheckResult {

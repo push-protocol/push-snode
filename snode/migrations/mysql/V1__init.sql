@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS blocks
 (
   object_hash VARCHAR(255) NOT NULL COMMENT 'optional: a uniq field to fight duplicates',
   object      MEDIUMTEXT   NOT NULL,
+  object_shards JSON       NOT NULL COMMENT 'message block shards',
   PRIMARY KEY (object_hash)
   ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8;
@@ -31,5 +32,14 @@ CREATE TABLE IF NOT EXISTS dset_client
     state           tinyint(1)   NOT NULL DEFAULT 1 COMMENT '1 = enabled, 0 = disabled',
     PRIMARY KEY (id),
     UNIQUE KEY uniq_dset_name_and_target (queue_name, target_node_id)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8;
+
+DROP TABLE IF EXISTS contract_shards;
+CREATE TABLE IF NOT EXISTS contract_shards
+(
+    ts          timestamp default CURRENT_TIMESTAMP() COMMENT 'update timestamp',
+    shards_assigned json NOT NULL COMMENT 'optional: a uniq field to fight duplicates',
+    PRIMARY KEY (ts)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8;

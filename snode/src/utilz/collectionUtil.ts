@@ -26,16 +26,38 @@ export class CollectionUtil {
     return Array.from(set.keys())
   }
 
-  public static intersectSets<T>(set1: Set<T>, set2: Set<T>): Set<T> {
+  // [1,2,3] - [2,3] = [1]
+  public static substractSet<T>(set1: Set<T>, set2: Set<T>): Set<T> {
+    return new Set([...set1].filter(x => !set2.has(x)));
+  }
+
+  // [1,2,3] x [2, 3] = [2,3]
+  public static intersectSet<T>(set1: Set<T>, set2: Set<T>): Set<T> {
     return new Set([...set1].filter(x => set2.has(x)));
   }
 
-  public static sortNumbersAsc(array:number[]) {
-    if(array==null || array.length==0) {
+  // [1,2,3] x [2, 3] = [2,3]
+  public static addSet<T>(set1: Set<T>, set2: Set<T>): Set<T> {
+    return new Set([...set1, ...set2]);
+  }
+
+  public static sortNumbersAsc(array: number[]) {
+    if (array == null || array.length == 0) {
       return;
     }
     array.sort((a, b) => {
       return a - b;
     })
+  }
+
+  // parse '[1,2,3]' into Set<number>: 1,2,3
+  public static parseAsNumberSet(jsonArray: string): Set<number> {
+    const arr: number[] = JSON.parse(jsonArray);
+    return CollectionUtil.arrayToSet(arr);
+  }
+
+  // store set 1,2,3 as array: [1,2,3]
+  public static numberSetToJson(s: Set<number>): string {
+    return JSON.stringify([...s]);
   }
 }

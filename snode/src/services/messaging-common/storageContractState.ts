@@ -1,4 +1,4 @@
-import {Service} from "typedi";
+import {Inject, Service} from "typedi";
 import {Logger} from "winston";
 import {WinstonUtil} from "../../utilz/winstonUtil";
 import {EnvLoader} from "../../utilz/envLoader";
@@ -9,10 +9,15 @@ import fs, {readFileSync} from "fs";
 import {ValidatorCtClient} from "./validatorContractState";
 import {BitUtil} from "../../utilz/bitUtil";
 import {EthersUtil} from "../../utilz/ethersUtil";
+import {CollectionUtil} from "../../utilz/collectionUtil";
+import StorageNode from "../messaging/storageNode";
 
 @Service()
 export class StorageContractState {
   public log: Logger = WinstonUtil.newLog(StorageContractState);
+  @Inject(type => StorageNode)
+  private storageNode: StorageNode;
+
   private provider: JsonRpcProvider
   private abi: string
   private rpcEndpoint: string
@@ -26,6 +31,9 @@ export class StorageContractState {
   // CONTRACT STATE
   private storageCtAddr: string
   private storageCt: StorageContract;
+  public rf: number;
+  public shardCount: number;
+  public nodeShards: Set<number>;
 
   public async postConstruct() {
     this.log.info('postConstruct()')
@@ -39,8 +47,8 @@ export class StorageContractState {
     this.configDir = EnvLoader.getPropertyOrFail('CONFIG_DIR')
     this.abi = EthersUtil.loadAbi(this.configDir, 'StorageV1.json')
     this.storageCt = await this.buildRWClient();
-    await this.readContractState(); // todo
-    await this.subscribeToContractChanges(); // todo
+    await this.readContractState();
+    await this.subscribeToContractChanges(); // todo ? ethers or hardhat always emits 1 fake event
   }
 
   public async buildRWClient(): Promise<StorageContract> {
@@ -56,19 +64,34 @@ export class StorageContractState {
     return contract;
   }
 
+  // todo re-read on every change
   public async readContractState() {
     this.log.info(`connected to StorageContract: ${this.storageCt.address} as node ${this.nodeWallet.address}`)
-    let rf = await this.storageCt.rf();
+    this.rf = await this.storageCt.rf();
     let nodeCount = await this.storageCt.nodeCount();
-    this.log.info(`rf: ${rf} , total nodeCount: ${nodeCount}`);
-    let nodeShards = await this.storageCt.getNodeShardsByAddr(this.nodeWallet.address);
-    const shards = BitUtil.bitsToPositions(nodeShards);
-    this.log.info(`this node ${this.nodeWallet.address} is assigned to shards (${nodeShards.toString(2)}) : ${JSON.stringify(shards)}`);
-
+    this.shardCount = await this.storageCt.SHARD_COUNT();
+    this.log.info(`rf: ${this.rf} , shard count: ${this.shardCount} total nodeCount: ${nodeCount}`);
+    let nodeShardmask = await this.storageCt.getNodeShardsByAddr(this.nodeWallet.address);
+    // publish, new data would settle according to the new shards right away
+    this.nodeShards = CollectionUtil.arrayToSet(BitUtil.bitsToPositions(nodeShardmask));
+    this.log.info(`this node %s is assigned to shards (%s) : %s`,
+      this.nodeWallet.address, nodeShardmask.toString(2), CollectionUtil.setToArray(this.nodeShards));
+    await this.storageNode.handleReshard(this.nodeShards);
   }
 
   public async subscribeToContractChanges() {
-
+    this.storageCt.on('SNodeMappingChanged', async (nodeList: string[]) => {
+      this.log.info(`EVENT: SNodeMappingChanged: nodeList=${JSON.stringify(nodeList)}`);
+      const pos = CollectionUtil.findIndex(nodeList, item => item === this.nodeAddress);
+      if (pos < 0) {
+        return;
+      }
+      let nodeShardmask = await this.storageCt.getNodeShardsByAddr(this.nodeAddress);
+      const newShards = CollectionUtil.arrayToSet(BitUtil.bitsToPositions(nodeShardmask));
+      // publish, new data would settle according to the new shards right away
+      this.nodeShards = newShards;
+      await this.storageNode.handleReshard(newShards);
+    });
   }
 }
 
@@ -81,4 +104,6 @@ export interface StorageContractAPI {
   getNodeShardsByAddr(addr: string): Promise<number>;
 
   nodeCount(): Promise<number>;
+
+  SHARD_COUNT(): Promise<number>;
 }
