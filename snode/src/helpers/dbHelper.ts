@@ -95,16 +95,23 @@ export default class DbHelper {
                 namespace_shard_id VARCHAR(64) NOT NULL,
                 namespace_id VARCHAR(64) NOT NULL,
                 ts TIMESTAMP NOT NULL default NOW(),
-                skey VARCHAR(64) NOT NULL PRIMARY KEY,
+                skey VARCHAR(64) NOT NULL,
                 dataSchema VARCHAR(20) NOT NULL,
-                payload JSONB
-            );
+                payload JSONB,
+                PRIMARY KEY(namespace,namespace_shard_id,namespace_id,skey,ts)
+            );`;
+        /*
+         real primary key: namespace + namespase_id + skey
+         namespace_shard_id is evaluated from namespace_id
+         ts is not important
 
-            CREATE INDEX IF NOT EXISTS 
-            ${tableName}_idx ON ${tableName} 
-            USING btree (namespace ASC, namespace_shard_id ASC, namespace_id ASC, ts ASC);
-        `
-        // todo CREATE INDEX CONCURRENTLY ?
+         we use all the fields to have good btree which allows search and sorting with
+         (namespace)
+         (namespace, namespace_shard_id)
+         (namespace, namespace_shard_id,namespace_id)
+         (namespace, namespace_shard_id,namespace_id, skey)
+         (namespace,namespace_shard_id,namespace_id, skey,ts)
+        */
         console.log(sql)
         return pgPool.query(sql).then(data => {
             console.log(data)
@@ -198,7 +205,7 @@ export default class DbHelper {
         const sql = `INSERT INTO ${storageTable} 
                     (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload)
                     values ('${ns}',  '${shardId}', '${nsIndex}', to_timestamp(${ts}),'${skey}', 'v1', '${body}')
-                    ON CONFLICT (skey) DO UPDATE SET payload = '${body}'`
+                    ON CONFLICT (namespace,namespace_shard_id,namespace_id,skey,ts) DO UPDATE SET payload = '${body}'`
         log.debug(sql);
         return pgPool.none(sql).then(data => {
             log.debug(data);

@@ -95,6 +95,7 @@ export class IndexStorage {
         const createtable = await DbHelper.createNewStorageTable(tableName);
         this.log.debug('creating node storage layout mapping')
         this.log.debug(createtable);
+        storageTable = tableName;
       }
     }
     const storageValue = await DbHelper.putValueInTable(nsName, nsShardId, nsId, storageTable,

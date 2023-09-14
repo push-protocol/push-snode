@@ -318,8 +318,10 @@ export class MessageBlockUtil {
     const allRecipients = Coll.arrayToMap(recipientsV, 'addr')
     for (const signatureA of signaturesA) {
       const recipientsMissing = signatureA.data.recipientsMissing
-      for (const itemToRemove of recipientsMissing.recipients) {
-        allRecipients.delete(itemToRemove.addr)
+      if (recipientsMissing != null) {
+        for (const itemToRemove of recipientsMissing.recipients) {
+          allRecipients.delete(itemToRemove.addr)
+        }
       }
     }
     return Array.from(allRecipients.keys())
@@ -339,7 +341,7 @@ export class MessageBlockUtil {
    * @param shardCount total amount of shards; see smart contract for this value
    * @returns a set of shard ids
    */
-  static calculateAffectedShards(block: Readonly<MessageBlock>, shardCount:number): Set<number> {
+  static calculateAffectedShards(block: Readonly<MessageBlock>, shardCount: number): Set<number> {
     const shards = new Set<number>()
     for (const fi of block.responses) {
       for (const recipient of fi.header.recipientsResolved) {
@@ -360,7 +362,7 @@ export class MessageBlockUtil {
   // 2) take sha256(addr) ->
   // shard count is a smart contract constant; normally it should never change
   // lets read this value from a contract
-  public static calculateAffectedShard(recipientAddr: string, shardCount:number): number | null {
+  public static calculateAffectedShard(recipientAddr: string, shardCount: number): number | null {
     if (StrUtil.isEmpty(recipientAddr)) {
       return null;
     }
