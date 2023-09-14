@@ -6,7 +6,7 @@ import {QueueClient} from "../messaging-dset/queueClient";
 import {Consumer, QItem} from "../messaging-dset/queueTypes";
 import {BlockStorage} from "./BlockStorage";
 import {QueueManager} from "./queueManager";
-import {CollectionUtil} from "../../utilz/collectionUtil";
+import {Coll} from "../../utilz/coll";
 import {Check} from "../../utilz/check";
 import {WinstonUtil} from "../../utilz/winstonUtil";
 import {StorageContractState} from "../messaging-common/storageContractState";
@@ -57,7 +57,7 @@ export default class StorageNode implements Consumer<QItem> {
     // check contents
     // since this check is not for historical data, but for realtime data,
     // so we do not care about old blocked validators which might occur in the historical queue
-    let activeValidators = CollectionUtil.arrayToFields(this.valContractState.getActiveValidators(), 'nodeId');
+    let activeValidators = Coll.arrayToFields(this.valContractState.getActiveValidators(), 'nodeId');
     let check1 = MessageBlockUtil.checkBlock(mb, activeValidators);
     if (!check1.success) {
       this.log.error('item validation failed: ', check1.err);
@@ -78,15 +78,20 @@ export default class StorageNode implements Consumer<QItem> {
 
   // todo raise a flag while executing this; handle new updates somehow?
   public async handleReshard(newShards: Set<number>) {
-    this.log.debug('handleReshard(): newShards: %j', CollectionUtil.setToArray(newShards))
     const oldShards = await this.blockStorage.loadNodeShards();
-    let shardsToAdd = CollectionUtil.substractSet(newShards, oldShards);
-    let shardsToDelete = CollectionUtil.substractSet(oldShards, newShards);
-    let commonShards = CollectionUtil.intersectSet(oldShards, newShards);
+    this.log.debug('handleReshard(): newShards: %j',
+      Coll.setToArray(newShards), Coll.setToArray(oldShards))
+    if (Coll.isEqualSet(newShards, oldShards)) {
+      this.log.debug('handleReshard(): no reshard is needed')
+      return;
+    }
+    let shardsToAdd = Coll.substractSet(newShards, oldShards);
+    let shardsToDelete = Coll.substractSet(oldShards, newShards);
+    let commonShards = Coll.intersectSet(oldShards, newShards);
     this.log.debug('shardsToAdd %j shardsToDelete %j shardsRemaining %j',
-      CollectionUtil.setToArray(shardsToAdd),
-      CollectionUtil.setToArray(shardsToDelete),
-      CollectionUtil.setToArray(commonShards));
+      Coll.setToArray(shardsToAdd),
+      Coll.setToArray(shardsToDelete),
+      Coll.setToArray(commonShards));
 
     await this.indexStorage.deleteShardsFromInboxes(shardsToDelete);
 
@@ -98,7 +103,7 @@ export default class StorageNode implements Consumer<QItem> {
       shardsToAdd,
       async (messageBlockJson, messageBlockHash, messageBlockShards) => {
         let mb: MessageBlock = JSON.parse(messageBlockJson);
-        let shardsToAddFromBlock = CollectionUtil.intersectSet(shardsToAdd, messageBlockShards);
+        let shardsToAddFromBlock = Coll.intersectSet(shardsToAdd, messageBlockShards);
         this.log.debug('reindexing block %s, blockShards %s, shardsToAdd %s,, shardsToAddFromBlock',
           messageBlockHash, messageBlockShards, shardsToAdd, shardsToAddFromBlock)
         await this.indexStorage.unpackBlockToInboxes(mb, shardsToAddFromBlock);
