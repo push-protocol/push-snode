@@ -9,7 +9,7 @@
  { s1, 0xD}, { s2, 0xE}, { s3, 0xF},
  { d1, 0x1}, { d2, 0x2}, { d3, 0x3} ]
  */
-import {CollectionUtil} from '../../utilz/collectionUtil'
+import {Coll} from '../../utilz/coll'
 import StrUtil from '../../utilz/strUtil'
 import {EthSig} from '../../utilz/ethSig'
 import {Logger} from 'winston'
@@ -315,7 +315,7 @@ export class MessageBlockUtil {
     Check.isTrue(requestOffset >= 0, 'requestOffset not found')
     const recipientsV = block.responses[requestOffset].header.recipientsResolved
     const signaturesA = block.responsesSignatures[requestOffset]
-    const allRecipients = CollectionUtil.arrayToMap(recipientsV, 'addr')
+    const allRecipients = Coll.arrayToMap(recipientsV, 'addr')
     for (const signatureA of signaturesA) {
       const recipientsMissing = signatureA.data.recipientsMissing
       for (const itemToRemove of recipientsMissing.recipients) {

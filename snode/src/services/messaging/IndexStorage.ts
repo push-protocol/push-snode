@@ -3,7 +3,7 @@ import {Inject, Service} from "typedi";
 import {Logger} from "winston";
 import {FPayload, MessageBlock, MessageBlockUtil} from "../messaging-common/messageBlock";
 import {Check} from "../../utilz/check";
-import {CollectionUtil} from "../../utilz/collectionUtil";
+import {Coll} from "../../utilz/coll";
 import DateUtil from "../../utilz/dateUtil";
 import DbHelper from "../../helpers/dbHelper";
 import StrUtil from "../../utilz/strUtil";
@@ -34,7 +34,7 @@ export class IndexStorage {
     const nodeShards = this.storageContractState.nodeShards;
     Check.notNull(nodeShards);
     this.log.debug('storage node supports %s shards: %o', nodeShards.size, nodeShards);
-    let shardsToProcess = CollectionUtil.intersectSet(shardSet, nodeShards);
+    let shardsToProcess = Coll.intersectSet(shardSet, nodeShards);
     this.log.debug('block %s has %d inboxes to unpack', mb.id, shardsToProcess)
     if (shardsToProcess.size == 0) {
       this.log.debug('finished');
@@ -108,7 +108,7 @@ export class IndexStorage {
     }
     // indexStorage
     // delete from index
-    let shardsToDeleteAsString = CollectionUtil.setToArray(shardsToDelete).join(',');
+    let shardsToDeleteAsString = Coll.setToArray(shardsToDelete).join(',');
     const tableArr = await PgUtil.queryArr<{ table_name: string }>(
       'select table_name from node_storage_layout');
     for (const tableName of tableArr) {

@@ -1,4 +1,4 @@
-import {CollectionUtil} from "./collectionUtil";
+import {Coll} from "./coll";
 
 export class BitUtil {
   /**
@@ -54,7 +54,7 @@ export class BitUtil {
       number = number >>> 1;
       position++;
     }
-    CollectionUtil.sortNumbersAsc(result);
+    Coll.sortNumbersAsc(result);
     return result;
   }
 }

@@ -9,7 +9,7 @@ import fs, {readFileSync} from "fs";
 import {ValidatorCtClient} from "./validatorContractState";
 import {BitUtil} from "../../utilz/bitUtil";
 import {EthersUtil} from "../../utilz/ethersUtil";
-import {CollectionUtil} from "../../utilz/collectionUtil";
+import {Coll} from "../../utilz/coll";
 import StorageNode from "../messaging/storageNode";
 
 @Service()
@@ -73,21 +73,21 @@ export class StorageContractState {
     this.log.info(`rf: ${this.rf} , shard count: ${this.shardCount} total nodeCount: ${nodeCount}`);
     let nodeShardmask = await this.storageCt.getNodeShardsByAddr(this.nodeWallet.address);
     // publish, new data would settle according to the new shards right away
-    this.nodeShards = CollectionUtil.arrayToSet(BitUtil.bitsToPositions(nodeShardmask));
+    this.nodeShards = Coll.arrayToSet(BitUtil.bitsToPositions(nodeShardmask));
     this.log.info(`this node %s is assigned to shards (%s) : %s`,
-      this.nodeWallet.address, nodeShardmask.toString(2), CollectionUtil.setToArray(this.nodeShards));
+      this.nodeWallet.address, nodeShardmask.toString(2), Coll.setToArray(this.nodeShards));
     await this.storageNode.handleReshard(this.nodeShards);
   }
 
   public async subscribeToContractChanges() {
     this.storageCt.on('SNodeMappingChanged', async (nodeList: string[]) => {
       this.log.info(`EVENT: SNodeMappingChanged: nodeList=${JSON.stringify(nodeList)}`);
-      const pos = CollectionUtil.findIndex(nodeList, item => item === this.nodeAddress);
+      const pos = Coll.findIndex(nodeList, item => item === this.nodeAddress);
       if (pos < 0) {
         return;
       }
       let nodeShardmask = await this.storageCt.getNodeShardsByAddr(this.nodeAddress);
-      const newShards = CollectionUtil.arrayToSet(BitUtil.bitsToPositions(nodeShardmask));
+      const newShards = Coll.arrayToSet(BitUtil.bitsToPositions(nodeShardmask));
       // publish, new data would settle according to the new shards right away
       this.nodeShards = newShards;
       await this.storageNode.handleReshard(newShards);

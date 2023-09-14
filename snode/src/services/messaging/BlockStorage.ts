@@ -4,7 +4,7 @@ import {Logger} from "winston";
 import {MySqlUtil} from "../../utilz/mySqlUtil";
 import {MessageBlock, MessageBlockUtil} from "../messaging-common/messageBlock";
 import StrUtil from "../../utilz/strUtil";
-import {CollectionUtil} from "../../utilz/collectionUtil";
+import {Coll} from "../../utilz/coll";
 import {Check} from "../../utilz/check";
 
 // stores everything in MySQL
@@ -61,11 +61,11 @@ export class BlockStorage {
    * and returns a set of {0,1,2..,31}
    */
   public async loadNodeShards(): Promise<Set<number> | null> {
-    const row = await MySqlUtil.queryOneValueOrDefault<{ shards_assigned: string, ts: number }>(
-      'select shards_assigned, ts from contract_shards order by ts desc limit 1', null);
+    const shardsAssigned = await MySqlUtil.queryOneValueOrDefault<string>(
+      'select shards_assigned from contract_shards order by ts desc limit 1', null);
     let result: Set<number>;
-    if (row != null && !StrUtil.isEmpty(row.shards_assigned)) {
-      const arr = JSON.parse(row.shards_assigned);
+    if (shardsAssigned != null && !StrUtil.isEmpty(shardsAssigned)) {
+      const arr = JSON.parse(shardsAssigned);
       result = new Set(arr);
     } else {
       result = new Set<number>();
@@ -79,7 +79,7 @@ export class BlockStorage {
    * @param nodeShards
    */
   public async saveNodeShards(nodeShards: Set<number>): Promise<void> {
-    let arr = CollectionUtil.setToArray(nodeShards);
+    let arr = Coll.setToArray(nodeShards);
     let arrAsJson = JSON.stringify(arr);
     await MySqlUtil.insert('INSERT IGNORE INTO contract_shards(shards_assigned) VALUES(?)', arrAsJson);
   }
@@ -149,7 +149,7 @@ export class BlockStorage {
               mbHash);
             continue;
           }
-          const mbShardSet = CollectionUtil.parseAsNumberSet(row.object_shards);
+          const mbShardSet = Coll.parseAsNumberSet(row.object_shards);
           await handler(row.object, mbHash, mbShardSet);
           cache.add(mbHash);
           if (cache.size > cacheMaxSize) {
