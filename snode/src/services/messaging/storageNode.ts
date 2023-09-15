@@ -35,6 +35,8 @@ export default class StorageNode implements Consumer<QItem> {
   private client: QueueClient;
 
   public async postConstruct() {
+    await this.blockStorage.postConstruct();
+    await this.indexStorage.postConstruct();
     await this.valContractState.postConstruct();
     await this.storageContractState.postConstruct();
     await this.queueManager.postConstruct();

@@ -48,10 +48,7 @@ CREATE TABLE IF NOT EXISTS node_storage_layout
     namespace_shard_id VARCHAR(64) NOT NULL,
     ts_start TIMESTAMP NOT NULL default NOW(),
     ts_end TIMESTAMP NOT NULL default NOW(),
-    table_name VARCHAR(64) NOT NULL
+    table_name VARCHAR(64) NOT NULL,
+    PRIMARY KEY(namespace, namespace_shard_id, ts_start, ts_end)
 );
-DROP INDEX IF EXISTS shard_map_ts_index;
-CREATE INDEX shard_map_ts_index ON node_storage_layout USING btree (namespace ASC, namespace_shard_id ASC, ts_start ASC, ts_end ASC);
-ALTER TABLE node_storage_layout DROP CONSTRAINT IF EXISTS node_storage_layout_uniq;
-ALTER TABLE node_storage_layout ADD CONSTRAINT node_storage_layout_uniq UNIQUE (namespace, namespace_shard_id, ts_start, ts_end);
 

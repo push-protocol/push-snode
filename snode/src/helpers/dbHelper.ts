@@ -41,6 +41,20 @@ PgUtil.init(pgPool);
 
 export default class DbHelper {
 
+    public static async createStorageTablesIfNeeded() {
+        await PgUtil.update(`
+        CREATE TABLE IF NOT EXISTS node_storage_layout
+        (
+            namespace          VARCHAR(20) NOT NULL,
+            namespace_shard_id VARCHAR(64) NOT NULL,
+            ts_start           TIMESTAMP   NOT NULL default NOW(),
+            ts_end             TIMESTAMP   NOT NULL default NOW(),
+            table_name         VARCHAR(64) NOT NULL,
+            PRIMARY KEY (namespace, namespace_shard_id, ts_start, ts_end)
+        );
+    `)
+    }
+
     // maps key -> 8bit space (0..255)
     // uses first 4bit from an md5 hash
     public static calculateShardForNamespaceIndex(namespace: string, key: string): number {

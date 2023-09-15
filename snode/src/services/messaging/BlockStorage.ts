@@ -6,12 +6,69 @@ import {MessageBlock, MessageBlockUtil} from "../messaging-common/messageBlock";
 import StrUtil from "../../utilz/strUtil";
 import {Coll} from "../../utilz/coll";
 import {Check} from "../../utilz/check";
+import DbHelper from "../../helpers/dbHelper";
 
 // stores everything in MySQL
 @Service()
 export class BlockStorage {
   public log: Logger = WinstonUtil.newLog(BlockStorage);
 
+  public async postConstruct() {
+    await this.createStorageTablesIfNeeded();
+  }
+
+  private async createStorageTablesIfNeeded() {
+    await MySqlUtil.insert(`
+        CREATE TABLE IF NOT EXISTS blocks
+        (
+            object_hash   VARCHAR(255) NOT NULL COMMENT 'optional: a uniq field to fight duplicates',
+            object        MEDIUMTEXT   NOT NULL,
+            object_shards JSON         NOT NULL COMMENT 'message block shards',
+            PRIMARY KEY (object_hash)
+        ) ENGINE = InnoDB
+          DEFAULT CHARSET = utf8;
+    `);
+
+    await MySqlUtil.insert(`
+        CREATE TABLE IF NOT EXISTS dset_queue_mblock
+        (
+            id          BIGINT       NOT NULL AUTO_INCREMENT,
+            ts          timestamp default CURRENT_TIMESTAMP() COMMENT 'timestamp is used for querying the queu',
+            object_hash VARCHAR(255) NOT NULL,
+            object_shard INT         NOT NULL COMMENT 'message block shard',
+            PRIMARY KEY (id),
+            UNIQUE KEY uniq_mblock_object_hash (object_hash, object_shard),
+            FOREIGN KEY (object_hash) REFERENCES blocks(object_hash)
+        ) ENGINE = InnoDB
+          DEFAULT CHARSET = utf8;
+    `);
+
+    await MySqlUtil.insert(`
+        CREATE TABLE IF NOT EXISTS dset_client
+        (
+            id              INT          NOT NULL AUTO_INCREMENT,
+            queue_name      varchar(32)  NOT NULL COMMENT 'target node queue name',
+            target_node_id  varchar(128) NOT NULL COMMENT 'target node eth address',
+            target_node_url varchar(128) NOT NULL COMMENT 'target node url, filled from the contract',
+            target_offset   bigint(20)   NOT NULL DEFAULT 0 COMMENT 'initial offset to fetch target queue',
+            state           tinyint(1)   NOT NULL DEFAULT 1 COMMENT '1 = enabled, 0 = disabled',
+            PRIMARY KEY (id),
+            UNIQUE KEY uniq_dset_name_and_target (queue_name, target_node_id)
+        ) ENGINE = InnoDB
+          DEFAULT CHARSET = utf8;
+    `);
+
+    await MySqlUtil.insert(`
+        CREATE TABLE IF NOT EXISTS contract_shards
+        (
+            ts          timestamp default CURRENT_TIMESTAMP() COMMENT 'update timestamp',
+            shards_assigned json NOT NULL COMMENT 'optional: a uniq field to fight duplicates',
+            PRIMARY KEY (ts)
+        ) ENGINE = InnoDB
+          DEFAULT CHARSET = utf8;
+
+    `);
+  }
 
   async saveBlockWithShardData(mb: MessageBlock, calculatedHash: string, shardSet: Set<number>): Promise<boolean> {
     // NOTE: the code already atomically updates the db ,

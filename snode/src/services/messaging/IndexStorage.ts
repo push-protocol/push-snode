@@ -23,6 +23,10 @@ export class IndexStorage {
   @Inject()
   private storageContractState: StorageContractState;
 
+  public async postConstruct() {
+    await DbHelper.createStorageTablesIfNeeded();
+  }
+
   /*
    sends the block contents (internal messages from every response)
    to every recipient's inbox
