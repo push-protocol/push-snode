@@ -96,9 +96,8 @@ export class IndexStorage {
         // we've added a new record to node_storage_layout => we can safely try to create a table
         // otherwise, if many connections attempt to create a table from multiple threads
         // it leads to postgres deadlock sometimes
-        const createtable = await DbHelper.createNewStorageTable(tableName);
+        await DbHelper.createNewStorageTable(tableName);
         this.log.debug('creating node storage layout mapping')
-        this.log.debug(createtable);
         storageTable = tableName;
       }
     }
@@ -107,21 +106,25 @@ export class IndexStorage {
     this.log.debug(`found value: ${storageValue}`)
   }
 
+  // todo remove shard entries from node_storage_layout also?
   public async deleteShardsFromInboxes(shardsToDelete: Set<number>) {
+    this.log.debug('deleteShardsFromInboxes(): shardsToDelete: %j',
+      Coll.setToArray(shardsToDelete));
     if (shardsToDelete.size == 0) {
       return;
     }
-    // indexStorage
     // delete from index
-    let shardsToDeleteAsString = Coll.setToArray(shardsToDelete).join(',');
-    const tableArr = await PgUtil.queryArr<{ table_name: string }>(
-      'select table_name from node_storage_layout');
-    for (const tableName of tableArr) {
-      this.log.debug('clearing table %s from shards %o', tableName, shardsToDeleteAsString);
+    let idsToDelete = Coll.numberSetToSqlQuoted(shardsToDelete);
+    const rows = await PgUtil.queryArr<{ table_name: string }>(
+      `select distinct table_name
+       from node_storage_layout
+       where namespace_shard_id in ${idsToDelete}`);
+    for (const row of rows) {
+      this.log.debug('clearing table %s from shards %o', row, idsToDelete);
       await PgUtil.update(`delete
-                           from ${tableName}
-                           where namespace_shard_id in (?)`,
-        shardsToDeleteAsString);
+                           from ${row.table_name}
+                           where namespace_shard_id in ${idsToDelete}`,
+        idsToDelete);
     }
   }
 

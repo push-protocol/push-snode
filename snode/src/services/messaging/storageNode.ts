@@ -81,7 +81,7 @@ export default class StorageNode implements Consumer<QItem> {
   // todo raise a flag while executing this; handle new updates somehow?
   public async handleReshard(newShards: Set<number>) {
     const oldShards = await this.blockStorage.loadNodeShards();
-    this.log.debug('handleReshard(): newShards: %j',
+    this.log.debug('handleReshard(): newShards: %j oldShards: %j',
       Coll.setToArray(newShards), Coll.setToArray(oldShards))
     if (Coll.isEqualSet(newShards, oldShards)) {
       this.log.debug('handleReshard(): no reshard is needed')

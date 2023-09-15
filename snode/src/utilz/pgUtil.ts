@@ -59,18 +59,21 @@ export class PgUtil {
 
   public static async update(query: string, ...sqlArgs: any[]): Promise<number> {
     query = StrUtil.replaceAllMySqlToPostre(query);
+    this.log.debug(query, '     ---> args ', sqlArgs);
     let result = await this.pool.result<number>(query, sqlArgs,r => r.rowCount);
     return result;
   }
 
   public static async insert(query: string, ...sqlArgs: any[]): Promise<number> {
     query = StrUtil.replaceAllMySqlToPostre(query);
+    this.log.debug(query, '     ---> args ', sqlArgs);
     let result = await this.pool.result<number>(query, sqlArgs,r => r.rowCount);
     return result;
   }
 
   public static async queryArr<R>(query: string, ...sqlArgs: any[]): Promise<R[]> {
     query = StrUtil.replaceAllMySqlToPostre(query);
+    this.log.debug(query, '     ---> args ', sqlArgs);
     let result = await this.pool.query<R[]>(query, sqlArgs);
     return result;
   }

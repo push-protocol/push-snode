@@ -101,8 +101,10 @@ export default class DbHelper {
             });
     }
 
-    public static async createNewStorageTable(tableName: string): Promise<boolean> {
-        const sql = `
+    public static async createNewStorageTable(tableName: string): Promise<void> {
+
+        // primary key should prevent duplicates by skey per inbox
+        await PgUtil.update(`
             CREATE TABLE IF NOT EXISTS ${tableName}
             (
                 namespace VARCHAR(20) NOT NULL,
@@ -112,28 +114,12 @@ export default class DbHelper {
                 skey VARCHAR(64) NOT NULL,
                 dataSchema VARCHAR(20) NOT NULL,
                 payload JSONB,
-                PRIMARY KEY(namespace,namespace_shard_id,namespace_id,skey,ts)
-            );`;
-        /*
-         real primary key: namespace + namespase_id + skey
-         namespace_shard_id is evaluated from namespace_id
-         ts is not important
+                PRIMARY KEY(namespace,namespace_shard_id,namespace_id,skey)
+            );`);
 
-         we use all the fields to have good btree which allows search and sorting with
-         (namespace)
-         (namespace, namespace_shard_id)
-         (namespace, namespace_shard_id,namespace_id)
-         (namespace, namespace_shard_id,namespace_id, skey)
-         (namespace,namespace_shard_id,namespace_id, skey,ts)
-        */
-        console.log(sql)
-        return pgPool.query(sql).then(data => {
-            console.log(data)
-            return Promise.resolve(true)
-        }).catch(err => {
-            console.log(err);
-            return Promise.resolve(false);
-        });
+        await PgUtil.update(`CREATE INDEX IF NOT EXISTS 
+            ${tableName}_idx ON ${tableName} 
+            USING btree (namespace ASC, namespace_id ASC, ts ASC);`);
     }
 
     // todo fix params substitution for the pg library;
@@ -219,7 +205,7 @@ export default class DbHelper {
         const sql = `INSERT INTO ${storageTable} 
                     (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload)
                     values ('${ns}',  '${shardId}', '${nsIndex}', to_timestamp(${ts}),'${skey}', 'v1', '${body}')
-                    ON CONFLICT (namespace,namespace_shard_id,namespace_id,skey,ts) DO UPDATE SET payload = '${body}'`
+                    ON CONFLICT (namespace,namespace_shard_id,namespace_id,skey) DO UPDATE SET payload = '${body}'`
         log.debug(sql);
         return pgPool.none(sql).then(data => {
             log.debug(data);

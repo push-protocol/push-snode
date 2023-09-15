@@ -74,4 +74,9 @@ export class Coll {
   public static numberSetToJson(s: Set<number>): string {
     return JSON.stringify([...s]);
   }
+
+  // set 1,2,3 to sql: ('1','2','3')
+  public static numberSetToSqlQuoted(s:Set<number>): string {
+    return '(' + Coll.setToArray(s).map(num => "'" + num + "'").join(',') + ')';
+  }
 }

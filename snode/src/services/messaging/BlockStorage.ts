@@ -32,13 +32,13 @@ export class BlockStorage {
     await MySqlUtil.insert(`
         CREATE TABLE IF NOT EXISTS dset_queue_mblock
         (
-            id          BIGINT       NOT NULL AUTO_INCREMENT,
-            ts          timestamp default CURRENT_TIMESTAMP() COMMENT 'timestamp is used for querying the queu',
-            object_hash VARCHAR(255) NOT NULL,
-            object_shard INT         NOT NULL COMMENT 'message block shard',
+            id           BIGINT       NOT NULL AUTO_INCREMENT,
+            ts           timestamp default CURRENT_TIMESTAMP() COMMENT 'timestamp is used for querying the queu',
+            object_hash  VARCHAR(255) NOT NULL,
+            object_shard INT          NOT NULL COMMENT 'message block shard',
             PRIMARY KEY (id),
             UNIQUE KEY uniq_mblock_object_hash (object_hash, object_shard),
-            FOREIGN KEY (object_hash) REFERENCES blocks(object_hash)
+            FOREIGN KEY (object_hash) REFERENCES blocks (object_hash)
         ) ENGINE = InnoDB
           DEFAULT CHARSET = utf8;
     `);
@@ -61,7 +61,7 @@ export class BlockStorage {
     await MySqlUtil.insert(`
         CREATE TABLE IF NOT EXISTS contract_shards
         (
-            ts          timestamp default CURRENT_TIMESTAMP() COMMENT 'update timestamp',
+            ts              timestamp default CURRENT_TIMESTAMP() COMMENT 'update timestamp',
             shards_assigned json NOT NULL COMMENT 'optional: a uniq field to fight duplicates',
             PRIMARY KEY (ts)
         ) ENGINE = InnoDB
@@ -85,12 +85,13 @@ export class BlockStorage {
     // insert block
     this.log.info('received block with hash %s, adding to the db', calculatedHash);
     const objectAsJson = JSON.stringify(mb);
+    const shardSetAsJson = JSON.stringify(Coll.setToArray(shardSet));
     const res = await MySqlUtil.insert(
       `INSERT
            IGNORE
        INTO blocks(object, object_hash, object_shards)
        VALUES (?, ?, ?)`,
-      objectAsJson, calculatedHash, JSON.stringify(shardSet));
+      objectAsJson, calculatedHash, shardSetAsJson);
     let requiresProcessing = res.affectedRows === 1;
     if (!requiresProcessing) {
       return false;
@@ -159,6 +160,10 @@ export class BlockStorage {
                                       handler: (messageBlockJson: string,
                                                 messageBlockHash: string,
                                                 messageBlockShards: Set<number>) => Promise<void>) {
+    if (shardsToLookFor.size == 0) {
+      this.log.debug('iterateAllStoredBlocks(): no shards to unpack ');
+      return;
+    }
     // [1,2] => (1, 2)
     let shardsAsCsv = Array.from(shardsToLookFor.keys()).join(',');
 
