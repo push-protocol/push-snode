@@ -128,11 +128,24 @@ contract StorageV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     // ----------------------------- ADMIN FUNCTIONS --------------------------------------------------
 
     // allows to set replication factor manually; however this is limited by node count;
+    // call shuffle after this to take effect
     function overrideRf(uint8 rf_) public onlyOwner {
         require(rf_ <= nodeIdList.length, 'rf is limited by node count');
         rf = rf_;
         rfChangedByAdmin = true;
         rfTarget = 0;
+    }
+
+    // revert back to automated replication factor (rf grows up to rfTarget when possible)
+    // call shuffle after this to take effect
+    function setRfTarget(uint8 rfTarget_) public onlyOwner {
+        rfTarget = rfTarget_;
+        uint rf_ = rfTarget_;
+        if (rf_ > nodeIdList.length) {
+            rf_ = nodeIdList.length;
+        }
+        rf = uint8(rf_);
+        rfChangedByAdmin = true;
     }
 
     // allows to set
@@ -416,13 +429,14 @@ contract StorageV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
                 // decide
                 if (unusedPos_ == - 1) {
                     // over-assigned - this food is no longer available
-                    nodeShardsBitmap_[nodeId_] = setBit(shardmask_, shard);
+                    shardmask_ = clearBit(shardmask_, shard);
                     nodeModifiedSet_[nodeId_]++;
                 } else {
                     // this food is used
                     unusedArr_[uint(unusedPos_)] = NULL_SHARD;
                 }
             }
+            nodeShardsBitmap_[nodeId_] = shardmask_;
         }
         // cleanup unused from empty slots (-1); normally most of them would be empty;
         {

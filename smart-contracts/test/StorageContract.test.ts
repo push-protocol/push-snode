@@ -438,13 +438,64 @@ describe("StorageTestNoAutoRf", function () {
       s.checkDistribution(2);
     }
   })
+
+
+  it('test_admin_lowers_rf_2to1', async () => {
+    let t1 = await ct.addNode(nodes[1]);
+    await expect(t1).to.emit(ct, "SNodeMappingChanged").withArgs([nodes[1]]);
+    let t2 = await ct.addNode(nodes[2]);
+    await expect(t2).to.emit(ct, "SNodeMappingChanged").withArgs([nodes[2]]);
+    assert.equal(2, await ct.rf());
+    debug('------ admin sets a fixed rf of 1; so we need to grab a lot at unassigned check stage');
+    let t3 = await ct.overrideRf(1);
+    await t.confirmTransaction(t3);
+    assert.equal(1, await ct.rf());
+    assert.equal(0, await ct.rfTarget());
+
+    let t4 = await ct.shuffle();
+    await expect(t4).to.emit(ct, "SNodeMappingChanged").withArgs([nodes[1], nodes[2]]);
+    assert.equal(1, await ct.rf());
+    assert.equal(0, await ct.rfTarget());
+
+  });
+
+
+  it('test_admin_lowers_rf_5_to_0', async () => {
+    // add nodes from 1 to 20
+    let nodeCount = 0;
+    for (let nodeId = 1; nodeId <= 25; nodeId++) {
+      const addr = nodes[nodeId];
+      debug('adding nodeId: %s with address: %s', nodeId, addr);
+      let t1 = await ct.addNode(addr);
+      await t.confirmTransaction(t1);
+      nodeCount++;
+    }
+    debug('---- added nodes, lowering rf')
+    // lower rf from 5 to 0 manually
+    for (let rf = 5; rf >= 1; rf--) {
+      debug('---- rf set to ', rf);
+      let t1 = await ct.overrideRf(rf);
+      await t.confirmTransaction(t1);
+
+      assert.equal(rf, await ct.rf());
+      assert.equal(0, await ct.rfTarget());
+
+      let t2 = await ct.shuffle();
+      await t.confirmTransaction(t2);
+
+      let s = await State.readFromEvm();
+      s.checkRf(rf);
+      s.checkNodeCount(nodeCount);
+      s.checkDistribution();
+    }
+  }).timeout(600000)
 });
 
 
 describe('StorageTestBig', function () {
 
   // runs only when ENV is set because it takes time
-  if(process.env.StorageTestBig!=='true') {
+  if (process.env.StorageTestBig !== 'true') {
     return;
   }
 

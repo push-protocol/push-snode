@@ -12,7 +12,11 @@ import {WinstonUtil} from "../../utilz/winstonUtil";
 import {StorageContractState} from "../messaging-common/storageContractState";
 import {IndexStorage} from "./IndexStorage";
 
-
+// todo reshard():
+// raise a flag while executing this; handle new updates somehow?
+// todo V2 reshard():
+// redownload every block from peers (snodes),
+// using the right virtual queue which exists for missing shards in (shardsToAdd)
 @Service()
 export default class StorageNode implements Consumer<QItem> {
   public log: Logger = WinstonUtil.newLog(StorageNode)
@@ -78,7 +82,6 @@ export default class StorageNode implements Consumer<QItem> {
   }
 
 
-  // todo raise a flag while executing this; handle new updates somehow?
   public async handleReshard(newShards: Set<number>) {
     const oldShards = await this.blockStorage.loadNodeShards();
     this.log.debug('handleReshard(): newShards: %j oldShards: %j',
@@ -100,20 +103,17 @@ export default class StorageNode implements Consumer<QItem> {
     // add to index
     // reprocess every block from blocks table (only once per each block)
     // if the block has shardsToAdd -> add anything which is in shardsToAdd
+    const pageSize = 30;
     await this.blockStorage.iterateAllStoredBlocks(this.storageContractState.shardCount,
-      1,
+      pageSize,
       shardsToAdd,
       async (messageBlockJson, messageBlockHash, messageBlockShards) => {
         let mb: MessageBlock = JSON.parse(messageBlockJson);
         let shardsToAddFromBlock = Coll.intersectSet(shardsToAdd, messageBlockShards);
         this.log.debug('reindexing block %s, blockShards %s, shardsToAdd %s,, shardsToAddFromBlock',
-          messageBlockHash, messageBlockShards, shardsToAdd, shardsToAddFromBlock)
+          messageBlockHash, Coll.setToArray(messageBlockShards), Coll.setToArray(shardsToAdd), Coll.setToArray(shardsToAddFromBlock))
         await this.indexStorage.unpackBlockToInboxes(mb, shardsToAddFromBlock);
       });
-
-    // todo V2 redownload every block from peers (snodes),
-    // using the right virtual queue which exists for missing shards in (shardsToAdd)
-
     await this.blockStorage.saveNodeShards(newShards);
   }
 }
