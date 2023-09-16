@@ -7,6 +7,7 @@
     "build": "rimraf ./build && tsc",
     "dev": "ts-node-dev --respawn --inspect=9229 --transpile-only ./src/app.ts",
     "dev6001": "ts-node-dev --inspect=6001 --transpile-only ./src/app.ts",
+    "dev6002": "ts-node-dev --inspect=6002 --transpile-only ./src/app.ts",
     "heroku-postbuild": "npm run build",
     "start": "nodemon",
     "inspect": "nodemon --inspect src/app.ts",
