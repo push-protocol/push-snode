@@ -9,7 +9,7 @@ import {QueueManager} from "./queueManager";
 import {Coll} from "../../utilz/coll";
 import {Check} from "../../utilz/check";
 import {WinstonUtil} from "../../utilz/winstonUtil";
-import {StorageContractState} from "../messaging-common/storageContractState";
+import {StorageContractListener, StorageContractState} from "../messaging-common/storageContractState";
 import {IndexStorage} from "./IndexStorage";
 
 // todo reshard():
@@ -18,7 +18,7 @@ import {IndexStorage} from "./IndexStorage";
 // redownload every block from peers (snodes),
 // using the right virtual queue which exists for missing shards in (shardsToAdd)
 @Service()
-export default class StorageNode implements Consumer<QItem> {
+export default class StorageNode implements Consumer<QItem>, StorageContractListener {
   public log: Logger = WinstonUtil.newLog(StorageNode)
 
   @Inject()
@@ -42,9 +42,8 @@ export default class StorageNode implements Consumer<QItem> {
     await this.blockStorage.postConstruct();
     await this.indexStorage.postConstruct();
     await this.valContractState.postConstruct();
-    await this.storageContractState.postConstruct();
+    await this.storageContractState.postConstruct(this);
     await this.queueManager.postConstruct();
-    // MySqlUtil.init(dbHelper.pool); todo postgres !!!!!!!!!!!!!!
   }
 
   // remote queue handler

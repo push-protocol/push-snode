@@ -4,20 +4,17 @@ import {WinstonUtil} from "../../utilz/winstonUtil";
 import {EnvLoader} from "../../utilz/envLoader";
 import {Contract, ethers, Wallet} from "ethers";
 import {JsonRpcProvider} from "@ethersproject/providers/src.ts/json-rpc-provider";
-import path from "path";
 import fs, {readFileSync} from "fs";
-import {ValidatorCtClient} from "./validatorContractState";
 import {BitUtil} from "../../utilz/bitUtil";
 import {EthersUtil} from "../../utilz/ethersUtil";
 import {Coll} from "../../utilz/coll";
-import StorageNode from "../messaging/storageNode";
+
 
 @Service()
 export class StorageContractState {
   public log: Logger = WinstonUtil.newLog(StorageContractState);
-  @Inject(type => StorageNode)
-  private storageNode: StorageNode;
 
+  private listener: StorageContractListener;
   private provider: JsonRpcProvider
   private abi: string
   private rpcEndpoint: string
@@ -35,8 +32,9 @@ export class StorageContractState {
   public shardCount: number;
   public nodeShards: Set<number>;
 
-  public async postConstruct() {
-    this.log.info('postConstruct()')
+  public async postConstruct(listener: StorageContractListener) {
+    this.log.info('postConstruct()');
+    this.listener = listener;
     this.storageCtAddr = EnvLoader.getPropertyOrFail('STORAGE_CONTRACT_ADDRESS')
     this.rpcEndpoint = EnvLoader.getPropertyOrFail('VALIDATOR_RPC_ENDPOINT')
     this.rpcNetwork = Number.parseInt(EnvLoader.getPropertyOrFail('VALIDATOR_RPC_NETWORK'))
@@ -64,7 +62,6 @@ export class StorageContractState {
     return contract;
   }
 
-  // todo re-read on every change
   public async readContractState() {
     this.log.info(`connected to StorageContract: ${this.storageCt.address} as node ${this.nodeWallet.address}`)
     this.rf = await this.storageCt.rf();
@@ -76,7 +73,7 @@ export class StorageContractState {
     this.nodeShards = Coll.arrayToSet(BitUtil.bitsToPositions(nodeShardmask));
     this.log.info(`this node %s is assigned to shards (%s) : %s`,
       this.nodeWallet.address, nodeShardmask.toString(2), Coll.setToArray(this.nodeShards));
-    await this.storageNode.handleReshard(this.nodeShards);
+    await this.listener.handleReshard(this.nodeShards);
   }
 
   public async subscribeToContractChanges() {
@@ -90,7 +87,7 @@ export class StorageContractState {
       const newShards = Coll.arrayToSet(BitUtil.bitsToPositions(nodeShardmask));
       // publish, new data would settle according to the new shards right away
       this.nodeShards = newShards;
-      await this.storageNode.handleReshard(newShards);
+      await this.listener.handleReshard(newShards);
     });
   }
 }
@@ -106,4 +103,8 @@ export interface StorageContractAPI {
   nodeCount(): Promise<number>;
 
   SHARD_COUNT(): Promise<number>;
+}
+
+export interface StorageContractListener {
+  handleReshard(nodeShards: Set<number>): Promise<void>;
 }
