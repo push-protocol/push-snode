@@ -17,23 +17,23 @@ export class StorageContractState {
 
   private listener: StorageContractListener;
   private provider: JsonRpcProvider
-  private abi: string
   private rpcEndpoint: string
   private rpcNetwork: number
-  private configDir: string
-  private pkFile: string;
-  private pkPass: string;
   // NODE STATE
-  private nodeWallet: Wallet;
-  private nodeAddress: string;
+  private nodeWallet: Wallet | null;
+  private nodeAddress: string | null;
   // CONTRACT STATE
   private storageCtAddr: string
   private storageCt: StorageContract;
   public rf: number;
   public shardCount: number;
+  // node0xA -> shard0, shard1, shard2
   public nodeShardMap: Map<string, Set<number>> = new Map();
+  // VARS
+  // shard0 -> node0xA, node0xB
+  public shardToNodesMap: Map<number, Set<string>> = new Map();
 
-  public async postConstruct(listener: StorageContractListener) {
+  public async postConstruct(useSigner: boolean, listener: StorageContractListener) {
     this.log.info('postConstruct()');
     this.listener = listener;
     this.storageCtAddr = EnvLoader.getPropertyOrFail('STORAGE_CONTRACT_ADDRESS')
@@ -43,24 +43,28 @@ export class StorageContractState {
       this.rpcEndpoint,
       this.rpcNetwork
     )
-    this.configDir = EnvLoader.getPropertyOrFail('CONFIG_DIR')
-    this.abi = EthersUtil.loadAbi(this.configDir, 'StorageV1.json')
-    this.storageCt = await this.buildRWClient();
+    if (useSigner) {
+      let connect = await EthersUtil.connectWithKey(
+        EnvLoader.getPropertyOrFail('CONFIG_DIR'),
+        EnvLoader.getPropertyOrFail('VALIDATOR_PRIVATE_KEY_FILE'),
+        EnvLoader.getPropertyOrFail('VALIDATOR_PRIVATE_KEY_PASS'),
+        'StorageV1.json',
+        EnvLoader.getPropertyOrFail('STORAGE_CONTRACT_ADDRESS'),
+        this.provider
+      );
+      this.storageCt = <StorageContract>connect.contract;
+      this.nodeWallet = connect.nodeWallet;
+      this.nodeAddress = connect.nodeAddress;
+    } else {
+      this.storageCt = <StorageContract>await EthersUtil.connectWithoutKey(
+        EnvLoader.getPropertyOrFail('CONFIG_DIR'),
+        'StorageV1.json',
+        EnvLoader.getPropertyOrFail('STORAGE_CONTRACT_ADDRESS'),
+        this.provider
+      )
+    }
     await this.readContractState();
     await this.subscribeToContractChanges(); // todo ? ethers or hardhat always emits 1 fake event
-  }
-
-  public async buildRWClient(): Promise<StorageContract> {
-    this.pkFile = EnvLoader.getPropertyOrFail('VALIDATOR_PRIVATE_KEY_FILE')
-    this.pkPass = EnvLoader.getPropertyOrFail('VALIDATOR_PRIVATE_KEY_PASS')
-
-    const jsonFile = readFileSync(this.configDir + '/' + this.pkFile, 'utf-8')
-    this.nodeWallet = await Wallet.fromEncryptedJson(jsonFile, this.pkPass)
-    this.nodeAddress = await this.nodeWallet.getAddress()
-
-    const signer = this.nodeWallet.connect(this.provider)
-    const contract = <StorageContract>new ethers.Contract(this.storageCtAddr, this.abi, signer)
-    return contract;
   }
 
   public async readContractState() {
@@ -70,22 +74,19 @@ export class StorageContractState {
     this.shardCount = await this.storageCt.SHARD_COUNT();
     this.log.info(`rf: ${this.rf} , shard count: ${this.shardCount} total nodeCount: ${nodeCount}`);
     let nodesAddrList = await this.storageCt.getNodeAddresses();
-    await this.reloadEveryAddressMask(nodesAddrList);
-    this.log.info(`this node %s is assigned to shards (%s) : %s`, Coll.setToArray(this.getNodeShards()));
-    // publish, new data would settle according to the new shards right away
-    await this.listener.handleReshard(this.getNodeShards(), this.nodeShardMap);
+
+    await this.reloadEveryAddressAndNotifyListeners(nodesAddrList);
   }
 
   public async subscribeToContractChanges() {
     this.storageCt.on('SNodeMappingChanged', async (nodeList: string[]) => {
       this.log.info(`EVENT: SNodeMappingChanged: nodeList=${JSON.stringify(nodeList)}`);
-      await this.reloadEveryAddressMask(nodeList);
-      await this.listener.handleReshard(this.getNodeShards(), this.nodeShardMap);
+      await this.reloadEveryAddressAndNotifyListeners(nodeList);
     });
   }
 
   // todo we can add 1 contract call for all addrs
-  async reloadEveryAddressMask(nodeAddrList: string[]): Promise<void> {
+  async reloadEveryAddressAndNotifyListeners(nodeAddrList: string[]): Promise<void> {
     for (const nodeAddr of nodeAddrList) {
       let nodeShardmask = await this.storageCt.getNodeShardsByAddr(nodeAddr);
       const shardSet = Coll.arrayToSet(BitUtil.bitsToPositions(nodeShardmask));
@@ -93,6 +94,21 @@ export class StorageContractState {
       this.log.info(`node %s is re-assigned to shards (%s) : %s`,
         nodeAddr, nodeShardmask.toString(2), Coll.setToArray(shardSet));
     }
+
+    this.shardToNodesMap.clear();
+    for (const [nodeAddr, shardSet] of this.nodeShardMap) {
+      for (const shard of shardSet) {
+        let nodes = this.shardToNodesMap.get(shard);
+        if (nodes == null) {
+          nodes = new Set<string>();
+          this.shardToNodesMap.set(shard, nodes);
+        }
+        nodes.add(nodeAddr);
+      }
+    }
+
+    this.log.info(`this node %s is assigned to shards (%s) : %s`, Coll.setToArray(this.getNodeShards()));
+    await this.listener.handleReshard(this.getNodeShards(), this.nodeShardMap);
   }
 
   // fails if this.nodeAddress is not defined
@@ -120,5 +136,5 @@ export interface StorageContractAPI {
 }
 
 export interface StorageContractListener {
-  handleReshard(currentNodeShards: Set<number>|null, allNodeShards: Map<string, Set<number>>): Promise<void>;
+  handleReshard(currentNodeShards: Set<number> | null, allNodeShards: Map<string, Set<number>>): Promise<void>;
 }

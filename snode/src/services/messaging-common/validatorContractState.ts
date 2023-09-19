@@ -119,13 +119,13 @@ class ContractClientFactory {
     return abi;
   }
 
-  // creates a client which can only read blockchain state
+
   public async buildROClient(log: Logger): Promise<ValidatorCtClient> {
     const contract = new ethers.Contract(this.validatorCtAddr, this.abi, this.provider)
     return new ValidatorCtClient(contract, log)
   }
 
-  // creates a client, using an encrypted private key from disk, so that we could write to the blockchain
+
   public async buildRWClient(log: Logger): Promise<ValidatorCtClient> {
     this.validatorPrivateKeyFile = EnvLoader.getPropertyOrFail('VALIDATOR_PRIVATE_KEY_FILE')
     this.validatorPrivateKeyPass = EnvLoader.getPropertyOrFail('VALIDATOR_PRIVATE_KEY_PASS')

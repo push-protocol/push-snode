@@ -42,7 +42,7 @@ export default class StorageNode implements Consumer<QItem>, StorageContractList
     await this.blockStorage.postConstruct();
     await this.indexStorage.postConstruct();
     await this.valContractState.postConstruct();
-    await this.storageContractState.postConstruct(this);
+    await this.storageContractState.postConstruct(true, this);
     await this.queueManager.postConstruct();
   }
 
