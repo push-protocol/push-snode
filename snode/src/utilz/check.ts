@@ -13,6 +13,7 @@ export class Check {
     }
   }
 
+  // todo make var types
   public static notEmpty(value: string, err?: string) {
     if (StrUtil.isEmpty(value)) {
       throw new Error(StrUtil.isEmpty(err) ? 'Str empty check failed' : err)
@@ -22,6 +23,12 @@ export class Check {
   public static notEmptyArr(value: any[], err?: string) {
     if (value == null || value.length == 0) {
       throw new Error(StrUtil.isEmpty(err) ? 'Str empty check failed' : err)
+    }
+  }
+
+  public static notEmptySet(value: Set<any>, err?: string) {
+    if (value == null || value.size == 0) {
+      throw new Error(StrUtil.isEmpty(err) ? 'Set empty check failed' : err)
     }
   }
 }

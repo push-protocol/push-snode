@@ -35,8 +35,7 @@ export class IndexStorage {
   */
   public async unpackBlockToInboxes(mb: MessageBlock, shardSet: Set<number>) {
     // this is the list of shards that we support on this node
-    const nodeShards = this.storageContractState.nodeShards;
-    Check.notNull(nodeShards);
+    const nodeShards = this.storageContractState.getNodeShards();
     this.log.debug('storage node supports %s shards: %o', nodeShards.size, nodeShards);
     let shardsToProcess = Coll.intersectSet(shardSet, nodeShards);
     this.log.debug('block %s has %d inboxes to unpack', mb.id, shardsToProcess)

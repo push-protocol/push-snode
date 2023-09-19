@@ -1,13 +1,14 @@
-import {Inject, Service} from "typedi";
+import {Service} from "typedi";
 import {Logger} from "winston";
 import {WinstonUtil} from "../../utilz/winstonUtil";
 import {EnvLoader} from "../../utilz/envLoader";
 import {Contract, ethers, Wallet} from "ethers";
 import {JsonRpcProvider} from "@ethersproject/providers/src.ts/json-rpc-provider";
-import fs, {readFileSync} from "fs";
+import {readFileSync} from "fs";
 import {BitUtil} from "../../utilz/bitUtil";
 import {EthersUtil} from "../../utilz/ethersUtil";
 import {Coll} from "../../utilz/coll";
+import {Check} from "../../utilz/check";
 
 
 @Service()
@@ -30,7 +31,7 @@ export class StorageContractState {
   private storageCt: StorageContract;
   public rf: number;
   public shardCount: number;
-  public nodeShards: Set<number>;
+  public nodeShardMap: Map<string, Set<number>> = new Map();
 
   public async postConstruct(listener: StorageContractListener) {
     this.log.info('postConstruct()');
@@ -68,27 +69,38 @@ export class StorageContractState {
     let nodeCount = await this.storageCt.nodeCount();
     this.shardCount = await this.storageCt.SHARD_COUNT();
     this.log.info(`rf: ${this.rf} , shard count: ${this.shardCount} total nodeCount: ${nodeCount}`);
-    let nodeShardmask = await this.storageCt.getNodeShardsByAddr(this.nodeWallet.address);
+    let nodesAddrList = await this.storageCt.getNodeAddresses();
+    await this.reloadEveryAddressMask(nodesAddrList);
+    this.log.info(`this node %s is assigned to shards (%s) : %s`, Coll.setToArray(this.getNodeShards()));
     // publish, new data would settle according to the new shards right away
-    this.nodeShards = Coll.arrayToSet(BitUtil.bitsToPositions(nodeShardmask));
-    this.log.info(`this node %s is assigned to shards (%s) : %s`,
-      this.nodeWallet.address, nodeShardmask.toString(2), Coll.setToArray(this.nodeShards));
-    await this.listener.handleReshard(this.nodeShards);
+    await this.listener.handleReshard(this.getNodeShards(), this.nodeShardMap);
   }
 
   public async subscribeToContractChanges() {
     this.storageCt.on('SNodeMappingChanged', async (nodeList: string[]) => {
       this.log.info(`EVENT: SNodeMappingChanged: nodeList=${JSON.stringify(nodeList)}`);
-      const pos = Coll.findIndex(nodeList, item => item === this.nodeAddress);
-      if (pos < 0) {
-        return;
-      }
-      let nodeShardmask = await this.storageCt.getNodeShardsByAddr(this.nodeAddress);
-      const newShards = Coll.arrayToSet(BitUtil.bitsToPositions(nodeShardmask));
-      // publish, new data would settle according to the new shards right away
-      this.nodeShards = newShards;
-      await this.listener.handleReshard(newShards);
+      await this.reloadEveryAddressMask(nodeList);
+      await this.listener.handleReshard(this.getNodeShards(), this.nodeShardMap);
     });
+  }
+
+  // todo we can add 1 contract call for all addrs
+  async reloadEveryAddressMask(nodeAddrList: string[]): Promise<void> {
+    for (const nodeAddr of nodeAddrList) {
+      let nodeShardmask = await this.storageCt.getNodeShardsByAddr(nodeAddr);
+      const shardSet = Coll.arrayToSet(BitUtil.bitsToPositions(nodeShardmask));
+      this.nodeShardMap.set(nodeAddr, shardSet);
+      this.log.info(`node %s is re-assigned to shards (%s) : %s`,
+        nodeAddr, nodeShardmask.toString(2), Coll.setToArray(shardSet));
+    }
+  }
+
+  // fails if this.nodeAddress is not defined
+  public getNodeShards(): Set<number> {
+    Check.notEmpty(this.nodeAddress);
+    const nodeShards = this.nodeShardMap.get(this.nodeAddress);
+    Check.notEmptySet(nodeShards);
+    return nodeShards;
   }
 }
 
@@ -98,6 +110,8 @@ export interface StorageContractAPI {
 
   rf(): Promise<number>;
 
+  getNodeAddresses(): Promise<string[]>;
+
   getNodeShardsByAddr(addr: string): Promise<number>;
 
   nodeCount(): Promise<number>;
@@ -106,5 +120,5 @@ export interface StorageContractAPI {
 }
 
 export interface StorageContractListener {
-  handleReshard(nodeShards: Set<number>): Promise<void>;
+  handleReshard(currentNodeShards: Set<number>|null, allNodeShards: Map<string, Set<number>>): Promise<void>;
 }
