@@ -11,6 +11,8 @@ import {ValidatorContractState} from "../../services/messaging-common/validatorC
 import onlyLocalhost from "../middlewares/onlyLocalhost";
 import StorageNode from "../../services/messaging/storageNode";
 import {Coll} from "../../utilz/coll";
+import {MessageBlockUtil} from "../../services/messaging-common/messageBlock";
+import {StorageContractState} from "../../services/messaging-common/storageContractState";
 
 const route = Router();
 const dbh = new DbHelper();
@@ -40,25 +42,20 @@ export function storageRoutes(app: Router) {
 
   app.use('/v1/kv', route);
 
+
   route.get(
-    '/ns/:nsName/nsidx/:nsIndex/date/:dt/key/:key', /*  */
+    '/ns/:nsName/nsidx/:nsIndex/date/:dt/key/:key',
     async (req: Request, res: Response, next: NextFunction) => {
       logRequest(req);
       const nsName = req.params.nsName;
       const nsIndex = req.params.nsIndex;
       const dt = req.params.dt;
       const key = req.params.key;
-      const nodeId = Container.get(ValidatorContractState).nodeId; // todo read this from db
+      const valContractState = Container.get(ValidatorContractState);
+      const storageContractState = Container.get(StorageContractState);
+      const nodeId = valContractState.nodeId; // todo read this from db
       log.debug(`nsName=${nsName} nsIndex=${nsIndex} dt=${dt} key=${key} nodeId=${nodeId}`);
-      let shardId = DbHelper.calculateShardForNamespaceIndex(nsName, nsIndex);
-      log.debug(`nodeId=${nodeId} shardId=${shardId}`);
-      const success = await DbHelper.checkThatShardIsOnThisNode(nsName, shardId, nodeId);
-      if (!success) {
-        let errMsg = `${nsName}.${nsIndex} maps to shard ${shardId} which is missing on node ${nodeId}`;
-        console.log(errMsg);
-        return res.status(500)
-          .json({errorMessage: errMsg})
-      }
+      let shardId = MessageBlockUtil.calculateAffectedShard(nsIndex, storageContractState.shardCount);
       const date = DateTime.fromISO(dt, {zone: 'utc'});
       if (!date.isValid) {
         return res.status(400).json('Invalid date ' + dt);
@@ -70,9 +67,8 @@ export function storageRoutes(app: Router) {
         log.error('storage table not found');
         return res.status(401).json('storage table not found');
       }
-      const storageItems = await DbHelper.findStorageItem(nsName, storageTable, key);
+      const storageItems = await DbHelper.findStorageItem(nsName, nsIndex, storageTable, key);
       log.debug(`found value: ${storageItems}`)
-      log.debug('success is ' + success);
       try {
         return res.status(200).json({
           items: storageItems
@@ -91,7 +87,7 @@ export function storageRoutes(app: Router) {
       const nsIndex = req.params.nsIndex; // ex: 1000000
       const ts: string = req.params.ts; //ex: 1661214142.123456
       const key = req.params.key; // ex: 5b62a7b2-d6eb-49ef-b080-20a7fa3091ad
-      const nodeId = Container.get(ValidatorContractState).nodeId; // todo read this from db
+      const nodeId = validatorContractState.nodeId; // todo read this from db
       const body = JSON.stringify(req.body);
       log.debug(`nsName=${nsName} nsIndex=${nsIndex} ts=${ts} key=${key} nodeId=${nodeId} body=${body}`);
       let shardId = DbHelper.calculateShardForNamespaceIndex(nsName, nsIndex);
@@ -152,7 +148,7 @@ export function storageRoutes(app: Router) {
       const nsIndex = req.params.nsIndex;
       const dt = req.params.month + '01';
       const key = req.params.key;
-      const nodeId = Container.get(ValidatorContractState).nodeId; // todo read this from db
+      const nodeId = validatorContractState.nodeId; // todo read this from db
       const body = JSON.stringify(req.body);
       const page = parseInt(req.params.page);
       log.debug(`nsName=${nsName} nsIndex=${nsIndex} dt=${dt} key=${key} nodeId=${nodeId}  firstTs=${firstTs} body=${body}`);

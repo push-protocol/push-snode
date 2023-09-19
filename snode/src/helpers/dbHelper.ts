@@ -38,7 +38,8 @@ const pg: pgPromise.IMain<{}, IClient> = pgPromise(options);
 export const pgPool = pg(`postgres://${EnvLoader.getPropertyOrFail('PG_USER')}:${EnvLoader.getPropertyOrFail('PG_PASS')}@${EnvLoader.getPropertyOrFail('PG_HOST')}:5432/${EnvLoader.getPropertyOrFail('PG_NAME')}`);
 PgUtil.init(pgPool);
 
-
+// todo use PgUtil
+// todo use placeholders (?)
 export default class DbHelper {
 
     public static async createStorageTablesIfNeeded() {
@@ -175,13 +176,13 @@ export default class DbHelper {
         });
     }
 
-    public static async findStorageItem(ns: string, tableName: string, skey: string): Promise<StorageRecord[]> {
+    public static async findStorageItem(ns: string, nsIndex: string, tableName: string, skey: string): Promise<StorageRecord[]> {
         log.debug(`tableName is ${tableName} , skey is ${skey}`);
         const sql = `select skey as skey,
                      extract(epoch from ts) as ts,
                      payload as payload
                      from ${tableName}
-                     where skey = '${skey}'`;
+                     where skey = '${skey}' and namespace_id='${nsIndex}' and namespace='${ns}'`;
         log.debug(sql);
         return pgPool.query(sql).then(data => {
             log.debug(data);

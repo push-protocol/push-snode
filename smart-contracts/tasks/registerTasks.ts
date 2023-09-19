@@ -52,6 +52,7 @@ task("v:registerStorage", "adds a new storage node")
   .addParam("validatorProxyCt", "validatorCt proxy address")
   .addParam("pushCt", "push token contract")
   .addPositionalParam("nodeAddress", "")
+  .addPositionalParam("nodeUrl", "")
   .addPositionalParam("nodeAmount", "")
   .setAction(async (args, hre) => {
     const validatorProxyCt = args.validatorProxyCt;
@@ -62,7 +63,7 @@ task("v:registerStorage", "adds a new storage node")
     info(`nodeOwner is ${nodeOwner.address}`);
 
     const nodeAddress = args.nodeAddress;
-    const nodeUrl = '';
+    const nodeUrl = args.nodeUrl;
     const nodeAmount = args.nodeAmount;
     info(`nodeAddress=${nodeAddress}, nodeUrl=${nodeUrl}, nodeAmount=${nodeAmount}`);
     await RegisterUtil.registerNode(hre, pushCt, validatorProxyCt, nodeOwner, nodeAddress, nodeAmount, nodeUrl, NodeType.SNode);

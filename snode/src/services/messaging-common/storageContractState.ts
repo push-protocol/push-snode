@@ -19,6 +19,7 @@ export class StorageContractState {
   private provider: JsonRpcProvider
   private rpcEndpoint: string
   private rpcNetwork: number
+  private useSigner: boolean;
   // NODE STATE
   private nodeWallet: Wallet | null;
   private nodeAddress: string | null;
@@ -68,7 +69,7 @@ export class StorageContractState {
   }
 
   public async readContractState() {
-    this.log.info(`connected to StorageContract: ${this.storageCt.address} as node ${this.nodeWallet.address}`)
+    this.log.info(`connected to StorageContract`)
     this.rf = await this.storageCt.rf();
     let nodeCount = await this.storageCt.nodeCount();
     this.shardCount = await this.storageCt.SHARD_COUNT();
@@ -106,9 +107,12 @@ export class StorageContractState {
         nodes.add(nodeAddr);
       }
     }
-
-    this.log.info(`this node %s is assigned to shards (%s) : %s`, Coll.setToArray(this.getNodeShards()));
-    await this.listener.handleReshard(this.getNodeShards(), this.nodeShardMap);
+    let nodeShards: Set<number> = null;
+    if (this.useSigner) {
+      this.log.info(`this node %s is assigned to shards (%s) : %s`, Coll.setToArray(this.getNodeShards()));
+      nodeShards = this.getNodeShards();
+    }
+    await this.listener.handleReshard(nodeShards, this.nodeShardMap);
   }
 
   // fails if this.nodeAddress is not defined
@@ -117,6 +121,10 @@ export class StorageContractState {
     const nodeShards = this.nodeShardMap.get(this.nodeAddress);
     Check.notEmptySet(nodeShards);
     return nodeShards;
+  }
+
+  public getStorageNodesForShard(shard: number): Set<string> | null {
+    return this.shardToNodesMap.get(shard);
   }
 }
 

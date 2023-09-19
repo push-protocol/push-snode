@@ -24,7 +24,7 @@ export class ValidatorContractState {
   public contractCli: ValidatorCtClient
 
   public async postConstruct() {
-    this.log.info('postConstruct()')
+    this.log.info('ValidatorContractState.postConstruct()')
     this.contractFactory = new ContractClientFactory()
     this.contractCli = await this.contractFactory.buildRWClient(this.log)
     await this.contractCli.connect()
@@ -111,21 +111,21 @@ class ContractClientFactory {
   }
 
   private static loadValidatorContractAbi(configDir: string, fileNameInConfigDir: string): string {
-    const fileAbsolute = path.resolve(configDir, `./${fileNameInConfigDir}`);
-    const file = fs.readFileSync(fileAbsolute, 'utf8');
-    const json = JSON.parse(file);
-    const abi = json.abi;
-    console.log(`abi size:`, abi.length);
-    return abi;
+    const fileAbsolute = path.resolve(configDir, `./${fileNameInConfigDir}`)
+    const file = fs.readFileSync(fileAbsolute, 'utf8')
+    const json = JSON.parse(file)
+    const abi = json.abi
+    console.log(`abi size:`, abi.length)
+    return abi
   }
 
-
+  // creates a client which can only read blockchain state
   public async buildROClient(log: Logger): Promise<ValidatorCtClient> {
     const contract = new ethers.Contract(this.validatorCtAddr, this.abi, this.provider)
     return new ValidatorCtClient(contract, log)
   }
 
-
+  // creates a client, using an encrypted private key from disk, so that we could write to the blockchain
   public async buildRWClient(log: Logger): Promise<ValidatorCtClient> {
     this.validatorPrivateKeyFile = EnvLoader.getPropertyOrFail('VALIDATOR_PRIVATE_KEY_FILE')
     this.validatorPrivateKeyPass = EnvLoader.getPropertyOrFail('VALIDATOR_PRIVATE_KEY_PASS')
@@ -140,19 +140,40 @@ class ContractClientFactory {
   }
 }
 
+interface ValidatorContract {
+  attestersRequired(): Promise<number>
+  nodeRandomMinCount(): Promise<number>
+  nodeRandomPingCount(): Promise<number>
+  getNodes(): Promise<string[]>
+  getNodeInfo(address: string): Promise<NodeInfo2>
+}
+
+interface NodeInfo2 {
+  shortAddr: number
+  ownerWallet: string
+  nodeWallet: string
+  nodeType: NodeType
+  nodeTokens: number
+  nodeApiBaseUrl: string
+  counters: any
+  status: NodeStatus
+}
+
+type TypedValidatorContract = ValidatorContract & Contract
+
 // all Validator contract interactions are wrapped into this class
 export class ValidatorCtClient {
-  contract: Contract
+  contract: TypedValidatorContract
   private log: Logger
 
   // contract state
   nodeMap: Map<string, NodeInfo> = new Map<string, NodeInfo>()
-  public attestersRequired: number;
-  public nodeRandomMinCount: number;
-  public nodeRandomPingCount: number;
+  public attestersRequired: number
+  public nodeRandomMinCount: number
+  public nodeRandomPingCount: number
 
   constructor(contract: ethers.Contract, log: Logger) {
-    this.contract = contract
+    this.contract = <TypedValidatorContract>contract
     this.log = log
   }
 
