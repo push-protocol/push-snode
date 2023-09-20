@@ -227,18 +227,21 @@ export default class DbHelper {
                      extract(epoch from ts) as ts,
                      payload as payload
                      from ${storageTable} 
-                     where namespace_id='${nsIndex}' ${ isFirstQuery ? '' : `and ts > to_timestamp(${firstTsExcluded})` }
+                     where namespace='${namespace}'
+                           and namespace_id='${nsIndex}' 
+                           ${ isFirstQuery ? '' : `and ts > to_timestamp(${firstTsExcluded})` }
                      order by ts
                      limit ${pageSize + pageLookAhead}`;
         log.debug(sql);
         let data1 = await pgPool.any(sql);
-        var items = [];
+        var items = new Map<string, any>();
         var lastTs: number = 0;
         for (let i = 0; i < Math.min(data1.length, pageSize); i++) {
-            items.push(DbHelper.convertRowToItem(data1[i], namespace));
+            const item = DbHelper.convertRowToItem(data1[i], namespace);
+            items.set(item.skey, item);
             lastTs = data1[i].ts;
         }
-        log.debug(`added ${items.length} items; lastTs=${lastTs}`)
+        log.debug(`added ${items.size} items; lastTs=${lastTs}`)
         // [0...{pagesize-1 (lastTs)}...{data1.length-1 (lastTsRowId)}....]
         // we always request pageSize+3 rows; so if we have these additional rows we can verify that their ts != last row ts,
         // otherwise we should add these additional rows to the output (works only for 2..3 rows)
@@ -260,30 +263,35 @@ export default class DbHelper {
                      extract(epoch from ts) as ts,
                      payload as payload
                      from ${storageTable}
-                     where ts = to_timestamp(${lastTs})
+                     where namespace='${namespace}'
+                           and namespace_id='${nsIndex}' 
+                           and ts = to_timestamp(${lastTs})
                      order by ts
                      limit ${pageSizeForSameTimestamp}`;
                 log.debug(sql2);
                 let data2 = await pgPool.any(sql2);
                 for (let row of data2) {
-                    items.push(DbHelper.convertRowToItem(row, namespace));
+                    const item = DbHelper.convertRowToItem(row, namespace);
+                    items.set(item.skey, item);
                 }
                 log.debug(`extra query with ${data2.length} items to fix duplicate timestamps pagination, total size is ${items.length}`);
             } else if (lastTsRowId > pageSize - 1) {
                 // we have more rows with same timestamp, they fit in pageSize+pageLookAhead rows
                 for (let i = pageSize; i <= lastTsRowId; i++) {
-                    items.push(DbHelper.convertRowToItem(data1[i], namespace));
+                    const item = DbHelper.convertRowToItem(data1[i], namespace);
+                    items.set(item.skey, item);
                 }
-                log.debug(`updated to ${items.length} items to fix duplicate timestamps pagination`)
+                log.debug(`updated to ${items.size} items to fix duplicate timestamps pagination`)
             }
         }
+        let itemsArr = [...items.values()];
         return {
-            'items': items,
+            'items': itemsArr,
             'lastTs': lastTs
         };
     }
 
-    private static convertRowToItem(rowObj: any, namespace: string): any {
+    private static convertRowToItem(rowObj: any, namespace: string) {
         return {
             ns: namespace,
             skey: rowObj.skey,

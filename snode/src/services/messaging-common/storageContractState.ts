@@ -44,6 +44,7 @@ export class StorageContractState {
       this.rpcEndpoint,
       this.rpcNetwork
     )
+    this.useSigner = useSigner;
     if (useSigner) {
       let connect = await EthersUtil.connectWithKey(
         EnvLoader.getPropertyOrFail('CONFIG_DIR'),
@@ -109,7 +110,9 @@ export class StorageContractState {
     }
     let nodeShards: Set<number> = null;
     if (this.useSigner) {
-      this.log.info(`this node %s is assigned to shards (%s) : %s`, Coll.setToArray(this.getNodeShards()));
+      this.log.info(`this node %s is assigned to shards (%s) : %s`,
+        this.nodeAddress,
+        Coll.setToArray(this.getNodeShards()));
       nodeShards = this.getNodeShards();
     }
     await this.listener.handleReshard(nodeShards, this.nodeShardMap);

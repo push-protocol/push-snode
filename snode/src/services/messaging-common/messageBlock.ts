@@ -386,6 +386,15 @@ export class MessageBlockUtil {
     return shardId % shardCount;
   }
 
+  public static getBlockCreationTimeMillis(block: MessageBlock): number | null {
+    if (block.responsesSignatures.length > 0
+      && block.responsesSignatures[0].length > 0) {
+      const sig = block.responsesSignatures[0][0];
+      return sig?.nodeMeta?.tsMillis;
+    }
+    return null;
+  }
+
   public static checkBlock(block: MessageBlock, validatorsFromContract: Set<string>): CheckResult {
     if (block.requests.length != block.responses.length) {
       return CheckResult.failWithText(

@@ -9,7 +9,25 @@ export class Coll {
     return new Map<V[K], V>(arr.map((value) => [value[keyField], value]))
   }
 
+  public static mapValuesToArray<K extends keyof V, V>(map: Map<V[K], V>): V[] {
+    if (map == null || map.size == 0) {
+      return []
+    }
+    return [...map.values()];
+  }
+
+  public static mapKeysToArray<K>(map: Map<K, any>): K[] {
+    if (map == null || map.size == 0) {
+      return []
+    }
+    return [...map.keys()];
+  }
+
+
   public static arrayToSet<V>(arr: V[]): Set<V> {
+    if (arr == null) {
+      return new Set<V>();
+    }
     return new Set<V>(arr)
   }
 
@@ -26,6 +44,9 @@ export class Coll {
   }
 
   public static setToArray<V>(set: Set<V>): V[] {
+    if (set == null) {
+      return [];
+    }
     return Array.from(set.keys())
   }
 
@@ -76,7 +97,7 @@ export class Coll {
   }
 
   // set 1,2,3 to sql: ('1','2','3')
-  public static numberSetToSqlQuoted(s:Set<number>): string {
+  public static numberSetToSqlQuoted(s: Set<number>): string {
     return '(' + Coll.setToArray(s).map(num => "'" + num + "'").join(',') + ')';
   }
 }

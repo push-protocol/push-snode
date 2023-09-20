@@ -43,7 +43,12 @@ export class IndexStorage {
       this.log.debug('finished');
       return;
     }
-    let nowStr = DateUtil.currentTimeSeconds() + '';
+
+    // ex: 1661214142.123456
+    let tsString = '' + (MessageBlockUtil.getBlockCreationTimeMillis(mb) / 1000.0);
+    if (tsString == null) {
+      tsString = '' + DateUtil.currentTimeSeconds();
+    }
     const currentNodeId = this.valContractState.nodeId;
     for (let i = 0; i < mb.responses.length; i++) {
       const feedItem = mb.responses[i];
@@ -54,7 +59,7 @@ export class IndexStorage {
         if (!shardsToProcess.has(targetShard)) {
           continue;
         }
-        await this.putPayloadToInbox('inbox', targetShard, targetAddr, nowStr, currentNodeId, feedItem.payload);
+        await this.putPayloadToInbox('inbox', targetShard, targetAddr, tsString, currentNodeId, feedItem.payload);
       }
     }
   }
@@ -70,6 +75,8 @@ export class IndexStorage {
    * @param ts current time, ex: 1661214142.123456
    * @param nodeId current node id, ex: 0xAAAAAAA
    * @param fpayload payload format
+   *
+   * todo pass ts as number
    */
   public async putPayloadToInbox(nsName: string, nsShardId: number, nsId: string,
                                  ts: string,
