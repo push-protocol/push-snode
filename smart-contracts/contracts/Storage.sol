@@ -114,7 +114,7 @@ contract StorageV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     ) initializer public {
         // init libraries
         __UUPSUpgradeable_init();
-        __Ownable_init_unchained();
+        __Ownable_init();
 
         unusedNodeId = 1;
         rf = 0;
@@ -207,9 +207,7 @@ contract StorageV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     function removeNode(address nodeAddress_) public onlyV {
         uint8 nodeId_ = mapAddrToNodeId[nodeAddress_];
         unusedNodeIdList.push(nodeId_);
-        if (nodeId_ == NULL_NODE) {
-            revert('no address found');
-        }
+        require(nodeId_ != NULL_NODE, 'no address found');
         if (nodeIdList.length == 0) {
             // mapping exists, but node has no short id
             delete mapAddrToNodeId[nodeAddress_];
@@ -324,7 +322,7 @@ contract StorageV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
                 maxNode_ = nodeId;
             }
         }
-        require(maxNode_ < MAX_NODE_ID);
+        require(maxNode_ < MAX_NODE_ID, "bad maxnode");
 
         // copy storage to memory
         // nodeShardsSet[i]: bit(J) = 1, if nodeI has shard J
@@ -332,9 +330,12 @@ contract StorageV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         uint32[] memory nodeShardsBitmap_ = new uint32[](maxNode_ + 1);
         for (uint i = 0; i < nodeList_.length; i++) {
             uint8 nodeId = nodeList_[i];
+            // this is intentionally left to check the node list for bad values at least once
             require(nodeId >= 1, 'nodes are 1 based');
             nodeShardsBitmap_[nodeId] = mapNodeToShards[nodeId];
         }
+        // 0 find all shards that are not yet assigned to every node
+        // also if a node owns shards that no longer exists (rf decreased) - grab them
         uint8[] memory unusedArr_ = buildUnused(nodeList_, nodeShardsBitmap_, nodeModifiedSet_,
             rf_, rfChanged_, nodeRemoved_, removedNodeShardmask_);
 
