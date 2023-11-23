@@ -12,22 +12,27 @@ Validator smart contract
 
 # Enables a network of Validator (V), Storage (S), Delivery (D) nodes
 - V performs a multi-sig on a message block within a specified group
-- D unpacks message block (a threshold amount of sigs required),
-and for every single message: delivers it to the end-users
+    stakes tokens;
+    Lifecycle: new - reported - slashed - banned
+
 - S unpacks message block (a threshold amount of sigs required),
 and indexes every single message: the message gets copied to every person's inbox
 So that later V can query a group of storage nodes responsible for some data range
 and show that inbox to the UI.
+    stakes tokens ;
+    Lifecycle: new - reported - slashed - banned (TBD)
+
+
+- D unpacks message block (a threshold amount of sigs required),
+and for every single message: delivers it to the end-users
+    stakes tokens
+    Lifecycle: none (TBD)
+
 
 # Contracts
 All the stacking, node management, slashing is done in this contrect Validator.sol
 S has it's own Storage.sol contract, which manages only S shard assignments.
 
-todo recalculate on addNode:
-  REPORT_NODES,REPORT_CNT_MAX,SLASH_CNT_MAX
-  attestersRequired,nodeRandomMinCount,nodeRandomPingCount
-
-todo ensure NodeInfo storage targetNode_ , is used carefully in all methods
 */
 contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
 
@@ -46,19 +51,21 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
 
     /* validator slashing params  (effectively constant)
 
-    report = bad behaviour, after REPORT_NODES would report REPORT_CNT_MAX times
-    we perform a slash
+    report = bad behaviour,
+    we accept a VoteData sign by this amout of nodes: REPORT_THRESHOLD
+    we perform a slash after this amount of reports: REPORTS_BEFORE_SLASH
+    */
+    uint32 public REPORT_THRESHOLD;       // i.e. 66 = 66% = 2/3
+    uint32 public REPORTS_BEFORE_SLASH;   // todo should be 10 for V and 50 for S nodes
 
+    /*
     slash = reduces node collateral for SLASH_PERCENT %
-    after SLASH_CNT_MAX slashes the node would get a bat
 
+    after SLASH_BEFORE_BAN iterations, the node would get a ban
     ban = reduces node collateral for BAN_PERCENT, node address is banned forever
     */
-    uint32 public REPORT_NODES;
-    uint32 public REPORT_CNT_MAX;
-
     uint32 public SLASH_PERCENT;
-    uint32 public SLASH_CNT_MAX;
+    uint32 public SLASHES_BEFORE_BAN; // todo should be 5?
 
     uint32 public BAN_PERCENT;
 
@@ -67,8 +74,23 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     for the contract these a simply constants; all the logic is in JS
     */
 
-    // how many attesters should sign the message block, after validator proposes a block
-    uint8 public attestersRequired;
+    // attestersRequired should group up to attestersTarget, when new nodes join
+    uint8 public attestersTarget;
+
+    /*
+    how many signatures is needed for a block
+
+       A block gets signed by a validator + N attesters
+       numberOfSignatures = attestersCountPerBlock (maxed by attersterTarget)
+
+       if REPORT_PERCENT is 66% ( 2/3 of signers should agree on a block)
+       3 * 67 / 100 = 201 / 100 = 2
+       if we have at least 2 valid signatures out of 3 - that's a good block
+
+       attestersCountPerBlock would grow as more nodes join the network;
+       up to attestersTarget
+    */
+    uint8 public attestersCountPerBlock;
     // how many networkRandom objects are required to compute a random value
     uint8 public nodeRandomMinCount;
     // how many nodes should see the emitter of that networkRandom ; so that we could count on this network random
@@ -85,15 +107,21 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     address public storageContract;
 
     // node colleciton
-    address[] public nodes;
+    address[] public nodes;       // todo split into 3 arrays based on type
     mapping(address => NodeInfo) public nodeMap;
-    uint public totalStaked;      // push tokens owned by this contract; which have an owner
-    uint public totalPenalties;   // push tokens owned by this contract; comes from penalties
 
+    // push tokens owned by this contract; which have an owner
+    uint public totalStaked;
+
+    // push tokens owned by this contract;
+    // comes from penalties from BAN only;
+    // SLASH benefits the voters
+    uint public totalUnstaked;
 
     // ----------------------------- EVENTS  --------------------------------------------------
     event NodeAdded(address indexed ownerWallet, address indexed nodeWallet, NodeType nodeType, uint256 nodeTokens, string nodeApiBaseUrl);
     event NodeStatusChanged(address indexed nodeWallet, NodeStatus nodeStatus, uint256 nodeTokens);
+    event NodeReported(address nodeWallet, address reporterWallet, address[] voters, VoteAction voteAction);
 
     event AttestersRequiredUpdated(uint32 value);
     event NodeRandomMinCountUpdated(uint32 value);
@@ -102,7 +130,6 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     // ----------------------------- TYPES  --------------------------------------------------
 
     struct NodeInfo {
-        uint16 shortAddr; // todo
         address ownerWallet;
         address nodeWallet;       // eth wallet
         NodeType nodeType;
@@ -113,16 +140,13 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     }
 
     struct NodeCounters {
-        uint16 reportCounter;
+        uint16 reportCounter; // how many times this node was reported
         uint16 slashCounter;
-    }
 
-    struct Vote {
-        uint256 ts;
-        address[] voters; // this is not the node which decided to vote, this is the one who reported
-        // a message, signed by X other nodes
-        address target;
-        VoteAction voteAction;
+        // block numbers where this node was reported (cleaned on BAN)
+        uint128[] reportedInBlocks;
+        // addresses who did the reports (they will receive slash rewards) (cleaned on SLASH)
+        address[] reportedBy;
     }
 
     enum NodeStatus {
@@ -134,9 +158,8 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     }
 
     enum VoteAction {
+        None,
         Report
-        //        Slash,
-        //        Ban
     }
 
     enum NodeType {
@@ -146,8 +169,12 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     }
 
     struct VoteMessage {
-        VoteAction vote;
-        address target;
+        // block which was the reason to apply sanctions (i.e. bad conversion)
+        uint128 blockId;
+        // node to punish
+        address targetNode;
+        // action
+        uint8 voteAction;
     }
 
     // ----------------------------- UPGRADABLE  --------------------------------------------------
@@ -160,7 +187,7 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     function initialize(
         uint16 protocolVersion_,
         address pushToken_,
-        uint8 attestersRequired_,
+        uint8 attestersTarget_,
         uint8 nodeRandomMinCount_,
         uint8 nodeRandomPingCount_
     ) initializer public {
@@ -171,8 +198,8 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         protocolVersion = protocolVersion_;
         require(pushToken_ != address(0));
         pushToken = IERC20(pushToken_);
-        require(attestersRequired_ > 0, "invalid attesters amount");
-        attestersRequired = attestersRequired_;
+        require(attestersTarget_ > 0, "invalid attesters amount");
+        attestersTarget = attestersTarget_;
         require(nodeRandomMinCount_ > 0, "invalid nodeRandomMinCount amount");
         nodeRandomMinCount = nodeRandomMinCount_;
         require(nodeRandomPingCount_ > 0, "invalid nodeRandomFilterPingsRequired amount");
@@ -181,12 +208,14 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         minStakeV = 100;
         minStakeS = 100;
         minStakeD = 100;
-        REPORT_CNT_MAX = 2;
+        REPORTS_BEFORE_SLASH = 2;
         SLASH_PERCENT = 1;
-        SLASH_CNT_MAX = 2;
+        SLASHES_BEFORE_BAN = 2;
         BAN_PERCENT = 10;
-        REPORT_NODES = 1;
-        // todo update this on node join
+
+
+        REPORT_THRESHOLD = 66;
+        attestersCountPerBlock = 0;
     }
 
     function _authorizeUpgrade(address) internal override onlyOwner {}
@@ -204,8 +233,23 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         storageContract = addr_;
     }
 
-    // ----------------------------- NODE PUBLIC FUNCTIONS  --------------------------------------------------
+    function updateAttestersCountPerBlock(uint8 val_) public onlyOwner {
+        _updateAttestersCountPerBlock(val_);
+    }
 
+    function updateNodeRandomMinCount(uint8 val_) public onlyOwner {
+        require(val_ >= 0 && val_ < nodes.length);
+        nodeRandomMinCount = val_;
+        emit NodeRandomMinCountUpdated(val_);
+    }
+
+    function updateNodeRandomPingCount(uint8 val_) public onlyOwner {
+        require(val_ >= 0 && val_ < nodes.length);
+        nodeRandomPingCount = val_;
+        emit NodeRandomPingCountUpdated(val_);
+    }
+
+    // ----------------------------- NODE PUBLIC FUNCTIONS  --------------------------------------------------
 
     /*
     Registers a new validator node
@@ -246,7 +290,9 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         require(pushToken.transferFrom(msg.sender, address(this), coll), "failed to transfer tokens to contract");
         totalStaked += coll;
         // post actions
-        if(nodeType_ == NodeType.SNode) {
+        if (nodeType_ == NodeType.VNode) {
+            recalcualteAttestersCountPerBlock();
+        } else if (nodeType_ == NodeType.SNode) {
             // try to register this node for shard mappings
             require(storageContract != address(0), 'no storage contract defined');
             StorageV1 s = StorageV1(storageContract);
@@ -256,6 +302,28 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         emit NodeAdded(msg.sender, nodeWallet_, nodeType_, coll, nodeApiBaseUrl_);
     }
 
+    // raise the number of required signatures per block
+    // from 1 up to attestersTarget
+    // or down to 1
+    function recalcualteAttestersCountPerBlock() private {
+        uint activeValidators_ = 0;
+        for (uint i = 0; i < nodes.length; i++) {
+            address nodeAddr_ = nodes[i];
+            NodeInfo storage nodeInfo_ = nodeMap[nodeAddr_];
+            if (nodeInfo_.nodeType == NodeType.VNode && isActiveValidator(nodeInfo_.status)) {
+                activeValidators_++;
+            }
+        }
+        uint newValue = activeValidators_;
+        if (attestersCountPerBlock > attestersTarget) {
+            newValue = attestersTarget;
+        }
+        _updateAttestersCountPerBlock(uint8(newValue));
+    }
+
+    function isActiveValidator(NodeStatus status) private pure returns (bool) {
+        return status == NodeStatus.Unstaked || status == NodeStatus.BannedAndUnstaked;
+    }
 
     /*
     Remove node (if you are the node owner)
@@ -270,7 +338,6 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         emit NodeStatusChanged(node.nodeWallet, NodeStatus.Unstaked, 0);
     }
 
-
     /* Complain on an existing node;
        N attesters can request to report malicious activity for a specific node
        also slashes if the # of complains meet the required threshold
@@ -280,49 +347,96 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
        Returns 1 (number of affected nodes) or 0 (if nothing happened)
      */
     // ACCESS: Any node can call this
-    function reportNode(bytes memory _message, bytes[] memory _signatures) public returns (uint8) {
-        uint validSigCount = 0;
-        NodeInfo storage callerNodeId = nodeMap[msg.sender];
-        if (callerNodeId.nodeWallet == address(0)) {
-            return 0;
+    function reportNode(bytes memory voteBlob_,
+        bytes[] memory signatures_) public {
+        console.log('reportNode()', voteBlob_.length);
+        NodeInfo storage reporterNode_ = nodeMap[msg.sender];
+        if (reporterNode_.nodeWallet == address(0)) {
+            revert('invalid reporter');
         }
-        for (uint i = 0; i < _signatures.length; i++) {
-            address nodeWallet = SigUtil.recoverSignerEx(_message, _signatures[i]);
-            NodeInfo storage voterNode = nodeMap[nodeWallet];
-            if (voterNode.nodeWallet != address(0)) {
-                validSigCount++;
+
+        console.log('got signatures', signatures_.length);
+        uint uniqVotersSize_ = 0;
+        address[] memory uniqVoters_ = new address[](signatures_.length);
+        for (uint i = 0; i < signatures_.length; i++) {
+            address voterWallet = SigUtil.recoverSignerEx(voteBlob_, signatures_[i]);
+            console.log('voter wallet is', voterWallet);
+            NodeInfo storage voterNode = nodeMap[voterWallet];
+            if (voterNode.nodeWallet == address(0)) {
+                console.log('invalid voter wallet');
+                continue;
             }
+            // this is not very efficient, but there is no in-memory set support
+            bool foundDuplicate_ = false;
+            for (uint j = 0; j < uniqVotersSize_; j++) {
+                if (uniqVoters_[j] == voterWallet) {
+                    foundDuplicate_ = true;
+                    break;
+                }
+            }
+            if (foundDuplicate_) {
+                continue;
+            }
+            uniqVoters_[uniqVotersSize_++] = voterWallet;
         }
-        if (validSigCount < REPORT_NODES) {
-            return 0;
+        if (uniqVotersSize_ < attestersCountPerBlock * REPORT_THRESHOLD / 100) {
+            revert('sig count is too low');
         }
-        VoteMessage memory vm = decodeVoteMessage(_message);
-        // always Report
-        NodeInfo storage targetNode = nodeMap[vm.target];
-        if (targetNode.nodeWallet == address(0)) {
-            revert("a node with _targetPubKey does not exists");
+        console.log('sigcount=', uniqVotersSize_);
+        // compactify
+        if (uniqVotersSize_ < signatures_.length) {
+            address[] memory tmp = new address[](uniqVotersSize_);
+            for (uint i = 0; i < uniqVotersSize_; i++) {
+                tmp[i] = uniqVoters_[i];
+            }
+            uniqVoters_ = tmp;
         }
-        return _reportNode(vm, targetNode);
+
+        // unpack and verify
+        VoteMessage memory vm_;
+        uint128 _blockId;
+        address _targetNode;
+        uint8 _voteAction;
+        (_blockId, _targetNode, _voteAction) = abi.decode(voteBlob_, (uint128, address, uint8));
+
+        require(_voteAction == uint8(VoteAction.Report), 'report action only supported');
+        NodeInfo storage targetNode_ = nodeMap[_targetNode];
+        require(targetNode_.nodeWallet != address(0), "target node wallet does not exists");
+        require(targetNode_.nodeType == NodeType.VNode, "report only for VNodes");
+
+        _reportNode(vm_, reporterNode_, uniqVoters_, targetNode_);
     }
 
     // ----------------------------- IMPL  --------------------------------------------------
 
 
+    function _updateAttestersCountPerBlock(uint8 val_) private {
+        require(val_ >= 0 && val_ < nodes.length);
+        if (val_ == attestersCountPerBlock) {
+            return;
+        }
+        attestersCountPerBlock = val_;
+        emit AttestersRequiredUpdated(val_);
+    }
+
     // note: reading storage value multiple times which is sub-optimal, but the code looks much simpler
-    function _reportNode(VoteMessage memory _vm, NodeInfo storage targetNode) private returns (uint8){
+    function _reportNode(VoteMessage memory _vm,
+        NodeInfo storage reporterNode,
+        address[] memory uniqVoters_,
+        NodeInfo storage targetNode) private returns (uint8){
         require(targetNode.nodeType == NodeType.VNode, "report only for VNodes");
         NodeStatus ns = targetNode.status;
         // 2 check count
-        if (_vm.vote == VoteAction.Report) {
-            doReport(targetNode);
+        if (_vm.voteAction == uint8(VoteAction.Report)) {
+            doReportIfBlockIsNew(reporterNode, uniqVoters_, _vm.blockId, targetNode);
         } else {
             revert("unsupported");
         }
         if (ns == NodeStatus.OK || ns == NodeStatus.Slashed) {
-            if (targetNode.counters.reportCounter >= REPORT_CNT_MAX) {
-                doSlash(targetNode);
+            if (targetNode.counters.reportCounter >= REPORTS_BEFORE_SLASH) {
+                doSlash(reporterNode, targetNode);
             }
-            if (targetNode.counters.slashCounter >= SLASH_CNT_MAX) {
+            if (targetNode.counters.slashCounter >= SLASHES_BEFORE_BAN) {
                 doBan(targetNode);
             }
         } else if (ns == NodeStatus.BannedAndUnstaked) {
@@ -334,18 +448,15 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     /*
      Returns remaining collateral
     */
-    function reduceCollateral(address nodeWallet_, uint32 percentage_) private returns (uint256) {
-        require(nodeWallet_ != address(0));
+    function reduceCollateral(NodeInfo storage slashedNode, uint32 percentage_
+    ) private returns (uint256 newAmount_, uint256 delta_) {
         require(percentage_ >= 0 && percentage_ <= 100, "percentage should be in [0, 100]");
         // reduce only nodeTokens; we do not transfer any tokens; it will affect only 'unstake'
-        NodeInfo storage node = nodeMap[nodeWallet_];
-        uint256 currentAmount_ = node.nodeTokens;
-        uint256 newAmount_ = (currentAmount_ * (100 - percentage_)) / 100;
-        uint256 delta_ = currentAmount_ - newAmount_;
-        node.nodeTokens = newAmount_;
-        totalStaked -= delta_;
-        totalPenalties += delta_;
-        return newAmount_;
+        uint256 currentAmount_ = slashedNode.nodeTokens;
+        newAmount_ = (currentAmount_ * (100 - percentage_)) / 100;
+        delta_ = currentAmount_ - newAmount_;
+        slashedNode.nodeTokens = newAmount_;
+        return (newAmount_, delta_);
     }
 
     /*
@@ -356,7 +467,11 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         require(pushToken.transfer(targetNode_.ownerWallet, delta), "failed to trasfer funds back to owner");
         targetNode_.nodeTokens = 0;
         totalStaked -= delta;
-        if(targetNode_.nodeType == NodeType.SNode) {
+        if (targetNode_.nodeType == NodeType.VNode) {
+            recalcualteAttestersCountPerBlock();
+            delete targetNode_.counters.reportedInBlocks;
+            delete targetNode_.counters.reportedBy;
+        } else if (targetNode_.nodeType == NodeType.SNode) {
             require(storageContract != address(0), 'no storage contract defined');
             StorageV1 s = StorageV1(storageContract);
             s.removeNode(targetNode_.nodeWallet);
@@ -365,10 +480,8 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     }
 
     function decodeVoteMessage(bytes memory data) private pure returns (VoteMessage memory) {
-        (VoteAction vote, address target) = abi.decode(data, (VoteAction, address));
         VoteMessage memory result;
-        result.vote = vote;
-        result.target = target;
+        (result.blockId, result.targetNode, result.voteAction) = abi.decode(data, (uint128, address, uint8));
         return result;
     }
 
@@ -380,43 +493,87 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         return nodes;
     }
 
-    function doReport(NodeInfo storage targetNode) private {
+    // alters newVoters_ !
+    // reportedInBlocks, reportedBy - arrays are used for a reason
+    // to be more compact and to clean easier later.
+    function doReportIfBlockIsNew(NodeInfo storage reporterNode, address[] memory newVoters_,
+                                  uint128 blockId_, NodeInfo storage targetNode
+    ) private {
+        console.log('doReport');
+
+        // check that we encounter this report X this block only for the first time
+        uint128[] memory knownBlocks = targetNode.counters.reportedInBlocks;
+        for (uint i = 0; i < knownBlocks.length; i++) {
+            if (blockId_ == knownBlocks[i]) {
+                revert('block is not new');
+            }
+        }
         targetNode.counters.reportCounter++;
+        targetNode.counters.reportedInBlocks.push(blockId_);
+
+        // calculate new voters; they will collectively split payments on slash
+        address [] memory knownVoters = targetNode.counters.reportedBy;
+        for (uint n = 0; n < newVoters_.length; n++) {
+            for (uint k = 0; k < knownVoters.length; k++) {
+                if (newVoters_[n] == knownVoters[k] && newVoters_[n] != address(0)) {
+                    newVoters_[n] = address(0);
+                    break;
+                }
+            }
+        }
+        for (uint n = 0; n < newVoters_.length; n++) {
+            address voter_ = newVoters_[n];
+            if (voter_ != address(0)) {
+                targetNode.counters.reportedBy.push(newVoters_[n]);
+            }
+        }
+
+
+        emit NodeReported(targetNode.nodeWallet, reporterNode.nodeWallet, newVoters_, VoteAction.Report); // todo do we need this ?
         emit NodeStatusChanged(targetNode.nodeWallet, NodeStatus.Reported, targetNode.nodeTokens);
     }
 
-    function doSlash(NodeInfo storage targetNode) private {
+    function doSlash(NodeInfo storage reporterNode, NodeInfo storage targetNode) private {
+        console.log('doSlash');
+        // targetNode gets slashed by SLASH_PERCENT, this deducts delta_ tokens
+        uint256 coll_;
+        uint256 delta_;
+        (coll_, delta_) = reduceCollateral(targetNode, SLASH_PERCENT);
+
+        // every pre-exising-signed-reporter will get a slice of the bonus
+        address[] memory reportedBy_ = targetNode.counters.reportedBy;
+        uint256 reporterBonus_;
+        reporterBonus_ = delta_ / (reportedBy_.length + 1);
+        for (uint i = 0; i < reportedBy_.length; i++) {
+            NodeInfo storage ni = nodeMap[reportedBy_[i]];
+            if (ni.ownerWallet == address(0)) {
+                continue;
+            }
+            ni.nodeTokens += reporterBonus_;
+            delta_ -= reporterBonus_;
+        }
+        // current reporter will get a slice of the bonus (so he gets 2xbonus)
+        reporterNode.nodeTokens += delta_; // reporter gets slashed profils
+
+
+        delete targetNode.counters.reportedBy;
         targetNode.status = NodeStatus.Slashed;
         targetNode.counters.reportCounter = 0;
         targetNode.counters.slashCounter++;
-        uint256 coll = reduceCollateral(targetNode.nodeWallet, SLASH_PERCENT);
-        emit NodeStatusChanged(targetNode.nodeWallet, NodeStatus.Slashed, coll);
+        emit NodeStatusChanged(targetNode.nodeWallet, NodeStatus.Slashed, coll_);
     }
 
     function doBan(NodeInfo storage targetNode) private {
-        reduceCollateral(targetNode.nodeWallet, BAN_PERCENT);
+        uint256 coll_;
+        uint256 delta_;
+        (coll_, delta_) = reduceCollateral(targetNode, BAN_PERCENT);
+        totalStaked -= delta_;
+        totalUnstaked += delta_;
         _unstakeNode(targetNode);
         targetNode.status = NodeStatus.BannedAndUnstaked;
         emit NodeStatusChanged(targetNode.nodeWallet, NodeStatus.BannedAndUnstaked, 0);
     }
 
-    function updateAttestersRequired(uint8 amount) public onlyOwner {
-        require(amount >= 0 && amount < nodes.length);
-        attestersRequired = amount;
-        emit AttestersRequiredUpdated(amount);
-    }
-
-    function updateNodeRandomMinCount(uint8 amount) public onlyOwner {
-        require(amount >= 0 && amount < nodes.length);
-        nodeRandomMinCount = amount;
-        emit NodeRandomMinCountUpdated(amount);
-    }
-
-    function updateNodeRandomPingCount(uint8 amount) public onlyOwner {
-        require(amount >= 0 && amount < nodes.length);
-        nodeRandomPingCount = amount;
-        emit NodeRandomPingCountUpdated(amount);
-    }
 }
 
 // a lib that abstracts privKey signature and pubKey+signature checks
