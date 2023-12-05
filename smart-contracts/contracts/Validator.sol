@@ -89,17 +89,17 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     attestersCountPerBlock would grow as more nodes join the network;
     up to attestersTarget
     */
-    uint8 public valPerBlock;
+    uint16 public valPerBlock;
 
     // maximum amount of validator signatures per block
     // we will grow or shrink valPerBlock up to this number
-    uint8 public valPerBlockTarget;
+    uint16 public valPerBlockTarget;
 
 
     // how many networkRandom objects are required to compute a random value
-    uint8 public nodeRandomMinCount;
+    uint16 public nodeRandomMinCount;
     // how many nodes should see the emitter of that networkRandom ; so that we could count on this network random
-    uint8 public nodeRandomPingCount;
+    uint16 public nodeRandomPingCount;
 
     // ----------------------------- CONTRACT STATE --------------------------------------------------
 
@@ -113,6 +113,7 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
 
     // node colleciton
     address[] public vnodes;
+    uint16 public vnodesActive;
     address[] public snodes;
     address[] public dnodes;
     mapping(address => NodeInfo) public nodeMap;
@@ -130,9 +131,9 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     event NodeStatusChanged(address indexed nodeWallet, NodeStatus nodeStatus, uint256 nodeTokens);
     event NodeReported(address nodeWallet, address reporterWallet, address[] voters, VoteAction voteAction);
 
-    event AttestersRequiredUpdated(uint32 value);
-    event NodeRandomMinCountUpdated(uint32 value);
-    event NodeRandomPingCountUpdated(uint32 value);
+    event BlockParamsUpdated(uint16 valPerBlock, uint16 valPerBlockTarget);
+    event RandomParamsUpdated(uint16 nodeRandomMinCount, uint16 nodeRandomPingCount);
+
 
     // ----------------------------- TYPES  --------------------------------------------------
 
@@ -147,14 +148,28 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     }
 
     struct NodeCounters {
-        uint16 reportCounter; // how many times this node was reported
+        // S, V nodes -----
+
+        // how many times this node was reported
+        // cleaned on SLASH
+        uint16 reportCounter;
+        // how many times this node was slashed
         uint16 slashCounter;
 
         // block numbers where this node was reported (cleaned on BAN)
+        // we prevent new reports that match any existing block in this list
+        // cleaned on BAN, unstake
         uint128[] reportedInBlocks;
-        // addresses who did the reports (they will receive slash rewards) (cleaned on SLASH)
+
+        // addresses who did the reports, they will receive SLASH rewards
+        // cleaned on SLASH, BAN, unstake
         address[] reportedBy;
-        uint128[] reportedKeys; // keys missing (for storage nodes only)
+
+        // S nodes -------
+
+        // keys missing (for storage nodes only)
+        // we prevent new reports that match any existing key in this list
+        uint128[] reportedKeys;
     }
 
     enum NodeStatus {
@@ -196,9 +211,9 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     function initialize(
         uint16 protocolVersion_,
         address pushToken_,
-        uint8 valPerBlockTarget_,
-        uint8 nodeRandomMinCount_,
-        uint8 nodeRandomPingCount_
+        uint16 valPerBlockTarget_,
+        uint16 nodeRandomMinCount_,
+        uint16 nodeRandomPingCount_
     ) initializer public {
         // init libraries
         __UUPSUpgradeable_init();
@@ -237,20 +252,18 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         storageContract = addr_;
     }
 
-    function updateAttestersCountPerBlock(uint8 val_) public onlyOwner {
-        _updateAttestersCountPerBlock(val_);
+    function updateBlockParams(uint16 valPerBlockTarget_) public onlyOwner {
+        require(valPerBlockTarget_ <= vnodes.length, 'incorrect valPerBlockTarget_');
+        valPerBlockTarget = valPerBlockTarget_;
+        emit BlockParamsUpdated(valPerBlock, valPerBlockTarget_);
     }
 
-    function updateNodeRandomMinCount(uint8 val_) public onlyOwner {
-        require(val_ >= 0 && val_ < vnodes.length);
-        nodeRandomMinCount = val_;
-        emit NodeRandomMinCountUpdated(val_);
-    }
-
-    function updateNodeRandomPingCount(uint8 val_) public onlyOwner {
-        require(val_ >= 0 && val_ < vnodes.length);
-        nodeRandomPingCount = val_;
-        emit NodeRandomPingCountUpdated(val_);
+    function updateRandomParams(uint16 nodeRandomMinCount_, uint16 nodeRandomPingCount_) public onlyOwner {
+        require(nodeRandomMinCount_ >= 0 && nodeRandomMinCount_ < vnodes.length);
+        require(nodeRandomPingCount_ >= 0 && nodeRandomPingCount_ < vnodes.length);
+        nodeRandomMinCount = nodeRandomMinCount_;
+        nodeRandomPingCount = nodeRandomPingCount_;
+        emit RandomParamsUpdated(nodeRandomMinCount_, nodeRandomPingCount_);
     }
 
     // ----------------------------- NODE PUBLIC FUNCTIONS  --------------------------------------------------
@@ -263,7 +276,7 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     */
     function registerNodeAndStake(uint256 nodeTokens_,
         NodeType nodeType_, string memory nodeApiBaseUrl_, address nodeWallet_) public {
-
+        console.log('--register', nodeWallet_);
         // pre-actions
         if (nodeType_ == NodeType.VNode) {
             require(nodeTokens_ >= minStakeV, "Insufficient collateral for VNODE");
@@ -319,23 +332,32 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     // from 1 up to attestersTarget
     // or down to 1
     function recalcualteAttestersCountPerBlock() private {
-        uint activeValidators_ = 0;
+        uint16 activeValidators_ = 0;
         for (uint i = 0; i < vnodes.length; i++) {
             address nodeAddr_ = vnodes[i];
             NodeInfo storage nodeInfo_ = nodeMap[nodeAddr_];
-            if (nodeInfo_.nodeType == NodeType.VNode && isActiveValidator(nodeInfo_.status)) {
+            if (isActiveValidator(nodeInfo_.status)) {
                 activeValidators_++;
             }
         }
-        uint newValue = activeValidators_;
-        if (valPerBlock > valPerBlockTarget) {
-            newValue = valPerBlockTarget;
+        vnodesActive = activeValidators_;
+        console.log('activeValidators_', activeValidators_);
+        uint16 valPerBlock_ = activeValidators_;
+        uint16 valPerBlockTarget_ = valPerBlockTarget;
+        if (valPerBlock_ > valPerBlockTarget_) {
+            valPerBlock_ = valPerBlockTarget_;
+            console.log('limit by target', valPerBlockTarget_);
         }
-        _updateAttestersCountPerBlock(uint8(newValue));
+        require(valPerBlock <= valPerBlockTarget_);
+        if(valPerBlock_ != valPerBlock) {
+            console.log('recalcualteAttestersCountPerBlock', valPerBlock_, valPerBlockTarget_);
+            valPerBlock = valPerBlock_;
+            emit BlockParamsUpdated(valPerBlock_, valPerBlockTarget_);
+        }
     }
 
     function isActiveValidator(NodeStatus status) private pure returns (bool) {
-        return status == NodeStatus.Unstaked || status == NodeStatus.BannedAndUnstaked;
+        return !(status == NodeStatus.Unstaked || status == NodeStatus.BannedAndUnstaked);
     }
 
     /*
@@ -343,6 +365,7 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     ACCESS: Any node owner can call this
     */
     function unstakeNode(address nodeWallet_) public {
+        console.log('--unstake', nodeWallet_);
         NodeInfo storage node = nodeMap[nodeWallet_];
         require(node.nodeWallet != address(0), "node does not exists");
         require(node.ownerWallet == msg.sender || owner() == msg.sender, "only owner can unstake a node");
@@ -430,17 +453,32 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
 
     }
 
+    function getVNodesLength() public view returns (uint) {
+        return vnodes.length;
+    }
+
+    function getVNodes() public view returns (address[] memory) {
+        return vnodes;
+    }
+
+    function getSNodesLength() public view returns (uint) {
+        return snodes.length;
+    }
+
+    function getSNodes() public view returns (address[] memory) {
+        return snodes;
+    }
+
+    function getDNodesLength() public view returns (uint) {
+        return dnodes.length;
+    }
+
+    function getDNodes() public view returns (address[] memory) {
+        return dnodes;
+    }
+
     // ----------------------------- IMPL  --------------------------------------------------
 
-
-    function _updateAttestersCountPerBlock(uint8 val_) private {
-        require(val_ >= 0 && val_ < vnodes.length);
-        if (val_ == valPerBlock) {
-            return;
-        }
-        valPerBlock = val_;
-        emit AttestersRequiredUpdated(val_);
-    }
 
     // note: reading storage value multiple times which is sub-optimal, but the code looks much simpler
     function _reportVNode(VoteAction voteAction_, NodeInfo storage reporterNode,
@@ -527,10 +565,10 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         targetNode_.nodeTokens = 0;
         totalStaked -= delta;
         if (targetNode_.nodeType == NodeType.VNode) {
-            recalcualteAttestersCountPerBlock();
             delete targetNode_.counters.reportedInBlocks;
             delete targetNode_.counters.reportedBy;
             findAndRemove(vnodes, targetNode_.nodeWallet);
+            recalcualteAttestersCountPerBlock(); // only after vnodes got shrinked
         } else if (targetNode_.nodeType == NodeType.SNode) {
             require(storageContract != address(0), 'no storage contract defined');
             StorageV1 s = StorageV1(storageContract);

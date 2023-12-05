@@ -18,8 +18,12 @@ export namespace DeployerUtil {
   export async function deployValidatorContract(hre: HardhatRuntimeEnvironment, pushCt:string): Promise<ValidatorV1> {
     log('deploying ValidatorV1');
     const validatorV1Factory = await hre.ethers.getContractFactory("ValidatorV1");
+    const protocolVersion = 1;
+    const valPerBlockTarget = 5;
+    const nodeRandomMinCount = 1;
+    const nodeRandomPingCount = 1;
     const validatorV1Proxy = await upgrades.deployProxy(validatorV1Factory,
-      [1, pushCt, 1, 1, 1],
+      [protocolVersion, pushCt, valPerBlockTarget, nodeRandomMinCount, nodeRandomPingCount],
       {kind: "uups"});
     await validatorV1Proxy.deployed();
     log(`deployed proxy: ${validatorV1Proxy.address}`);
