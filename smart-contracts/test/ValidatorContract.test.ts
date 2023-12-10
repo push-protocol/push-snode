@@ -3,59 +3,18 @@
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import "@nomicfoundation/hardhat-chai-matchers";
 import "@nomiclabs/hardhat-ethers";
-import {expect, assert} from "chai";
-import {ethers} from "hardhat";
-import hre from "hardhat";
+import {assert, expect} from "chai";
+import hre, {ethers} from "hardhat";
 import {PushToken, StorageV1, ValidatorV1} from "../typechain-types";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {TestHelper as th} from "./uitlz/TestHelper";
-import {NodeStatus, EthSig2, VoteData} from "./ValidatorHelper";
-import {BigNumber, Contract} from "ethers";
+import {EthSig2, NodeStatus, VoteData} from "./ValidatorHelper";
 import {BitUtil} from "./uitlz/bitUtil";
 import {DeployerUtil, NodeType} from "../src/DeployerUtil";
+import {BigNumber} from "ethers";
 
 let log = console.log;
 
-/*
-async function deployPushTokenFake(): Promise<PushToken> {
-  log('deploying PushToken');
-  const ptFactory = await ethers.getContractFactory("PushToken");
-  const pushContract = await ptFactory.deploy();
-  log(`deployed impl: ${pushContract.address}`);
-  log('done');
-  return pushContract;
-}
-
-async function deployValidatorContract(pushCt: PushToken): Promise<ValidatorV1> {
-  log('deploying ValidatorV1');
-  const validatorV1Factory = await ethers.getContractFactory("ValidatorV1");
-  const validatorV1Proxy = await upgrades.deployProxy(validatorV1Factory,
-    [1, pushCt.address, 1, 1, 1],
-    {kind: "uups"});
-  await validatorV1Proxy.deployed();
-  log(`deployed proxy: ${validatorV1Proxy.address}`);
-
-  let validatorV1Impl = await upgrades.erc1967.getImplementationAddress(validatorV1Proxy.address);
-  log(`deployed impl: ${validatorV1Impl}`);
-  log('done');
-  return validatorV1Proxy;
-}
-
-async function deployStorageContract(valCt: ValidatorV1): Promise<StorageV2> {
-  log('deploying StorageV1')
-  let protocolVersion = 1;
-  let rfTarget = 5;
-  const factory = await ethers.getContractFactory("StorageV1");
-  const proxyCt = await upgrades.deployProxy(factory,
-    [protocolVersion, valCt.address, rfTarget],
-    {kind: "uups"});
-  await proxyCt.deployed();
-  log(`deployed proxy: ${proxyCt.address}`);
-  let implCt = await upgrades.erc1967.getImplementationAddress(proxyCt.address);
-  log(`deployed impl: ${implCt}`);
-  log('done');
-  return proxyCt;
-}*/
 
 
 // VARIABLES FOR TESTS
@@ -87,7 +46,7 @@ async function initBlockchain(): Promise<DeployInfo> {
   const [owner_] = signers;
 
   const pushCt = await DeployerUtil.deployPushTokenFake(hre);
-
+// todo SLASH_PERCENT 10 for tests, and 1 for PROD
   const valCt = await DeployerUtil.deployValidatorContract(hre, pushCt.address);
 
   const storeCt = await DeployerUtil.deployStorageContract(hre, valCt.address);
@@ -368,9 +327,9 @@ describe("Validator - node reports on other node / vnro", function () {
 
   beforeEach(beforeEachInit);
 
-  it("check-smart-contract-compatipable-signatures-cscs", async function () {
-    let vd = new VoteData('1111', '0x' + "AA".repeat(20), 1);
-    const packed = VoteData.write(vd);
+  it("Check smart contract signatures - cscs", async function () {
+    let vd = new VoteData(1, '1111', '0x' + "AA".repeat(20));
+    const packed = VoteData.encode(vd);
     console.log('vote data packed: ', packed);
 
     const sig1 = await EthSig2.signOffline(vnode1, packed);
@@ -381,7 +340,7 @@ describe("Validator - node reports on other node / vnro", function () {
     expect(valid).to.be.true;
   });
 
-  it("val-reg-1", async function () {
+  it("Register 1 validator node and check events - val-reg-1", async function () {
     assert.equal(await valCt.valPerBlock(), 0);
     assert.equal(await valCt.valPerBlockTarget(), 5);
     {
@@ -398,13 +357,13 @@ describe("Validator - node reports on other node / vnro", function () {
 
   });
 
-  it("stor-reg-6", async function () {
+  it("Register 6 storage nodes and unstake them - stor-reg-6", async function () {
     let nodeType = NodeType.SNode;
     let nodeTokens = 100;
     // register nodes
     assert.equal(await valCt.valPerBlock(), 0);
     assert.equal(await valCt.valPerBlockTarget(), 5);
-    for(let i=0;i<6;i++) {
+    for (let i = 0; i < 6; i++) {
       let t1 = await valCt.registerNodeAndStake(nodeTokens, nodeType,
         `http://snode${i}:3000`, vnodes[i].address);
       await th.confirmTransaction(t1);
@@ -413,7 +372,7 @@ describe("Validator - node reports on other node / vnro", function () {
     assert.equal((await pushCt.balanceOf(valCt.address)).toNumber(), 6 * nodeTokens);
 
     // unstake nodes
-    for(let i=0;i<6;i++) {
+    for (let i = 0; i < 6; i++) {
       let t1 = await valCt.unstakeNode(vnodes[i].address);
       await th.confirmTransaction(t1);
     }
@@ -422,13 +381,13 @@ describe("Validator - node reports on other node / vnro", function () {
   });
 
 
-  it("val-reg-6", async function () {
+  it("Regster 6 validator nodes and unstake them - val-reg-unreg-6", async function () {
     let nodeType = NodeType.VNode;
     let nodeTokens = 100;
     // register nodes
     assert.equal(await valCt.valPerBlock(), 0);
     assert.equal(await valCt.valPerBlockTarget(), 5);
-    for(let i=0;i<6;i++) {
+    for (let i = 0; i < 6; i++) {
       let t1 = await valCt.registerNodeAndStake(nodeTokens, nodeType,
         `http://snode${i}:3000`, vnodes[i].address);
       await th.confirmTransaction(t1);
@@ -437,11 +396,8 @@ describe("Validator - node reports on other node / vnro", function () {
     assert.equal(await valCt.valPerBlock(), 5); // peaks at 5, even for 6 nodes
     assert.equal(await valCt.valPerBlockTarget(), 5);
     assert.equal((await pushCt.balanceOf(valCt.address)).toNumber(), 6 * nodeTokens);
-    // report each other
-    // todo
-
     // unstake nodes
-    for(let i=0;i<6;i++) {
+    for (let i = 0; i < 6; i++) {
       let t1 = await valCt.unstakeNode(vnodes[i].address);
       await th.confirmTransaction(t1);
     }
@@ -449,6 +405,68 @@ describe("Validator - node reports on other node / vnro", function () {
     assert.equal(await valCt.valPerBlock(), 0);
     assert.equal(await valCt.valPerBlockTarget(), 5);
     assert.equal((await pushCt.balanceOf(valCt.address)).toNumber(), 0);
+  });
+
+  it("Regster 3 validator nodes - 2 report on 1 - 3v-reports", async function () {
+    let nodeType = NodeType.VNode;
+    let nodeTokens = 100;
+    // register 3 nodes
+    assert.equal(await valCt.valPerBlock(), 0);
+    assert.equal(await valCt.valPerBlockTarget(), 5);
+    for (let i = 0; i < 3; i++) {
+      let t1 = await valCt.registerNodeAndStake(nodeTokens, nodeType,
+        `http://snode${i}:3000`, vnodes[i].address);
+      await th.confirmTransaction(t1);
+    }
+
+    {
+      // v0,v1 report on v2 ; v0 calls reportNode
+      const vote = VoteData.encode(new VoteData(1, '0x1111', vnodes[2].address));
+      const sig0 = await EthSig2.signOffline(vnodes[0], vote);
+      const sig1 = await EthSig2.signOffline(vnodes[1], vote);
+      // 1st report
+      let tx1 = await valCt.connect(vnodes[0]).reportNode(NodeType.VNode, vote, [sig0, sig1]);
+
+      const ni = await valCt.getNodeInfo(vnodes[2].address);
+      assert.deepEqual(ni.counters.reportedBy, [vnodes[0].address, vnodes[1].address]);
+
+      await expect(tx1).to.emit(valCt, "NodeStatusChanged")
+        .withArgs(vnodes[2].address, NodeStatus.Reported, BigNumber.from(100)); // 1% slash occured
+
+      console.log('vote', vote);
+      console.log('signature ', sig1);
+      console.log('voter wallet is', vnode1.address);
+
+      //duplicate report
+      //same block id = reject
+      let tx2 = valCt.connect(vnodes[0]).reportNode(NodeType.VNode, vote, [sig0, sig1]);
+      await th.expectRejct(tx2);
+    }
+
+    //2nd report (2 reports lead to slash; both n0,n1 get +5 tokens)
+    {
+      const vote = VoteData.encode(new VoteData(1, '0x2222', vnodes[2].address));
+      const sig0 = await EthSig2.signOffline(vnodes[0], vote);
+      const sig1 = await EthSig2.signOffline(vnodes[1], vote);
+      let tx = await valCt.connect(vnodes[0]).reportNode(NodeType.VNode, vote, [sig0, sig1]);
+      // await th.printEvents(tx);
+      await expect(tx).to.emit(valCt, "NodeStatusChanged")
+        .withArgs(vnodes[2].address, NodeStatus.Slashed, BigNumber.from(90)); // 10% slash occured
+
+      const ni2 = await valCt.getNodeInfo(vnodes[2].address);
+      assert.equal(ni2.nodeTokens.toNumber(), 90);
+      assert.equal(ni2.status, NodeStatus.Slashed);
+      assert.equal(ni2.counters.slashCounter, 1);
+      assert.equal(ni2.counters.reportCounter, 0);
+      assert.deepEqual(ni2.counters.reportedBy, []);
+      assert.deepEqual(ni2.counters.reportedKeys, []);
+
+      const ni0 = await valCt.getNodeInfo(vnodes[0].address);
+      assert.equal(ni0.nodeTokens.toNumber(), 105);
+
+      const ni1 = await valCt.getNodeInfo(vnodes[1].address);
+      assert.equal(ni1.nodeTokens.toNumber(), 105);
+    }
   });
 
 });

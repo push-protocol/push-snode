@@ -56,23 +56,23 @@ export enum NodeStatus {
 }
 
 export class VoteData {
+  // the vote action, right now it is 1
+  cmd: number;
   // the block where vote should be placed
   blockId: string;
   // the node wallet, we do a complaint about
   targetNode: string;
-  // the vote action, right now it is 1
-  voteAction: number;
 
 
-  constructor(blockId: string, targetNode: string, voteAction: number) {
+  constructor(cmd: number, blockId: string, targetNode: string) {
+    this.cmd = cmd;
     this.blockId = blockId;
     this.targetNode = targetNode;
-    this.voteAction = voteAction;
   }
 
-  public static write(vt: VoteData): string {
+  public static encode(vt: VoteData): string {
     let abi = ethers.utils.defaultAbiCoder;
-    return abi.encode(["uint128", "address", "uint8"],
-      [vt.blockId, vt.targetNode, 1]);
+    return abi.encode(["uint8", "uint128", "address", ],
+      [1, vt.blockId, vt.targetNode]);
   }
 }

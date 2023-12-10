@@ -56,9 +56,9 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     we accept a VoteData sign by this amout of nodes: REPORT_THRESHOLD
     we perform a slash after this amount of reports: REPORTS_BEFORE_SLASH
     */
-    uint32 public REPORT_THRESHOLD_PER_BLOCK;  // i.e. 66 = 66% = 2/3
-    uint32 public REPORTS_BEFORE_SLASH_V;
-    uint32 public REPORTS_BEFORE_SLASH_S;
+    uint16 public REPORT_THRESHOLD_PER_BLOCK;  // i.e. 66 = 66% = 2/3
+    uint16 public REPORTS_BEFORE_SLASH_V;
+    uint16 public REPORTS_BEFORE_SLASH_S;
 
     /*
     slash = reduces node collateral for SLASH_PERCENT %
@@ -66,11 +66,11 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     after SLASH_BEFORE_BAN iterations, the node would get a ban
     ban = reduces node collateral for BAN_PERCENT, node address is banned forever
     */
-    uint32 public SLASH_PERCENT;
-    uint32 public SLASHES_BEFORE_BAN_V;
-    uint32 public SLASHES_BEFORE_BAN_S;
+    uint16 public SLASH_PERCENT;
+    uint16 public SLASHES_BEFORE_BAN_V;
+    uint16 public SLASHES_BEFORE_BAN_S;
 
-    uint32 public BAN_PERCENT;
+    uint16 public BAN_PERCENT;
 
     /* validator validation params  (effectively constant only for V backend)
     these parameters control how nodejs processes communicate
@@ -213,7 +213,13 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         address pushToken_,
         uint16 valPerBlockTarget_,
         uint16 nodeRandomMinCount_,
-        uint16 nodeRandomPingCount_
+        uint16 nodeRandomPingCount_,
+        uint16 REPORTS_BEFORE_SLASH_V_,
+        uint16 REPORTS_BEFORE_SLASH_S_,
+        uint16 SLASHES_BEFORE_BAN_V_,
+        uint16 SLASHES_BEFORE_BAN_S_,
+        uint16 SLASH_PERCENT_,
+        uint16 BAN_PERCENT_
     ) initializer public {
         // init libraries
         __UUPSUpgradeable_init();
@@ -232,12 +238,12 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         minStakeV = 100;
         minStakeS = 100;
         minStakeD = 100;
-        REPORTS_BEFORE_SLASH_V = 10;
-        REPORTS_BEFORE_SLASH_S = 50; // todo should be 10 for V and 50 for S nodes
-        SLASH_PERCENT = 1;
-        SLASHES_BEFORE_BAN_V = 2;
-        SLASHES_BEFORE_BAN_S = 2;
-        BAN_PERCENT = 10;
+        REPORTS_BEFORE_SLASH_V = REPORTS_BEFORE_SLASH_V_;
+        REPORTS_BEFORE_SLASH_S = REPORTS_BEFORE_SLASH_S_;
+        SLASH_PERCENT = SLASH_PERCENT_; // todo FIX
+        SLASHES_BEFORE_BAN_V = SLASHES_BEFORE_BAN_V_;
+        SLASHES_BEFORE_BAN_S = SLASHES_BEFORE_BAN_S_;
+        BAN_PERCENT = BAN_PERCENT_;
 
 
         REPORT_THRESHOLD_PER_BLOCK = 66;
@@ -426,17 +432,17 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
 
         if (targetNodeType_ == NodeType.VNode) {
             // unpack and verify
-            uint8 voteAction_;
+            uint8 cmd_;
             uint128 blockId_;
             address targetNodeAddr_;
-            (voteAction_, blockId_, targetNodeAddr_) = abi.decode(voteBlob_, (uint8, uint128, address));
+            (cmd_, blockId_, targetNodeAddr_) = abi.decode(voteBlob_, (uint8, uint128, address));
 
-            require(voteAction_ == uint8(VoteAction.ReportV), 'report action only supported');
+            require(cmd_ == uint8(VoteAction.ReportV), 'report action only supported');
             NodeInfo storage targetNode_ = nodeMap[targetNodeAddr_];
             require(targetNode_.nodeWallet != address(0), "target node wallet does not exists");
             require(targetNode_.nodeType == NodeType.VNode, "report only for VNodes");
 
-            _reportVNode(VoteAction(voteAction_), reporterNode_, uniqVoters_, targetNode_, blockId_);
+            _reportVNode(VoteAction(cmd_), reporterNode_, uniqVoters_, targetNode_, blockId_);
         } else if (targetNodeType_ == NodeType.SNode) {
             uint8 voteAction_;
             uint128 blockId_;
@@ -631,6 +637,8 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
 
         targetNode.counters.reportCounter++;
         targetNode.counters.reportedInBlocks.push(blockId_);
+        console.log('targetNode wallet', targetNode.nodeWallet);
+        console.log('targetNode added blockId', blockId_);
 
         // calculate new voters; they will collectively split payments on slash
         address[] memory reportedBy_ = targetNode.counters.reportedBy;
@@ -665,20 +673,22 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         // every pre-exising-signed-reporter will get a slice of the bonus
         address[] memory reportedBy_ = targetNode.counters.reportedBy;
         uint256 reporterBonus_;
-        reporterBonus_ = delta_ / (reportedBy_.length + 1);
-        require(reporterBonus_ >= 0, 'negative bonus');
-        for (uint i = 0; i < reportedBy_.length; i++) {
-            NodeInfo storage ni = nodeMap[reportedBy_[i]];
-            if (ni.ownerWallet == address(0)) {
-                continue;
+        if (delta_ > 0 && reportedBy_.length > 0) {
+            reporterBonus_ = delta_ / reportedBy_.length;
+            console.log('reporter bonus=', reporterBonus_);
+            require(reporterBonus_ >= 0, 'negative bonus');
+            for (uint i = 0; i < reportedBy_.length; i++) {
+                NodeInfo storage ni = nodeMap[reportedBy_[i]];
+                if (ni.ownerWallet == address(0)) {
+                    continue;
+                }
+                ni.nodeTokens += reporterBonus_;
+                delta_ -= reporterBonus_;
+                require(delta_ >= 0, 'positive delta');
             }
-            ni.nodeTokens += reporterBonus_;
-            delta_ -= reporterBonus_;
-            require(delta_ >= 0, 'positive delta');
         }
-        require(delta_ >= 0, 'negative delta');
-        // current reporter will get a slice of the bonus (so he gets 2xbonus)
-        reporterNode.nodeTokens += delta_; // reporter gets slashed profils
+        // reporter will get the remaing points (less that reporterBonus)
+        reporterNode.nodeTokens += delta_;
 
 
         delete targetNode.counters.reportedBy;

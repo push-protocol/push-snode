@@ -15,15 +15,24 @@ export namespace DeployerUtil {
     return pushContract;
   }
 
-  export async function deployValidatorContract(hre: HardhatRuntimeEnvironment, pushCt:string): Promise<ValidatorV1> {
+  export async function deployValidatorContract(hre: HardhatRuntimeEnvironment, pushCt: string): Promise<ValidatorV1> {
     log('deploying ValidatorV1');
     const validatorV1Factory = await hre.ethers.getContractFactory("ValidatorV1");
     const protocolVersion = 1;
     const valPerBlockTarget = 5;
     const nodeRandomMinCount = 1;
     const nodeRandomPingCount = 1;
+    const REPORTS_BEFORE_SLASH_V = 2; // 10 for prod
+    const REPORTS_BEFORE_SLASH_S = 2; // 50 for prod
+    const SLASHES_BEFORE_BAN_V = 2;
+    const SLASHES_BEFORE_BAN_S = 2;
+    const SLASH_PERCENT = 10;
+    const BAN_PERCENT = 10;
+
     const validatorV1Proxy = await upgrades.deployProxy(validatorV1Factory,
-      [protocolVersion, pushCt, valPerBlockTarget, nodeRandomMinCount, nodeRandomPingCount],
+      [protocolVersion, pushCt, valPerBlockTarget, nodeRandomMinCount, nodeRandomPingCount,
+        REPORTS_BEFORE_SLASH_V, REPORTS_BEFORE_SLASH_S, SLASHES_BEFORE_BAN_V, SLASHES_BEFORE_BAN_S,
+        SLASH_PERCENT, BAN_PERCENT],
       {kind: "uups"});
     await validatorV1Proxy.deployed();
     log(`deployed proxy: ${validatorV1Proxy.address}`);
@@ -34,7 +43,7 @@ export namespace DeployerUtil {
     return validatorV1Proxy;
   }
 
-  export async function updateValidatorContract(hre:HardhatRuntimeEnvironment, validatorProxyCt:string) {
+  export async function updateValidatorContract(hre: HardhatRuntimeEnvironment, validatorProxyCt: string) {
     const ethers = hre.ethers;
     const [owner] = await hre.ethers.getSigners();
     log(`owner is ${owner.address}`);
