@@ -27,8 +27,12 @@ export class TestHelper {
         //     expectedVal = expectedVal.toString();
         // }
         if (checkValues/*val != expectedVal*/) {
-          assert.deepEqual(val, expectedVal,
-            `assert failed: invalid field ${key} with value ${val}, expected ${expectedVal}`);
+          console.log('comparing', val, expectedVal);
+          if(val!=expectedVal) {
+            throw Error(`invalid field ${key} with value ${val}, expected ${expectedVal}`);
+          }
+          // assert.deepEqual(val, expectedVal,
+          //   `assert failed: invalid field ${key} with value ${val}, expected ${expectedVal}`);
           return false;
           /*if (throwEx) {
             console.log(`${val.constructor.name} ${expectedVal.constructor.name}`)
@@ -66,8 +70,17 @@ export class TestHelper {
     return TestHelper.expectEventEx(tx, "NodeStatusChanged", index, sample);
   }
 
+  static async expectRejct(tx: ContractTransaction | Promise<ContractTransaction>) {
+    await expect(tx).to.be.rejected;
+  }
+
   static async expectEventFirst(tx: ContractTransaction, sample: any) {
     return TestHelper.expectEventEx(tx, "NodeStatusChanged", 0, sample);
+  }
+
+  static async printEvents(tx: ContractTransaction) {
+    const receipt = await tx.wait();
+    console.log(receipt.events);
   }
 
   static async expectEventEx(tx: ContractTransaction, eventName: string, index: number, sample: any) {
@@ -77,7 +90,9 @@ export class TestHelper {
     for (let i = 0; i < fileteredEvents.length; i++) {
       console.log(`event[${i}] -> ${fileteredEvents[i].args}`);
     }
-    TestHelper.hasAllFields(fileteredEvents[index].args, sample, true, true);
+    const obj = fileteredEvents[index].args;
+    console.log(`trying to check object: ${JSON.stringify(obj)} vs sample: ${JSON.stringify(sample)}`);
+    TestHelper.hasAllFields(obj, sample, true, true);
   }
 
 }

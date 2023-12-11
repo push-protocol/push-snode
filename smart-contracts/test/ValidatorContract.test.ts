@@ -8,13 +8,12 @@ import hre, {ethers} from "hardhat";
 import {PushToken, StorageV1, ValidatorV1} from "../typechain-types";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {TestHelper as th} from "./uitlz/TestHelper";
-import {EthSig2, NodeStatus, VoteData} from "./ValidatorHelper";
+import {EthSig2, NodeStatus, VoteDataS, VoteDataV} from "./ValidatorHelper";
 import {BitUtil} from "./uitlz/bitUtil";
 import {DeployerUtil, NodeType} from "../src/DeployerUtil";
 import {BigNumber} from "ethers";
 
 let log = console.log;
-
 
 
 // VARIABLES FOR TESTS
@@ -328,8 +327,8 @@ describe("Validator - node reports on other node / vnro", function () {
   beforeEach(beforeEachInit);
 
   it("Check smart contract signatures - cscs", async function () {
-    let vd = new VoteData(1, '1111', '0x' + "AA".repeat(20));
-    const packed = VoteData.encode(vd);
+    let vd = new VoteDataV(1, '1111', '0x' + "AA".repeat(20));
+    const packed = VoteDataV.encode(vd);
     console.log('vote data packed: ', packed);
 
     const sig1 = await EthSig2.signOffline(vnode1, packed);
@@ -357,7 +356,7 @@ describe("Validator - node reports on other node / vnro", function () {
 
   });
 
-  it("Register 6 storage nodes and unstake them - stor-reg-6", async function () {
+  it("Register 6 storage nodes and unstake them :: reg-6s", async function () {
     let nodeType = NodeType.SNode;
     let nodeTokens = 100;
     // register nodes
@@ -381,7 +380,7 @@ describe("Validator - node reports on other node / vnro", function () {
   });
 
 
-  it("Regster 6 validator nodes and unstake them - val-reg-unreg-6", async function () {
+  it("Regster 6 validator nodes and unstake them :: reg-6v-unreg", async function () {
     let nodeType = NodeType.VNode;
     let nodeTokens = 100;
     // register nodes
@@ -407,9 +406,13 @@ describe("Validator - node reports on other node / vnro", function () {
     assert.equal((await pushCt.balanceOf(valCt.address)).toNumber(), 0);
   });
 
-  it("Regster 3 validator nodes - 2 report on 1 - 3v-reports", async function () {
+
+  it("Regster 3 validator nodes - 2 report on 1 :: v-reports-on-v", async function () {
     let nodeType = NodeType.VNode;
     let nodeTokens = 100;
+    const v0 = vnodes[0];
+    const v1 = vnodes[1];
+    const v2 = vnodes[2];
     // register 3 nodes
     assert.equal(await valCt.valPerBlock(), 0);
     assert.equal(await valCt.valPerBlockTarget(), 5);
@@ -421,17 +424,23 @@ describe("Validator - node reports on other node / vnro", function () {
 
     {
       // v0,v1 report on v2 ; v0 calls reportNode
-      const vote = VoteData.encode(new VoteData(1, '0x1111', vnodes[2].address));
-      const sig0 = await EthSig2.signOffline(vnodes[0], vote);
-      const sig1 = await EthSig2.signOffline(vnodes[1], vote);
+      const vote = VoteDataV.encode(new VoteDataV(1, '0x1111', v2.address));
+      const sig0 = await EthSig2.signOffline(v0, vote);
+      const sig1 = await EthSig2.signOffline(v1, vote);
       // 1st report
-      let tx1 = await valCt.connect(vnodes[0]).reportNode(NodeType.VNode, vote, [sig0, sig1]);
+      let tx1 = await valCt.connect(v0).reportNode(NodeType.VNode, vote, [sig0, sig1]);
 
-      const ni = await valCt.getNodeInfo(vnodes[2].address);
-      assert.deepEqual(ni.counters.reportedBy, [vnodes[0].address, vnodes[1].address]);
+      const ni = await valCt.getNodeInfo(v2.address);
+
+      assert.equal(ni.nodeTokens.toNumber(), 100);
+      assert.equal(ni.status, NodeStatus.Reported);
+      assert.equal(ni.counters.slashCounter, 0);
+      assert.equal(ni.counters.reportCounter, 1);
+      assert.deepEqual(ni.counters.reportedBy, [v0.address, v1.address]);
+      assert.deepEqual(ni.counters.reportedKeys, []);
 
       await expect(tx1).to.emit(valCt, "NodeStatusChanged")
-        .withArgs(vnodes[2].address, NodeStatus.Reported, BigNumber.from(100)); // 1% slash occured
+        .withArgs(v2.address, NodeStatus.Reported, BigNumber.from(100)); // 1% slash occured
 
       console.log('vote', vote);
       console.log('signature ', sig1);
@@ -439,21 +448,21 @@ describe("Validator - node reports on other node / vnro", function () {
 
       //duplicate report
       //same block id = reject
-      let tx2 = valCt.connect(vnodes[0]).reportNode(NodeType.VNode, vote, [sig0, sig1]);
+      let tx2 = valCt.connect(v0).reportNode(NodeType.VNode, vote, [sig0, sig1]);
       await th.expectRejct(tx2);
     }
 
     //2nd report (2 reports lead to slash; both n0,n1 get +5 tokens)
     {
-      const vote = VoteData.encode(new VoteData(1, '0x2222', vnodes[2].address));
-      const sig0 = await EthSig2.signOffline(vnodes[0], vote);
-      const sig1 = await EthSig2.signOffline(vnodes[1], vote);
-      let tx = await valCt.connect(vnodes[0]).reportNode(NodeType.VNode, vote, [sig0, sig1]);
+      const vote = VoteDataV.encode(new VoteDataV(1, '0x2222', v2.address));
+      const sig0 = await EthSig2.signOffline(v0, vote);
+      const sig1 = await EthSig2.signOffline(v1, vote);
+      let tx = await valCt.connect(v0).reportNode(NodeType.VNode, vote, [sig0, sig1]);
       // await th.printEvents(tx);
       await expect(tx).to.emit(valCt, "NodeStatusChanged")
-        .withArgs(vnodes[2].address, NodeStatus.Slashed, BigNumber.from(90)); // 10% slash occured
+        .withArgs(v2.address, NodeStatus.Slashed, BigNumber.from(90)); // 10% slash occured
 
-      const ni2 = await valCt.getNodeInfo(vnodes[2].address);
+      const ni2 = await valCt.getNodeInfo(v2.address);
       assert.equal(ni2.nodeTokens.toNumber(), 90);
       assert.equal(ni2.status, NodeStatus.Slashed);
       assert.equal(ni2.counters.slashCounter, 1);
@@ -461,12 +470,104 @@ describe("Validator - node reports on other node / vnro", function () {
       assert.deepEqual(ni2.counters.reportedBy, []);
       assert.deepEqual(ni2.counters.reportedKeys, []);
 
-      const ni0 = await valCt.getNodeInfo(vnodes[0].address);
+      const ni0 = await valCt.getNodeInfo(v0.address);
       assert.equal(ni0.nodeTokens.toNumber(), 105);
 
-      const ni1 = await valCt.getNodeInfo(vnodes[1].address);
+      const ni1 = await valCt.getNodeInfo(v1.address);
       assert.equal(ni1.nodeTokens.toNumber(), 105);
     }
+  });
+
+
+  it("2v report on 1s - v-reports-on-s", async function () {
+    let nodeTokens = 100;
+    const v0 = vnodes[0];
+    const v1 = vnodes[1];
+    const s0 = snodes[0];
+
+    // register 3 validator nodes and 1 storage node
+    for (let i = 0; i < 3; i++) {
+      let t1 = await valCt.registerNodeAndStake(nodeTokens, NodeType.VNode,
+        `http://snode${i}:3000`, vnodes[i].address);
+      await th.confirmTransaction(t1);
+    }
+    {
+      let t1 = await valCt.registerNodeAndStake(nodeTokens, NodeType.SNode,
+        `http://snode${0}:3000`, snodes[0].address);
+      await th.confirmTransaction(t1);
+      const allShards = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+        10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+        20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
+        30, 31];
+      const bitmask = await storeCt.getNodeShardsByAddr(s0.address);
+      assert.deepEqual(BitUtil.bitsToPositions(bitmask), allShards);
+    }
+
+    // v0,v1 report on s0 ; v0 calls reportNode
+    {
+      const vote = VoteDataS.encode(new VoteDataS(2, '0x1111', s0.address, '0x9999'));
+      const sig0 = await EthSig2.signOffline(v0, vote);
+      const sig1 = await EthSig2.signOffline(v1, vote);
+      // 1st report (works)
+      let tx1 = await valCt.connect(v0).reportNode(NodeType.SNode, vote, [sig0, sig1]);
+
+      const ni = await valCt.getNodeInfo(s0.address);
+      assert.equal(ni.nodeTokens.toNumber(), 100);
+      assert.equal(ni.status, NodeStatus.Reported);
+      assert.equal(ni.counters.reportCounter, 1);
+      assert.equal(ni.counters.slashCounter, 0);
+      assert.deepEqual(ni.counters.reportedBy, [v0.address, v1.address]);
+      assert.deepEqual(ni.counters.reportedKeys, [BigNumber.from('0x9999')]);
+
+      await expect(tx1).to.emit(valCt, "NodeStatusChanged")
+        .withArgs(s0.address, NodeStatus.Reported, BigNumber.from(100));
+
+      console.log('vote', vote);
+      console.log('signature ', sig1);
+      console.log('voter wallet is', vnode1.address);
+
+      //duplicate report
+
+      //same block id = reject
+      let tx2 = valCt.connect(v0).reportNode(NodeType.VNode, vote, [sig0, sig1]);
+      await th.expectRejct(tx2);
+
+      //different block, same skey = reject
+      {
+        const vote = VoteDataS.encode(new VoteDataS(2, '0x2222', s0.address, '0x9999'));
+        const sig0 = await EthSig2.signOffline(v0, vote);
+        const sig1 = await EthSig2.signOffline(v1, vote);
+        let tx3 = valCt.connect(v0).reportNode(NodeType.VNode, vote, [sig0, sig1]);
+        await th.expectRejct(tx3);
+      }
+
+      //2nd report (2 reports lead to slash; both n0,n1 get +5 tokens)
+      {
+        const vote = VoteDataS.encode(new VoteDataS(2, '0x2222', s0.address, '0x7777'));
+        const sig0 = await EthSig2.signOffline(v0, vote);
+        const sig1 = await EthSig2.signOffline(v1, vote);
+        let tx = await valCt.connect(v0).reportNode(NodeType.SNode, vote, [sig0, sig1]);
+
+        await expect(tx).to.emit(valCt, "NodeStatusChanged")
+          .withArgs(s0.address, NodeStatus.Slashed, BigNumber.from(90)); // 10% slash occured
+
+        const s0Info = await valCt.getNodeInfo(s0.address);
+        assert.equal(s0Info.nodeTokens.toNumber(), 90);
+        assert.equal(s0Info.status, NodeStatus.Slashed);
+        assert.equal(s0Info.counters.slashCounter, 1);
+        assert.equal(s0Info.counters.reportCounter, 0);
+        assert.deepEqual(s0Info.counters.reportedBy, []);
+        assert.deepEqual(s0Info.counters.reportedKeys,
+          [BigNumber.from('0x9999'), BigNumber.from('0x7777')]);
+
+        const ni0 = await valCt.getNodeInfo(v0.address);
+        assert.equal(ni0.nodeTokens.toNumber(), 105);
+
+        const ni1 = await valCt.getNodeInfo(v1.address);
+        assert.equal(ni1.nodeTokens.toNumber(), 105);
+      }
+    }
+
   });
 
 });

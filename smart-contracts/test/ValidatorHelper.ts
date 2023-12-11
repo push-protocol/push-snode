@@ -55,7 +55,7 @@ export enum NodeStatus {
   Unstaked
 }
 
-export class VoteData {
+export class VoteDataV {
   // the vote action, right now it is 1
   cmd: number;
   // the block where vote should be placed
@@ -70,9 +70,34 @@ export class VoteData {
     this.targetNode = targetNode;
   }
 
-  public static encode(vt: VoteData): string {
+  public static encode(vt: VoteDataV): string {
     let abi = ethers.utils.defaultAbiCoder;
     return abi.encode(["uint8", "uint128", "address", ],
       [1, vt.blockId, vt.targetNode]);
+  }
+}
+
+export class VoteDataS {
+  // the vote action, right now it is 1
+  cmd: number;
+  // the block where vote should be placed
+  blockId: string;
+  // the node wallet, we do a complaint about
+  targetNode: string;
+  // storage key for k-v for storage node
+  skey:string;
+
+
+  constructor(cmd: number, blockId: string, targetNode: string, skey:string) {
+    this.cmd = cmd;
+    this.blockId = blockId;
+    this.targetNode = targetNode;
+    this.skey = skey;
+  }
+
+  public static encode(vt: VoteDataS): string {
+    let abi = ethers.utils.defaultAbiCoder;
+    return abi.encode(["uint8", "uint128", "address", "uint128"],
+      [2, vt.blockId, vt.targetNode, vt.skey]);
   }
 }

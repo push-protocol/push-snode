@@ -144,6 +144,8 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         uint256 nodeTokens;
         string nodeApiBaseUrl; // rest api url for invocation
         NodeCounters counters;
+        // worst case status, at least 1 report or slash leads to status reported or slashed
+        // OK -> reported -> slashed -> banned
         NodeStatus status;
     }
 
@@ -444,17 +446,17 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
 
             _reportVNode(VoteAction(cmd_), reporterNode_, uniqVoters_, targetNode_, blockId_);
         } else if (targetNodeType_ == NodeType.SNode) {
-            uint8 voteAction_;
+            uint8 cmd_;
             uint128 blockId_;
             address targetNodeAddr_;
             uint128 skey_;
-            (voteAction_, blockId_, targetNodeAddr_, skey_) = abi.decode(voteBlob_, (uint8, uint128, address, uint128));
+            (cmd_, blockId_, targetNodeAddr_, skey_) = abi.decode(voteBlob_, (uint8, uint128, address, uint128));
 
-            require(voteAction_ == uint8(VoteAction.ReportS), 'report action only supported');
+            require(cmd_ == uint8(VoteAction.ReportS), 'report action only supported');
             NodeInfo storage targetNode_ = nodeMap[targetNodeAddr_];
             require(targetNode_.nodeWallet != address(0), "target node wallet does not exists");
             require(targetNode_.nodeType == NodeType.SNode, "report only for SNodes");
-            _reportSNode(VoteAction(voteAction_), reporterNode_, uniqVoters_, targetNode_, blockId_, skey_);
+            _reportSNode(VoteAction(cmd_), reporterNode_, uniqVoters_, targetNode_, blockId_, skey_);
         }
 
     }
@@ -491,22 +493,22 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         address[] memory uniqVoters_, NodeInfo storage targetNode, uint128 blockId_
     ) private returns (uint8) {
         require(targetNode.nodeType == NodeType.VNode, "report only for VNodes");
-
         if (uniqVoters_.length < valPerBlock * REPORT_THRESHOLD_PER_BLOCK / 100) {
             revert('sig count is too low');
         }
+        NodeStatus ns_ = targetNode.status;
+        if (ns_ == NodeStatus.Unstaked || ns_ == NodeStatus.BannedAndUnstaked) {
+            // this is a terminal state
+            return 0;
+        }
 
         reportIfNew(voteAction_, reporterNode, targetNode, uniqVoters_, blockId_, 0);
-        NodeStatus ns = targetNode.status;
-        if (ns == NodeStatus.OK || ns == NodeStatus.Slashed) {
-            if (targetNode.counters.reportCounter >= REPORTS_BEFORE_SLASH_V) {
-                slash(reporterNode, targetNode);
-            }
-            if (targetNode.counters.slashCounter >= SLASHES_BEFORE_BAN_V) {
-                ban(targetNode);
-            }
-        } else if (ns == NodeStatus.BannedAndUnstaked) {
-            // do nothing; terminal state
+
+        if (targetNode.counters.reportCounter >= REPORTS_BEFORE_SLASH_V) {
+            slash(reporterNode, targetNode);
+        }
+        if (targetNode.counters.slashCounter >= SLASHES_BEFORE_BAN_V) {
+            ban(targetNode);
         }
         return 0;
     }
@@ -514,21 +516,22 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     function _reportSNode(VoteAction voteAction_, NodeInfo storage reporterNode, address[] memory uniqVoters_,
         NodeInfo storage targetNode, uint128 blockId_, uint128 storageKey_) private returns (uint8) {
         require(targetNode.nodeType == NodeType.SNode, "report only for SNodes");
-
         if (uniqVoters_.length < valPerBlock * REPORT_THRESHOLD_PER_BLOCK / 100) {
             revert('sig count is too low');
         }
-        reportIfNew(voteAction_, reporterNode, targetNode, uniqVoters_, blockId_, storageKey_);
         NodeStatus ns_ = targetNode.status;
-        if (ns_ == NodeStatus.OK || ns_ == NodeStatus.Slashed) {
-            if (targetNode.counters.reportCounter >= REPORTS_BEFORE_SLASH_S) {
-                slash(reporterNode, targetNode);
-            }
-            if (targetNode.counters.slashCounter >= SLASHES_BEFORE_BAN_S) {
-                ban(targetNode);
-            }
-        } else if (ns_ == NodeStatus.BannedAndUnstaked) {
-            // do nothing; terminal state
+        if (ns_ == NodeStatus.Unstaked || ns_ == NodeStatus.BannedAndUnstaked) {
+            // this is a terminal state
+            return 0;
+        }
+
+        reportIfNew(voteAction_, reporterNode, targetNode, uniqVoters_, blockId_, storageKey_);
+
+        if (targetNode.counters.reportCounter >= REPORTS_BEFORE_SLASH_S) {
+            slash(reporterNode, targetNode);
+        }
+        if (targetNode.counters.slashCounter >= SLASHES_BEFORE_BAN_S) {
+            ban(targetNode);
         }
         return 0;
     }
@@ -632,6 +635,7 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
                 }
             }
             targetNode.counters.reportedKeys.push(storageKey_);
+            console.log('targetNode added skey', storageKey_);
         }
 
 
@@ -658,7 +662,9 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
             }
         }
 
-
+        if(targetNode.status == NodeStatus.OK) {
+            targetNode.status = NodeStatus.Reported;
+        }
         emit NodeReported(targetNode.nodeWallet, reporterNode.nodeWallet, newVoters_, voteAction_); // todo do we need this ?
         emit NodeStatusChanged(targetNode.nodeWallet, NodeStatus.Reported, targetNode.nodeTokens);
     }
@@ -692,7 +698,9 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
 
 
         delete targetNode.counters.reportedBy;
-        targetNode.status = NodeStatus.Slashed;
+        if(targetNode.status == NodeStatus.OK || targetNode.status == NodeStatus.Reported) {
+            targetNode.status = NodeStatus.Slashed;
+        }
         targetNode.counters.reportCounter = 0;
         targetNode.counters.slashCounter++;
         emit NodeStatusChanged(targetNode.nodeWallet, NodeStatus.Slashed, coll_);

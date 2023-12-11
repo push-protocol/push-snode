@@ -70,7 +70,8 @@ export class QueueClient {
           try {
             appendSuccessful = await this.consumer.accept(item);
           } catch (e) {
-            this.log.error('error processing accept(): queue %s: ', this.queueName,  e);
+            this.log.error('error processing accept(): queue %s: ', this.queueName);
+            this.log.error(e);
           }
           if (appendSuccessful) {
             endpointStats.newItems++
