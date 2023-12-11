@@ -16,8 +16,15 @@ export namespace DeployerUtil {
   }
 
   export async function deployValidatorContract(hre: HardhatRuntimeEnvironment, pushCt: string): Promise<ValidatorV1> {
+    log('deploying SigUtil library');
+    const suFactory = await hre.ethers.getContractFactory("SigUtil");
+    const suLibrary = await suFactory.deploy();
+    await suLibrary.deployed();
+    log('deployed SigUtil at ', suLibrary.address)
+
     log('deploying ValidatorV1');
-    const validatorV1Factory = await hre.ethers.getContractFactory("ValidatorV1");
+    const validatorV1Factory = await hre.ethers.getContractFactory("ValidatorV1",
+      {libraries: {SigUtil: suLibrary.address}});
     const protocolVersion = 1;
     const valPerBlockTarget = 5;
     const nodeRandomMinCount = 1;
@@ -33,7 +40,10 @@ export namespace DeployerUtil {
       [protocolVersion, pushCt, valPerBlockTarget, nodeRandomMinCount, nodeRandomPingCount,
         REPORTS_BEFORE_SLASH_V, REPORTS_BEFORE_SLASH_S, SLASHES_BEFORE_BAN_V, SLASHES_BEFORE_BAN_S,
         SLASH_PERCENT, BAN_PERCENT],
-      {kind: "uups"});
+      {
+        kind: "uups",
+        unsafeAllowLinkedLibraries: true
+      });
     await validatorV1Proxy.deployed();
     log(`deployed proxy: ${validatorV1Proxy.address}`);
 

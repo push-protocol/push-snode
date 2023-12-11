@@ -70,7 +70,7 @@ export class TestHelper {
     return TestHelper.expectEventEx(tx, "NodeStatusChanged", index, sample);
   }
 
-  static async expectRejct(tx: ContractTransaction | Promise<ContractTransaction>) {
+  static async expectReject(tx: ContractTransaction | Promise<ContractTransaction>) {
     await expect(tx).to.be.rejected;
   }
 

@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./Storage.sol";
+import "./SigUtil.sol";
 import "hardhat/console.sol";
 
 /*
@@ -134,7 +135,6 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     event BlockParamsUpdated(uint16 valPerBlock, uint16 valPerBlockTarget);
     event RandomParamsUpdated(uint16 nodeRandomMinCount, uint16 nodeRandomPingCount);
 
-
     // ----------------------------- TYPES  --------------------------------------------------
 
     struct NodeInfo {
@@ -242,7 +242,7 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         minStakeD = 100;
         REPORTS_BEFORE_SLASH_V = REPORTS_BEFORE_SLASH_V_;
         REPORTS_BEFORE_SLASH_S = REPORTS_BEFORE_SLASH_S_;
-        SLASH_PERCENT = SLASH_PERCENT_; // todo FIX
+        SLASH_PERCENT = SLASH_PERCENT_;
         SLASHES_BEFORE_BAN_V = SLASHES_BEFORE_BAN_V_;
         SLASHES_BEFORE_BAN_S = SLASHES_BEFORE_BAN_S_;
         BAN_PERCENT = BAN_PERCENT_;
@@ -273,6 +273,67 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         nodeRandomPingCount = nodeRandomPingCount_;
         emit RandomParamsUpdated(nodeRandomMinCount_, nodeRandomPingCount_);
     }
+
+
+/*
+     an admin method to redistribute staked tokens manually between parties
+     no ERC20 transactions performed, we only set new token ownership
+
+     redistributeStaked(0xAA, 0, 100) - staked tokens will move to the contract (unstaked)
+     redistributeStaked(0, 0xAA, 100) - unstaked tokens will move from the contract to some node as staked
+     redistributeStaked(0xAA,0xBB, 100) - staked tokens will move from 0xAA to 0xBB
+    */
+
+    function redistributeStaked(address from_, address to_, uint256 amount_) public onlyOwner returns (bool) {
+        require(amount_ > 0, 'amount should be positive');
+        require(from_ != to_, 'cannot transfer between same addresses');
+        if (to_ != address(0) && from_ == address(0)) {
+            // transfer contract tokens -> staked for a specific node
+            require(totalFees >= amount_, 'from node should have enough collateral');
+            NodeInfo storage toNode_ = nodeMap[to_];
+            require(toNode_.ownerWallet != address(0), 'missing to node');
+
+            totalFees -= amount_;
+            totalStaked += amount_;
+            toNode_.nodeTokens += amount_;
+        } else if (from_ != address(0) && to_ == address(0)) {
+            // transfer staked for a specific node -> contract tokens
+            NodeInfo storage fromNode_ = nodeMap[from_];
+            require(fromNode_.ownerWallet != address(0), 'missing from node');
+            require(fromNode_.nodeTokens >= amount_, 'from node should have enough collateral');
+
+            fromNode_.nodeTokens -= amount_;
+            totalStaked -= amount_;
+            totalFees += amount_;
+        } else {
+            // transfer staked for a specific node A -> specific node B
+            NodeInfo storage fromNode_ = nodeMap[from_];
+            require(fromNode_.ownerWallet != address(0), 'missing from node');
+            require(fromNode_.nodeTokens >= amount_, 'from node should have enough collateral');
+            NodeInfo storage toNode_ = nodeMap[to_];
+            require(fromNode_.ownerWallet != address(0), 'missing to node');
+
+            fromNode_.nodeTokens -= amount_;
+            toNode_.nodeTokens += amount_;
+        }
+        return true;
+    }
+
+/**
+    Unstakes IERC20 tokens from this contract (totalFees)
+    to any arbitrary address.
+    */
+
+    function unstakeFees(address to_, uint256 amount_) public onlyOwner returns (bool) {
+        require(to_ != address(0), 'invalid to address');
+        require(amount_ > 0, 'invalid amount');
+        require(amount_ <= totalFees && amount_ <= pushToken.balanceOf(address(this)), "insufficient balance");
+        require(pushToken.transfer(to_, amount_), 'failed to transfer');
+        totalFees -= amount_;
+        return true;
+    }
+
+
 
     // ----------------------------- NODE PUBLIC FUNCTIONS  --------------------------------------------------
 
@@ -357,7 +418,7 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
             console.log('limit by target', valPerBlockTarget_);
         }
         require(valPerBlock <= valPerBlockTarget_);
-        if(valPerBlock_ != valPerBlock) {
+        if (valPerBlock_ != valPerBlock) {
             console.log('recalcualteAttestersCountPerBlock', valPerBlock_, valPerBlockTarget_);
             valPerBlock = valPerBlock_;
             emit BlockParamsUpdated(valPerBlock_, valPerBlockTarget_);
@@ -600,7 +661,6 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         return nodeMap[_nodeWallet];
     }
 
-
     /*
     A reporterNode reports on targetNode, targetNode can be V or S node
     newVoters_ - who voted (set)
@@ -662,7 +722,7 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
             }
         }
 
-        if(targetNode.status == NodeStatus.OK) {
+        if (targetNode.status == NodeStatus.OK) {
             targetNode.status = NodeStatus.Reported;
         }
         emit NodeReported(targetNode.nodeWallet, reporterNode.nodeWallet, newVoters_, voteAction_); // todo do we need this ?
@@ -698,7 +758,7 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
 
 
         delete targetNode.counters.reportedBy;
-        if(targetNode.status == NodeStatus.OK || targetNode.status == NodeStatus.Reported) {
+        if (targetNode.status == NodeStatus.OK || targetNode.status == NodeStatus.Reported) {
             targetNode.status = NodeStatus.Slashed;
         }
         targetNode.counters.reportCounter = 0;
@@ -715,65 +775,6 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         _unstakeNode(targetNode);
         targetNode.status = NodeStatus.BannedAndUnstaked;
         emit NodeStatusChanged(targetNode.nodeWallet, NodeStatus.BannedAndUnstaked, 0);
-    }
-
-}
-
-// a lib that abstracts privKey signature and pubKey+signature checks
-library SigUtil {
-
-    function getMessageHash(bytes memory _message) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked(_message));
-    }
-
-    function getEthSignedMessageHash(bytes32 _messageHash) internal pure returns (bytes32) {
-        /*
-        Signature is produced by signing a keccak256 hash with the following format:
-        "\x19Ethereum Signed Message\n" + len(msg) + msg
-        */
-        return
-            keccak256(
-            abi.encodePacked("\x19Ethereum Signed Message:\n32", _messageHash)
-        );
-    }
-
-    function recoverSigner(
-        bytes32 _ethSignedMessageHash,
-        bytes memory _signature) internal pure returns (address) {
-        (bytes32 r, bytes32 s, uint8 v) = splitSignature(_signature);
-
-        return ecrecover(_ethSignedMessageHash, v, r, s);
-    }
-
-    function splitSignature(bytes memory sig) internal pure returns (bytes32 r, bytes32 s, uint8 v) {
-        require(sig.length == 65, "invalid signature length");
-
-        assembly {
-        /*
-        First 32 bytes stores the length of the signature
-
-        add(sig, 32) = pointer of sig + 32
-        effectively, skips first 32 bytes of signature
-
-        mload(p) loads next 32 bytes starting at the memory address p into memory
-        */
-
-        // first 32 bytes, after the length prefix
-            r := mload(add(sig, 32))
-        // second 32 bytes
-            s := mload(add(sig, 64))
-        // final byte (first byte of the next 32 bytes)
-            v := byte(0, mload(add(sig, 96)))
-        }
-
-        // implicitly return (r, s, v)
-    }
-
-    function recoverSignerEx(bytes memory _message, bytes memory _signature
-    ) internal pure returns (address) {
-        bytes32 messageHash = getMessageHash(_message);
-        bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
-        return recoverSigner(ethSignedMessageHash, _signature);
     }
 
 }

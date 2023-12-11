@@ -7,7 +7,7 @@ import {assert, expect} from "chai";
 import hre, {ethers} from "hardhat";
 import {PushToken, StorageV1, ValidatorV1} from "../typechain-types";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {TestHelper as th} from "./uitlz/TestHelper";
+import {TestHelper as TH} from "./uitlz/TestHelper";
 import {EthSig2, NodeStatus, VoteDataS, VoteDataV} from "./ValidatorHelper";
 import {BitUtil} from "./uitlz/bitUtil";
 import {DeployerUtil, NodeType} from "../src/DeployerUtil";
@@ -227,7 +227,7 @@ describe("Storage", function () {
     {
       // remove node1
       const t1 = await valCt.connect(acc1).unstakeNode(snode1.address);
-      await th.confirmTransaction(t1);
+      await TH.confirmTransaction(t1);
       const t2 = await valCt.connect(acc1).unstakeNode(snode1.address); // try unstake 2nd time
       expect(t2).to.be.reverted;
       const t3 = valCt.connect(acc2).unstakeNode(snode1.address); // try unstake: not a node owner
@@ -236,7 +236,7 @@ describe("Storage", function () {
     {
       // remove node2
       const t1 = await valCt.connect(acc2).unstakeNode(snode2.address);
-      await th.confirmTransaction(t1);
+      await TH.confirmTransaction(t1);
       const t2 = valCt.connect(acc2).unstakeNode(snode2.address); // try unstake 2nd time
       expect(t2).to.be.reverted;
       const t3 = valCt.connect(acc1).unstakeNode(snode2.address); // try unstake: not a node owner
@@ -263,7 +263,7 @@ describe("Storage", function () {
           .connect(owner)
           .registerNodeAndStake(100, 0,
             "http://snode1:3000", vnode1.address);
-        await th.confirmTransaction(tx);
+        await TH.confirmTransaction(tx);
 
         let ownerBalanceAfter = await pushCt.balanceOf(owner.address);
         let valContractBalanceAfter = await pushCt.balanceOf(valCt.address);
@@ -299,7 +299,7 @@ describe("Storage", function () {
         let tx = await valCt
           .connect(owner)
           .unstakeNode(vnode1.address);
-        await th.confirmTransaction(tx);
+        await TH.confirmTransaction(tx);
 
         let nodeInfo = await valCt.getNodeInfo(vnode1.address);
         expect(nodeInfo.status).to.be.equal(NodeStatus.Unstaked);
@@ -365,7 +365,7 @@ describe("Validator - node reports on other node / vnro", function () {
     for (let i = 0; i < 6; i++) {
       let t1 = await valCt.registerNodeAndStake(nodeTokens, nodeType,
         `http://snode${i}:3000`, vnodes[i].address);
-      await th.confirmTransaction(t1);
+      await TH.confirmTransaction(t1);
     }
     assert.equal((await valCt.getSNodesLength()).toNumber(), 6);
     assert.equal((await pushCt.balanceOf(valCt.address)).toNumber(), 6 * nodeTokens);
@@ -373,7 +373,7 @@ describe("Validator - node reports on other node / vnro", function () {
     // unstake nodes
     for (let i = 0; i < 6; i++) {
       let t1 = await valCt.unstakeNode(vnodes[i].address);
-      await th.confirmTransaction(t1);
+      await TH.confirmTransaction(t1);
     }
     assert.equal((await valCt.getSNodesLength()).toNumber(), 0);
     assert.equal((await pushCt.balanceOf(valCt.address)).toNumber(), 0);
@@ -389,7 +389,7 @@ describe("Validator - node reports on other node / vnro", function () {
     for (let i = 0; i < 6; i++) {
       let t1 = await valCt.registerNodeAndStake(nodeTokens, nodeType,
         `http://snode${i}:3000`, vnodes[i].address);
-      await th.confirmTransaction(t1);
+      await TH.confirmTransaction(t1);
     }
     assert.equal((await valCt.getVNodesLength()).toNumber(), 6);
     assert.equal(await valCt.valPerBlock(), 5); // peaks at 5, even for 6 nodes
@@ -398,7 +398,7 @@ describe("Validator - node reports on other node / vnro", function () {
     // unstake nodes
     for (let i = 0; i < 6; i++) {
       let t1 = await valCt.unstakeNode(vnodes[i].address);
-      await th.confirmTransaction(t1);
+      await TH.confirmTransaction(t1);
     }
     assert.equal((await valCt.getVNodesLength()).toNumber(), 0);
     assert.equal(await valCt.valPerBlock(), 0);
@@ -419,7 +419,7 @@ describe("Validator - node reports on other node / vnro", function () {
     for (let i = 0; i < 3; i++) {
       let t1 = await valCt.registerNodeAndStake(nodeTokens, nodeType,
         `http://snode${i}:3000`, vnodes[i].address);
-      await th.confirmTransaction(t1);
+      await TH.confirmTransaction(t1);
     }
 
     {
@@ -449,7 +449,7 @@ describe("Validator - node reports on other node / vnro", function () {
       //duplicate report
       //same block id = reject
       let tx2 = valCt.connect(v0).reportNode(NodeType.VNode, vote, [sig0, sig1]);
-      await th.expectRejct(tx2);
+      await TH.expectReject(tx2);
     }
 
     //2nd report (2 reports lead to slash; both n0,n1 get +5 tokens)
@@ -489,12 +489,12 @@ describe("Validator - node reports on other node / vnro", function () {
     for (let i = 0; i < 3; i++) {
       let t1 = await valCt.registerNodeAndStake(nodeTokens, NodeType.VNode,
         `http://snode${i}:3000`, vnodes[i].address);
-      await th.confirmTransaction(t1);
+      await TH.confirmTransaction(t1);
     }
     {
       let t1 = await valCt.registerNodeAndStake(nodeTokens, NodeType.SNode,
         `http://snode${0}:3000`, snodes[0].address);
-      await th.confirmTransaction(t1);
+      await TH.confirmTransaction(t1);
       const allShards = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
         10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
         20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
@@ -530,7 +530,7 @@ describe("Validator - node reports on other node / vnro", function () {
 
       //same block id = reject
       let tx2 = valCt.connect(v0).reportNode(NodeType.VNode, vote, [sig0, sig1]);
-      await th.expectRejct(tx2);
+      await TH.expectReject(tx2);
 
       //different block, same skey = reject
       {
@@ -538,7 +538,7 @@ describe("Validator - node reports on other node / vnro", function () {
         const sig0 = await EthSig2.signOffline(v0, vote);
         const sig1 = await EthSig2.signOffline(v1, vote);
         let tx3 = valCt.connect(v0).reportNode(NodeType.VNode, vote, [sig0, sig1]);
-        await th.expectRejct(tx3);
+        await TH.expectReject(tx3);
       }
 
       //2nd report (2 reports lead to slash; both n0,n1 get +5 tokens)
@@ -570,4 +570,95 @@ describe("Validator - node reports on other node / vnro", function () {
 
   });
 
+});
+
+
+describe("Validator - staked tokens management :: sttmgmnt", function () {
+
+  beforeEach(beforeEachInit);
+
+  it("test redistributeStaked", async function () {
+    const v0 = vnodes[0];
+    const ZERO = '0x'+'00'.repeat(20);
+    let t1 = await valCt.registerNodeAndStake(100, NodeType.VNode, `http://vnode${0}:3000`, v0.address);
+    await TH.confirmTransaction(t1);
+
+    const v1 = vnodes[1];
+    let t2 = await valCt.registerNodeAndStake(100, NodeType.VNode, `http://vnode${0}:3000`, v1.address);
+    await TH.confirmTransaction(t2);
+
+    // v0 -> v1 --------------
+    assert.equal((await valCt.getNodeInfo(v0.address)).nodeTokens.toNumber(), 100);
+    assert.equal((await valCt.getNodeInfo(v1.address)).nodeTokens.toNumber(), 100);
+    assert.equal((await valCt.totalStaked()).toNumber(), 200);
+    assert.equal((await valCt.totalFees()).toNumber(), 0);
+
+    await valCt.redistributeStaked(v0.address, v1.address, 50);
+
+    assert.equal((await valCt.getNodeInfo(v0.address)).nodeTokens.toNumber(), 50);
+    assert.equal((await valCt.getNodeInfo(v1.address)).nodeTokens.toNumber(), 150);
+    assert.equal((await valCt.totalStaked()).toNumber(), 200);
+    assert.equal((await valCt.totalFees()).toNumber(), 0);
+
+    // transfer fails if not enough node tokens ------------
+    // another node
+    let t3 = valCt.redistributeStaked(v0.address, v1.address, 51);
+    await TH.expectReject(t3);
+    // to contract
+    let t4 = valCt.redistributeStaked(v0.address, ZERO, 51);
+    await TH.expectReject(t4);
+
+    // v0 -> contract ------------
+    assert.equal((await valCt.totalStaked()).toNumber(), 200);
+    assert.equal((await valCt.totalFees()).toNumber(), 0);
+
+    await valCt.redistributeStaked(v0.address, ZERO, 50);
+
+    assert.equal((await valCt.getNodeInfo(v0.address)).nodeTokens.toNumber(), 0);
+    assert.equal((await valCt.totalFees()).toNumber(), 50);
+    assert.equal((await valCt.totalStaked()).toNumber(), 150);
+
+    // contract -> v1 -------------
+    assert.equal((await valCt.totalFees()).toNumber(), 50);
+    assert.equal((await valCt.totalStaked()).toNumber(), 150);
+
+    await valCt.redistributeStaked(ZERO, v1.address, 20);
+
+    assert.equal((await valCt.getNodeInfo(v1.address)).nodeTokens.toNumber(), 170);
+    assert.equal((await valCt.totalFees()).toNumber(), 30);
+    assert.equal((await valCt.totalStaked()).toNumber(), 170);
+  });
+
+  it("test unstakeFees", async function () {
+    const v0 = vnodes[0];
+    const ZERO = '0x'+'00'.repeat(20);
+    const DECIMALS = BigNumber.from('1000000000000000000');
+    let t1 = await valCt.registerNodeAndStake(100, NodeType.VNode, `http://vnode${0}:3000`, v0.address);
+    await TH.confirmTransaction(t1);
+
+    // v0 -> contract
+    await valCt.redistributeStaked(v0.address, ZERO, 40);
+
+    // contract fees -> custom address
+    const accBalanceBefore = await pushCt.balanceOf(acc1.address);
+    console.log(accBalanceBefore);
+    assert.equal((await valCt.totalFees()).toNumber(), 40);
+    assert.equal((await valCt.totalStaked()).toNumber(), 60);
+
+    await valCt.unstakeFees(acc1.address, 30);
+
+    const accBalanceAfter = await pushCt.balanceOf(acc1.address);
+    console.log(accBalanceAfter);
+    assert.equal(accBalanceAfter.sub(accBalanceBefore).toNumber(), 30);
+    assert.equal((await valCt.totalFees()).toNumber(), 10);
+    assert.equal((await valCt.totalStaked()).toNumber(), 60);
+
+    // no tokens = reject
+    let t2 = valCt.unstakeFees(acc1.address, 20);
+    await TH.expectReject(t2);
+
+    // empty address = reject
+    let t3 = valCt.unstakeFees(ZERO, 20);
+    await TH.expectReject(t3);
+  });
 });
