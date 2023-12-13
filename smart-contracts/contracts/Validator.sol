@@ -6,7 +6,6 @@ import "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./Storage.sol";
 import "./SigUtil.sol";
-import "hardhat/console.sol";
 
 /*
 Validator smart contract
@@ -54,8 +53,10 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     /* validator slashing params  (effectively constant)
 
     report = bad behaviour,
-    we accept a VoteData sign by this amout of nodes: REPORT_THRESHOLD
-    we perform a slash after this amount of reports: REPORTS_BEFORE_SLASH
+    we accept a VoteData signed by this amout of nodes: REPORT_THRESHOLD_PER_BLOCK
+    we perform a slash after this amount of reports: REPORTS_BEFORE_SLASH_V|S
+
+    A slash reward is distributed among all the nodes which submitted the reports.
     */
     uint16 public REPORT_THRESHOLD_PER_BLOCK;  // i.e. 66 = 66% = 2/3
     uint16 public REPORTS_BEFORE_SLASH_V;
@@ -64,8 +65,10 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     /*
     slash = reduces node collateral for SLASH_PERCENT %
 
-    after SLASH_BEFORE_BAN iterations, the node would get a ban
+    after SLASH_BEFORE_BAN_V|S iterations, the node would get a ban
     ban = reduces node collateral for BAN_PERCENT, node address is banned forever
+
+    A ban reward is distributed to this contract.
     */
     uint16 public SLASH_PERCENT;
     uint16 public SLASHES_BEFORE_BAN_V;
@@ -123,8 +126,6 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     uint public totalStaked;
 
     // push tokens owned by this contract;
-    // comes from penalties from BAN only;
-    // while SLASH benefits the voters
     uint public totalFees;
 
     // ----------------------------- EVENTS  --------------------------------------------------
@@ -138,14 +139,22 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     // ----------------------------- TYPES  --------------------------------------------------
 
     struct NodeInfo {
+        // the owner of the node;
+        // the one who provides PUSH tokens for the node staking
+        // also this address is used for unstake
         address ownerWallet;
-        address nodeWallet;       // eth wallet
+        // node eth wallet, which is used mostly for private key signatures for node communication
+        address nodeWallet;
+        // node type; currently we support only 3 types (V,S,D)
         NodeType nodeType;
+        // 'staked' PUSH tokens for this node (18 digits)
         uint256 nodeTokens;
-        string nodeApiBaseUrl; // rest api url for invocation
+        // rest api url for invocation
+        string nodeApiBaseUrl;
+        // counters for report, slash, ban
         NodeCounters counters;
         // worst case status, at least 1 report or slash leads to status reported or slashed
-        // OK -> reported -> slashed -> banned
+        // lifecycle: OK -> reported -> slashed -> banned|unstaked
         NodeStatus status;
     }
 
@@ -183,9 +192,9 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     }
 
     enum VoteAction {
-        None,
-        ReportV,
-        ReportS
+        None,    // 0
+        ReportV, // 1
+        ReportS  // 2
     }
 
     enum NodeType {
@@ -252,6 +261,7 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         valPerBlock = 0;
     }
 
+    // DO NOT EDIT THIS FUNCTION; THIS MAY LEAD TO THE LOSS OF THE CONTRACT !!!
     function _authorizeUpgrade(address) internal override onlyOwner {}
 
     // ----------------------------- ADMIN FUNCTIONS --------------------------------------------------
@@ -345,7 +355,6 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     */
     function registerNodeAndStake(uint256 nodeTokens_,
         NodeType nodeType_, string memory nodeApiBaseUrl_, address nodeWallet_) public {
-        console.log('--register', nodeWallet_);
         // pre-actions
         if (nodeType_ == NodeType.VNode) {
             require(nodeTokens_ >= minStakeV, "Insufficient collateral for VNODE");
@@ -370,7 +379,6 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
             require(allowed >= nodeTokens_, "_nodeTokens cannot be transferred, check allowance");
         }
         // new mapping
-        console.log('node owner is ', msg.sender);
         NodeInfo memory n;
         n.ownerWallet = msg.sender;
         n.nodeWallet = nodeWallet_;
@@ -393,7 +401,6 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
             StorageV1 s = StorageV1(storageContract);
             s.addNode(nodeWallet_);
         }
-        //        MIN_NODES_FOR_REPORT = (uint32)(1 + (nodes.length / 2));
         emit NodeAdded(msg.sender, nodeWallet_, nodeType_, nodeTokens_, nodeApiBaseUrl_);
     }
 
@@ -410,16 +417,13 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
             }
         }
         vnodesActive = activeValidators_;
-        console.log('activeValidators_', activeValidators_);
         uint16 valPerBlock_ = activeValidators_;
         uint16 valPerBlockTarget_ = valPerBlockTarget;
         if (valPerBlock_ > valPerBlockTarget_) {
             valPerBlock_ = valPerBlockTarget_;
-            console.log('limit by target', valPerBlockTarget_);
         }
         require(valPerBlock <= valPerBlockTarget_);
         if (valPerBlock_ != valPerBlock) {
-            console.log('recalcualteAttestersCountPerBlock', valPerBlock_, valPerBlockTarget_);
             valPerBlock = valPerBlock_;
             emit BlockParamsUpdated(valPerBlock_, valPerBlockTarget_);
         }
@@ -434,7 +438,6 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     ACCESS: Any node owner can call this
     */
     function unstakeNode(address nodeWallet_) public {
-        console.log('--unstake', nodeWallet_);
         NodeInfo storage node = nodeMap[nodeWallet_];
         require(node.nodeWallet != address(0), "node does not exists");
         require(node.ownerWallet == msg.sender || owner() == msg.sender, "only owner can unstake a node");
@@ -453,21 +456,17 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
      */
     // ACCESS: Any node can call this
     function reportNode(NodeType targetNodeType_, bytes memory voteBlob_, bytes[] memory signatures_) public {
-        console.log('reportNode()', voteBlob_.length);
         NodeInfo storage reporterNode_ = nodeMap[msg.sender];
         if (reporterNode_.nodeWallet == address(0)) {
             revert('invalid reporter');
         }
 
-        console.log('got signatures', signatures_.length);
         uint uniqVotersSize_ = 0;
         address[] memory uniqVoters_ = new address[](signatures_.length);
         for (uint i = 0; i < signatures_.length; i++) {
             address voterWallet = SigUtil.recoverSignerEx(voteBlob_, signatures_[i]);
-            console.log('voter wallet is', voterWallet);
             NodeInfo storage voterNode = nodeMap[voterWallet];
             if (voterNode.nodeWallet == address(0)) {
-                console.log('invalid voter wallet');
                 continue;
             }
             // this is not very efficient, but there is no in-memory set support
@@ -483,7 +482,6 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
             }
             uniqVoters_[uniqVotersSize_++] = voterWallet;
         }
-        console.log('sigcount=', uniqVotersSize_);
         // compactify
         if (uniqVotersSize_ < signatures_.length) {
             address[] memory tmp = new address[](uniqVotersSize_);
@@ -674,8 +672,6 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         uint128 blockId_,
         uint128 storageKey_
     ) private {
-        console.log('doReport');
-
         // check that we encounter this report X this block only for the first time
         uint128[] memory reportedInBlocks_ = targetNode.counters.reportedInBlocks;
         uint ribLen_ = reportedInBlocks_.length;
@@ -695,14 +691,11 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
                 }
             }
             targetNode.counters.reportedKeys.push(storageKey_);
-            console.log('targetNode added skey', storageKey_);
         }
 
 
         targetNode.counters.reportCounter++;
         targetNode.counters.reportedInBlocks.push(blockId_);
-        console.log('targetNode wallet', targetNode.nodeWallet);
-        console.log('targetNode added blockId', blockId_);
 
         // calculate new voters; they will collectively split payments on slash
         address[] memory reportedBy_ = targetNode.counters.reportedBy;
@@ -730,7 +723,6 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     }
 
     function slash(NodeInfo storage reporterNode, NodeInfo storage targetNode) private {
-        console.log('doSlash');
         // targetNode gets slashed by SLASH_PERCENT, this deducts delta_ tokens
         uint256 coll_;
         uint256 delta_;
@@ -741,7 +733,6 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         uint256 reporterBonus_;
         if (delta_ > 0 && reportedBy_.length > 0) {
             reporterBonus_ = delta_ / reportedBy_.length;
-            console.log('reporter bonus=', reporterBonus_);
             require(reporterBonus_ >= 0, 'negative bonus');
             for (uint i = 0; i < reportedBy_.length; i++) {
                 NodeInfo storage ni = nodeMap[reportedBy_[i]];
