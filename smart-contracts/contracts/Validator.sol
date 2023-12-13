@@ -627,26 +627,27 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     /*
     Returns unstaked amount
     */
-    function _unstakeNode(NodeInfo storage targetNode_) private returns (uint256) {
-        uint256 delta = targetNode_.nodeTokens;
-        require(pushToken.transfer(targetNode_.ownerWallet, delta), "failed to trasfer funds back to owner");
-        targetNode_.nodeTokens = 0;
-        totalStaked -= delta;
-        if (targetNode_.nodeType == NodeType.VNode) {
-            delete targetNode_.counters.reportedInBlocks;
-            delete targetNode_.counters.reportedBy;
-            findAndRemove(vnodes, targetNode_.nodeWallet);
+    function _unstakeNode(NodeInfo storage targetNode) private returns (uint256) {
+        uint256 delta_ = targetNode.nodeTokens;
+        require(pushToken.transfer(targetNode.ownerWallet, delta_), "failed to trasfer funds back to owner");
+        targetNode.nodeTokens = 0;
+        totalStaked -= delta_;
+        totalFees += delta_;
+        if (targetNode.nodeType == NodeType.VNode) {
+            delete targetNode.counters.reportedInBlocks;
+            delete targetNode.counters.reportedBy;
+            findAndRemove(vnodes, targetNode.nodeWallet);
             recalcualteAttestersCountPerBlock(); // only after vnodes got shrinked
-        } else if (targetNode_.nodeType == NodeType.SNode) {
+        } else if (targetNode.nodeType == NodeType.SNode) {
             require(storageContract != address(0), 'no storage contract defined');
             StorageV1 s = StorageV1(storageContract);
-            s.removeNode(targetNode_.nodeWallet);
-            delete targetNode_.counters.reportedInBlocks;
-            delete targetNode_.counters.reportedBy;
-            delete targetNode_.counters.reportedKeys;
-            findAndRemove(snodes, targetNode_.nodeWallet);
+            s.removeNode(targetNode.nodeWallet);
+            delete targetNode.counters.reportedInBlocks;
+            delete targetNode.counters.reportedBy;
+            delete targetNode.counters.reportedKeys;
+            findAndRemove(snodes, targetNode.nodeWallet);
         }
-        return delta;
+        return delta_;
     }
 
     function decodeVoteMessage(bytes memory data) private pure returns (VoteMessage memory) {
@@ -761,8 +762,6 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         uint256 coll_;
         uint256 delta_;
         (coll_, delta_) = reduceCollateral(targetNode, BAN_PERCENT);
-        totalStaked -= delta_;
-        totalFees += delta_;
         _unstakeNode(targetNode);
         targetNode.status = NodeStatus.BannedAndUnstaked;
         emit NodeStatusChanged(targetNode.nodeWallet, NodeStatus.BannedAndUnstaked, 0);
