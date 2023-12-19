@@ -650,12 +650,6 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         return delta_;
     }
 
-    function decodeVoteMessage(bytes memory data) private pure returns (VoteMessage memory) {
-        VoteMessage memory result;
-        (result.blockId, result.targetNode, result.voteAction) = abi.decode(data, (uint128, address, uint8));
-        return result;
-    }
-
     function getNodeInfo(address _nodeWallet) public view returns (NodeInfo memory) {
         return nodeMap[_nodeWallet];
     }
