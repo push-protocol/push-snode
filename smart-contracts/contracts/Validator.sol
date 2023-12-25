@@ -183,6 +183,11 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         uint128[] reportedKeys;
     }
 
+    struct ActiveValidator {
+        address nodeWallet;
+        string nodeApiBaseUrl;
+    }
+
     enum NodeStatus {
         OK, // this node operates just fine (DEFAULT VALUE)
         Reported, // he have a few malicious reports
@@ -520,6 +525,29 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
 
     }
 
+    // returns only active validators, for SDK to select the right url to call
+    function getActiveVNodes() public view returns (ActiveValidator[] memory) {
+        uint activeValidators_ = 0;
+        for (uint i = 0; i < vnodes.length; i++) {
+            address nodeAddr_ = vnodes[i];
+            NodeInfo storage nodeInfo = nodeMap[nodeAddr_];
+            if (isActiveValidator(nodeInfo.status)) {
+                activeValidators_++;
+            }
+        }
+        ActiveValidator[] memory result = new ActiveValidator[](activeValidators_);
+        uint j = 0;
+        for (uint i = 0; i < vnodes.length; i++) {
+            address nodeAddr_ = vnodes[i];
+            NodeInfo storage nodeInfo = nodeMap[nodeAddr_];
+            if (!isActiveValidator(nodeInfo.status)) {
+                continue;
+            }
+            result[j++] = ActiveValidator(nodeInfo.nodeWallet, nodeInfo.nodeApiBaseUrl);
+        }
+        return result;
+    }
+
     function getVNodesLength() public view returns (uint) {
         return vnodes.length;
     }
@@ -714,7 +742,7 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
             targetNode.status = NodeStatus.Reported;
         }
         emit NodeReported(targetNode.nodeWallet, reporterNode.nodeWallet, newVoters_, voteAction_); // todo do we need this ?
-        emit NodeStatusChanged(targetNode.nodeWallet, NodeStatus.Reported, targetNode.nodeTokens);
+        emit NodeStatusChanged(targetNode.nodeWallet, targetNode.status, targetNode.nodeTokens);
     }
 
     function slash(NodeInfo storage reporterNode, NodeInfo storage targetNode) private {
@@ -757,6 +785,7 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         uint256 delta_;
         (coll_, delta_) = reduceCollateral(targetNode, BAN_PERCENT);
         _unstakeNode(targetNode);
+        targetNode.counters.slashCounter = 0;
         targetNode.status = NodeStatus.BannedAndUnstaked;
         emit NodeStatusChanged(targetNode.nodeWallet, NodeStatus.BannedAndUnstaked, 0);
     }
