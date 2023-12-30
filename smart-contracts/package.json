@@ -9,7 +9,7 @@
     "@nomiclabs/hardhat-etherscan": "^3.1.5",
     "@openzeppelin/contracts": "^4.8.3",
     "@openzeppelin/contracts-upgradeable": "^4.8.3",
-    "@openzeppelin/hardhat-upgrades": "^1.22.1",
+    "@openzeppelin/hardhat-upgrades": "^1.28.0",
     "dotenv": "^16.0.3"
   }
 }

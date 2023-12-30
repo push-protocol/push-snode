@@ -90,8 +90,8 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     3 * 67 / 100 = 201 / 100 = 2
     if we have at least 2 valid signatures out of 3 - that's a good block
 
-    attestersCountPerBlock would grow as more nodes join the network;
-    up to attestersTarget
+    valPerBlock would grow as more nodes join the network;
+    up to valPerBlockTarget
     */
     uint16 public valPerBlock;
 
@@ -115,11 +115,13 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     // storage contract manages storage node state
     address public storageContract;
 
-    // node colleciton
+    // vnode colleciton; banned/unstaked nodes are removed
     address[] public vnodes;
-    uint16 public vnodesActive;
+    // vnode colleciton; banned/unstaked nodes are removed
     address[] public snodes;
+    // vnode colleciton; banned/unstaked nodes are removed
     address[] public dnodes;
+    // node details
     mapping(address => NodeInfo) public nodeMap;
 
     // push tokens owned by this contract; which have an owner
@@ -244,7 +246,7 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         protocolVersion = protocolVersion_;
         require(pushToken_ != address(0));
         pushToken = IERC20(pushToken_);
-        require(valPerBlockTarget_ > 0, "invalid attesters amount");
+        require(valPerBlockTarget_ > 0, "invalid valPerBlockTarget_ amount");
         valPerBlockTarget = valPerBlockTarget_;
         require(nodeRandomMinCount_ > 0, "invalid nodeRandomMinCount amount");
         nodeRandomMinCount = nodeRandomMinCount_;
@@ -399,7 +401,7 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
 
         // post actions
         if (nodeType_ == NodeType.VNode) {
-            recalcualteAttestersCountPerBlock();
+            recalcualteValPerBlock();
         } else if (nodeType_ == NodeType.SNode) {
             // try to register this node for shard mappings
             require(storageContract != address(0), 'no storage contract defined');
@@ -410,9 +412,9 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     }
 
     // raise the number of required signatures per block
-    // from 1 up to attestersTarget
+    // from 1 up to valPerBlockTarget
     // or down to 1
-    function recalcualteAttestersCountPerBlock() private {
+    function recalcualteValPerBlock() private {
         uint16 activeValidators_ = 0;
         for (uint i = 0; i < vnodes.length; i++) {
             address nodeAddr_ = vnodes[i];
@@ -421,8 +423,10 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
                 activeValidators_++;
             }
         }
-        vnodesActive = activeValidators_;
-        uint16 valPerBlock_ = activeValidators_;
+        uint16 valPerBlock_ = activeValidators_ - 1;
+        if(valPerBlock_ < 0) {
+            valPerBlock_ = 0;
+        }
         uint16 valPerBlockTarget_ = valPerBlockTarget;
         if (valPerBlock_ > valPerBlockTarget_) {
             valPerBlock_ = valPerBlockTarget_;
@@ -665,7 +669,7 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
             delete targetNode.counters.reportedInBlocks;
             delete targetNode.counters.reportedBy;
             findAndRemove(vnodes, targetNode.nodeWallet);
-            recalcualteAttestersCountPerBlock(); // only after vnodes got shrinked
+            recalcualteValPerBlock(); // only after vnodes got shrinked
         } else if (targetNode.nodeType == NodeType.SNode) {
             require(storageContract != address(0), 'no storage contract defined');
             StorageV1 s = StorageV1(storageContract);

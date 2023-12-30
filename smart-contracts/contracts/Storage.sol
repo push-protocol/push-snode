@@ -114,7 +114,7 @@ contract StorageV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     ) initializer public {
         // init libraries
         __UUPSUpgradeable_init();
-        __Ownable_init();
+        __Ownable_init_unchained();
 
         unusedNodeId = 1;
         rf = 0;

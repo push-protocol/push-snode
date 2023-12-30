@@ -48,6 +48,7 @@ task("v:deployStorageCt", "deploys validatorCt and registers it into validator c
   .setAction(async (taskArgs, hre) => {
     const ethers = hre.ethers;
     const [owner] = await hre.ethers.getSigners();
+    log(`owner is ${owner.address}`);
     const pushCt = taskArgs.pushCt;
     const valCtAddr: string = taskArgs.validatorContract;
     log('deploying storage contract')
