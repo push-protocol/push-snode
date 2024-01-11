@@ -184,6 +184,7 @@ contract StorageV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     }
 
     function addNode(address nodeAddress_) public onlyV returns (uint8) {
+        require(nodeAddress_ != address(0), 'address is 0');
         require(mapAddrToNodeId[nodeAddress_] == 0, 'address is already registered');
         require(unusedNodeId > 0 && unusedNodeId < MAX_NODE_ID, 'nodeId > 0 && nodeId < max');
         uint8 newNodeId;

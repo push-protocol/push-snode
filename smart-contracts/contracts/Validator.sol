@@ -244,13 +244,13 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         __Ownable_init_unchained();
         // init state
         protocolVersion = protocolVersion_;
-        require(pushToken_ != address(0));
-        pushToken = IERC20(pushToken_);
+        require(pushToken_ != address(0), "push token is empty");
         require(valPerBlockTarget_ > 0, "invalid valPerBlockTarget_ amount");
-        valPerBlockTarget = valPerBlockTarget_;
         require(nodeRandomMinCount_ > 0, "invalid nodeRandomMinCount amount");
-        nodeRandomMinCount = nodeRandomMinCount_;
         require(nodeRandomPingCount_ > 0, "invalid nodeRandomFilterPingsRequired amount");
+        pushToken = IERC20(pushToken_);
+        valPerBlockTarget = valPerBlockTarget_;
+        nodeRandomMinCount = nodeRandomMinCount_;
         nodeRandomPingCount = nodeRandomPingCount_;
 
         minStakeV = 100;
@@ -274,6 +274,7 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     // ----------------------------- ADMIN FUNCTIONS --------------------------------------------------
 
     function setStorageContract(address addr_) public onlyOwner {
+        require(addr_ != address(0), 'empty addr');
         storageContract = addr_;
     }
 
@@ -284,8 +285,8 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     }
 
     function updateRandomParams(uint16 nodeRandomMinCount_, uint16 nodeRandomPingCount_) public onlyOwner {
-        require(nodeRandomMinCount_ >= 0 && nodeRandomMinCount_ < vnodes.length);
-        require(nodeRandomPingCount_ >= 0 && nodeRandomPingCount_ < vnodes.length);
+        require(nodeRandomMinCount_ < vnodes.length, "bad nodeRandomMinCount");
+        require(nodeRandomPingCount_ < vnodes.length, "bad nodeRandomPingCount_");
         nodeRandomMinCount = nodeRandomMinCount_;
         nodeRandomPingCount = nodeRandomPingCount_;
         emit RandomParamsUpdated(nodeRandomMinCount_, nodeRandomPingCount_);
@@ -328,7 +329,7 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
             require(fromNode_.ownerWallet != address(0), 'missing from node');
             require(fromNode_.nodeTokens >= amount_, 'from node should have enough collateral');
             NodeInfo storage toNode_ = nodeMap[to_];
-            require(fromNode_.ownerWallet != address(0), 'missing to node');
+            require(toNode_.ownerWallet != address(0), 'missing to node');
 
             fromNode_.nodeTokens -= amount_;
             toNode_.nodeTokens += amount_;
@@ -356,12 +357,19 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
 
     /*
     Registers a new V, S, D node
-    Locks PUSH tokens ($_token) with $_collateral amount.
-    A node will run from a _nodeWallet
-    ACCESS: Any node can call this
+    Locks PUSH tokens (nodeTokens_) with $_collateral amount.
+    A node will run from a nodeWallet_
+    ACCESS: Anyone can call this (dApp frontend functiton)
     */
     function registerNodeAndStake(uint256 nodeTokens_,
         NodeType nodeType_, string memory nodeApiBaseUrl_, address nodeWallet_) public {
+        if (nodeWallet_ == address(0)) {
+            revert("empty node address");
+        }
+        NodeInfo storage old = nodeMap[nodeWallet_];
+        if (old.ownerWallet != address(0)) {
+            revert("a node with pubKey is already defined");
+        }
         // pre-actions
         if (nodeType_ == NodeType.VNode) {
             require(nodeTokens_ >= minStakeV, "Insufficient collateral for VNODE");
@@ -375,10 +383,7 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         } else {
             revert("unsupported nodeType ");
         }
-        NodeInfo storage old = nodeMap[nodeWallet_];
-        if (old.ownerWallet != address(0)) {
-            revert("a node with pubKey is already defined");
-        }
+
 
         // check that collateral is allowed to spend
         if (nodeTokens_ > 0) {
@@ -416,17 +421,15 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     // or down to 1
     function recalcualteValPerBlock() private {
         uint16 activeValidators_ = 0;
-        for (uint i = 0; i < vnodes.length; i++) {
+        uint len = vnodes.length;
+        for (uint i = 0; i < len; i++) {
             address nodeAddr_ = vnodes[i];
             NodeInfo storage nodeInfo_ = nodeMap[nodeAddr_];
             if (isActiveValidator(nodeInfo_.status)) {
                 activeValidators_++;
             }
         }
-        uint16 valPerBlock_ = activeValidators_ - 1;
-        if(valPerBlock_ < 0) {
-            valPerBlock_ = 0;
-        }
+        uint16 valPerBlock_ = activeValidators_;
         uint16 valPerBlockTarget_ = valPerBlockTarget;
         if (valPerBlock_ > valPerBlockTarget_) {
             valPerBlock_ = valPerBlockTarget_;
@@ -532,7 +535,8 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     // returns only active validators, for SDK to select the right url to call
     function getActiveVNodes() public view returns (ActiveValidator[] memory) {
         uint activeValidators_ = 0;
-        for (uint i = 0; i < vnodes.length; i++) {
+        uint len_ = vnodes.length;
+        for (uint i = 0; i < len_; i++) {
             address nodeAddr_ = vnodes[i];
             NodeInfo storage nodeInfo = nodeMap[nodeAddr_];
             if (isActiveValidator(nodeInfo.status)) {
@@ -541,7 +545,7 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         }
         ActiveValidator[] memory result = new ActiveValidator[](activeValidators_);
         uint j = 0;
-        for (uint i = 0; i < vnodes.length; i++) {
+        for (uint i = 0; i < len_; i++) {
             address nodeAddr_ = vnodes[i];
             NodeInfo storage nodeInfo = nodeMap[nodeAddr_];
             if (!isActiveValidator(nodeInfo.status)) {
@@ -632,7 +636,7 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
     */
     function reduceCollateral(NodeInfo storage slashedNode, uint32 percentage_
     ) private returns (uint256 newAmount_, uint256 delta_) {
-        require(percentage_ >= 0 && percentage_ <= 100, "percentage should be in [0, 100]");
+        require(percentage_ <= 100, "percentage should be in [0, 100]");
         // reduce only nodeTokens; we do not transfer any tokens; it will affect only 'unstake'
         uint256 currentAmount_ = slashedNode.nodeTokens;
         newAmount_ = (currentAmount_ * (100 - percentage_)) / 100;
@@ -664,7 +668,6 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         require(pushToken.transfer(targetNode.ownerWallet, delta_), "failed to trasfer funds back to owner");
         targetNode.nodeTokens = 0;
         totalStaked -= delta_;
-        totalFees += delta_;
         if (targetNode.nodeType == NodeType.VNode) {
             delete targetNode.counters.reportedInBlocks;
             delete targetNode.counters.reportedBy;
@@ -760,7 +763,6 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
         uint256 reporterBonus_;
         if (delta_ > 0 && reportedBy_.length > 0) {
             reporterBonus_ = delta_ / reportedBy_.length;
-            require(reporterBonus_ >= 0, 'negative bonus');
             for (uint i = 0; i < reportedBy_.length; i++) {
                 NodeInfo storage ni = nodeMap[reportedBy_[i]];
                 if (ni.ownerWallet == address(0)) {
@@ -768,7 +770,6 @@ contract ValidatorV1 is Ownable2StepUpgradeable, UUPSUpgradeable {
                 }
                 ni.nodeTokens += reporterBonus_;
                 delta_ -= reporterBonus_;
-                require(delta_ >= 0, 'positive delta');
             }
         }
         // reporter will get the remaing points (less that reporterBonus)
