@@ -89,6 +89,8 @@ task("v:listNodes", "shows validator nodes registered")
     info(await validator.getSNodes());
     info(`showing delivery nodes registered in ${args.validatorProxyCt}`);
     info(await validator.getDNodes());
+    info(`registered storage contract is`);
+    info(await validator.storageContract())
   });
 
 

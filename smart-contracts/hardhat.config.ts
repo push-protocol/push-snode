@@ -26,14 +26,10 @@ const config: HardhatUserConfig = {
         hardhat: {
             gas: 30000000
         },
-        polygon_mumbai: {
-            url: "https://rpc-mumbai.maticvigil.com",
-            accounts: [process.env.PRIVATE_KEY_POLYGON_TESTNET_MUMBAI]
+        sepolia : {
+            url: process.env.SEPOLIA_TEST_RPC_URL,
+            accounts: [process.env.SEPOLIA_TEST_PRIVATE_KEY]
         },
-        goerli: {
-            url: `https://eth-goerli.alchemyapi.io/v2/${process.env.ALCHEMY_API_KEY}`,
-            accounts: [process.env.PRIVATE_KEY || ""]
-        }
     },
 
     etherscan: {
