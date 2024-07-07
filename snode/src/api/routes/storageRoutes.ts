@@ -183,4 +183,18 @@ export function storageRoutes(app: Router) {
       }
     }
   );
+
+  // prints all namespaces
+  route.post(
+    '/ns/all/', /*  */
+    async (req: Request, res: Response, next: NextFunction) => {
+      logRequest(req);
+      const allNsIndex = await DbHelper.listAllNsIndex();
+      try {
+        return res.status(200).json(allNsIndex);
+      } catch (e) {
+        return next(e);
+      }
+    }
+  );
 };

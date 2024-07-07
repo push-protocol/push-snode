@@ -53,7 +53,65 @@ export default class DbHelper {
             table_name         VARCHAR(64) NOT NULL,
             PRIMARY KEY (namespace, namespace_shard_id, ts_start, ts_end)
         );
-    `)
+    `);
+        await PgUtil.update(` 
+        
+
+-- allows itself to be called on every call
+-- recreates a view, no more than once per day, which contains
+-- a consistent ordered list of all namespaces (wallets) in the system
+CREATE OR REPLACE FUNCTION update_storage_all_namespace_view()
+RETURNS VOID AS $$
+DECLARE
+    table_rec RECORD;
+    combined_query TEXT := '';
+    last_update_var DATE;
+BEGIN
+    CREATE TABLE IF NOT EXISTS view_update_log (
+    view_name TEXT PRIMARY KEY,
+    last_update DATE NOT NULL
+    );
+
+    INSERT INTO view_update_log (view_name, last_update)
+    VALUES ('storage_all_namespace_view', '2000-01-01')
+    ON CONFLICT (view_name) DO NOTHING;
+
+    -- Retrieve the last update date from the log
+    SELECT last_update INTO last_update_var
+    FROM view_update_log
+    WHERE view_name = 'storage_all_namespace_view';
+
+    -- Check if the view has already been updated today
+    IF last_update_var = CURRENT_DATE THEN
+        RETURN;
+    END IF;
+
+    -- Construct the combined query
+    FOR table_rec IN
+        SELECT tablename
+        FROM pg_tables
+        WHERE schemaname = 'public'
+        AND tablename LIKE 'storage_ns_%_d_%'
+    LOOP
+        IF combined_query <> '' THEN
+            combined_query := combined_query || ' UNION ';
+        END IF;
+        combined_query := combined_query || 'SELECT namespace_id FROM ' || table_rec.tablename;
+    END LOOP;
+
+    -- Create or replace the view
+    EXECUTE 'CREATE OR REPLACE VIEW storage_all_namespace_view AS
+             SELECT DISTINCT namespace_id
+             FROM (' || combined_query || ') AS combined_query
+             ORDER BY namespace_id ASC';
+
+    -- Update the last update date in the log
+    UPDATE view_update_log
+    SET last_update = CURRENT_DATE
+    WHERE view_name = 'storage_all_namespace_view';
+
+END $$ LANGUAGE plpgsql;
+        `)
     }
 
     // maps key -> 8bit space (0..255)
@@ -298,6 +356,21 @@ export default class DbHelper {
             ts: rowObj.ts,
             payload: rowObj.payload
         };
+    }
+
+    static async listAllNsIndex() {
+        const updateViewIfNeeded = `select update_storage_all_namespace_view();`;
+        log.debug(updateViewIfNeeded);
+        await pgPool.any(updateViewIfNeeded);
+        const selectAll = `select namespace_id from storage_all_namespace_view;`;
+        log.debug(selectAll);
+        return pgPool.manyOrNone(selectAll).then(data => {
+            log.debug(data);
+            return Promise.resolve(data == null ? [] : data.map(item => item.namespace_id));
+        }).catch(err => {
+            log.debug(err);
+            return Promise.reject(err);
+        });
     }
 }
 
