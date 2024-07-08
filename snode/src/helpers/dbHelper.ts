@@ -55,7 +55,6 @@ export default class DbHelper {
         );
     `);
         await PgUtil.update(` 
-        
 
 -- allows itself to be called on every call
 -- recreates a view, no more than once per day, which contains
@@ -96,21 +95,22 @@ BEGIN
         IF combined_query <> '' THEN
             combined_query := combined_query || ' UNION ';
         END IF;
-        combined_query := combined_query || 'SELECT namespace_id FROM ' || table_rec.tablename;
+        combined_query := combined_query || 'SELECT namespace_id, max(ts) as last_ts FROM ' || table_rec.tablename || ' group by namespace_id';
     END LOOP;
 
     -- Create or replace the view
     EXECUTE 'CREATE OR REPLACE VIEW storage_all_namespace_view AS
-             SELECT DISTINCT namespace_id
+             SELECT namespace_id, max(last_ts) as last_usage
              FROM (' || combined_query || ') AS combined_query
-             ORDER BY namespace_id ASC';
+             GROUP BY namespace_id
+             ORDER BY last_usage desc';
 
     -- Update the last update date in the log
     UPDATE view_update_log
     SET last_update = CURRENT_DATE
     WHERE view_name = 'storage_all_namespace_view';
 
-END $$ LANGUAGE plpgsql;
+END $$ LANGUAGE plpgsql;        
         `)
     }
 
@@ -362,11 +362,16 @@ END $$ LANGUAGE plpgsql;
         const updateViewIfNeeded = `select update_storage_all_namespace_view();`;
         log.debug(updateViewIfNeeded);
         await pgPool.any(updateViewIfNeeded);
-        const selectAll = `select namespace_id from storage_all_namespace_view;`;
+        const selectAll = `select namespace_id, last_usage from storage_all_namespace_view;`;
         log.debug(selectAll);
         return pgPool.manyOrNone(selectAll).then(data => {
             log.debug(data);
-            return Promise.resolve(data == null ? [] : data.map(item => item.namespace_id));
+            return Promise.resolve(data == null ? [] : data.map(function (item) {
+                return {
+                    'nsId': item.namespace_id,
+                    'last_usage' : item.last_usage
+                };
+            }));
         }).catch(err => {
             log.debug(err);
             return Promise.reject(err);
