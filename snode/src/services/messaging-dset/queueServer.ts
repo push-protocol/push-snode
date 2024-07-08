@@ -84,7 +84,7 @@ export class QueueServer implements Consumer<QItem> {
     const object = JSON.stringify(cmd)
     const objectHash = ObjectHasher.hashToSha256(cmd)
     const res = await MySqlUtil.insert(
-      `INSERT INTO dset_queue_${this.queueName}(object)
+      `INSERT INTO dset_queue_${this.queueName}(object, object_hash)
        VALUES (?,?)`,
       object,
       objectHash

@@ -13,6 +13,11 @@ export default ({ app }: { app: express.Application }) => {
     res.status(200).end();
   });
 
+  // The magic package that prevents frontend developers going nuts
+  // Alternate description:
+  // Enable Cross Origin Resource Sharing to all origins by default
+  app.use(cors());
+
   app.use('/api', routes());
 
   // Load Static Files
@@ -46,4 +51,5 @@ export default ({ app }: { app: express.Application }) => {
       }
     });
   });
+
 };
