@@ -23,4 +23,12 @@ export class EnvLoader {
     const val = process.env[propName]
     return val != null && val.toLowerCase() === 'true'
   }
+
+  public static getPropertyOrDefault(propName: string, def:string): string {
+    const val = process.env[propName]
+    if (StrUtil.isEmpty(val)) {
+      return def;
+    }
+    return val
+  }
 }

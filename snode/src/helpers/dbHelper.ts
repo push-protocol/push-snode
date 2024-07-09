@@ -276,8 +276,7 @@ END $$ LANGUAGE plpgsql;
     }
 
     static async listInbox(namespace: string, namespaceShardId: number, nsIndex:string,
-                           storageTable: string, firstTsExcluded: string): Promise<object> {
-        const pageSize = 5;
+                           storageTable: string, firstTsExcluded: string, pageSize:number): Promise<object> {
         const pageLookAhead = 3;
         const pageSizeForSameTimestamp = pageSize * 20;
         const isFirstQuery = StrUtil.isEmpty(firstTsExcluded);

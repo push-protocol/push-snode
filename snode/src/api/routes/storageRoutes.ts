@@ -13,6 +13,9 @@ import StorageNode from "../../services/messaging/storageNode";
 import {Coll} from "../../utilz/coll";
 import {MessageBlockUtil} from "../../services/messaging-common/messageBlock";
 import {StorageContractState} from "../../services/messaging-common/storageContractState";
+import {EnvLoader} from "../../utilz/envLoader";
+
+const PAGE_SIZE = Number.parseInt(EnvLoader.getPropertyOrDefault("PAGE_SIZE", "30"));
 
 const route = Router();
 const dbh = new DbHelper();
@@ -160,7 +163,7 @@ export function storageRoutes(app: Router) {
       const valContractState = Container.get(ValidatorContractState);
       const storageContractState = Container.get(StorageContractState);
       const nodeId = valContractState.nodeId; // todo read this from db
-      log.debug(`nsName=${nsName} nsIndex=${nsIndex} dt=${dt} nodeId=${nodeId}`);
+      log.debug(`nsName=${nsName} nsIndex=${nsIndex} dt=${dt} nodeId=${nodeId} PAGE_SIZE=${PAGE_SIZE}`);
       let shardId = MessageBlockUtil.calculateAffectedShard(nsIndex, storageContractState.shardCount);
       const date = DateTime.fromISO(dt, {zone: 'utc'});
       if (!date.isValid) {
@@ -173,8 +176,7 @@ export function storageRoutes(app: Router) {
         log.error('storage table not found');
         return res.status(401).json('storage table not found');
       }
-
-      const storageValue = await DbHelper.listInbox(nsName, shardId, nsIndex, storageTable, firstTs);
+      const storageValue = await DbHelper.listInbox(nsName, shardId, nsIndex, storageTable, firstTs, PAGE_SIZE);
       log.debug(`found value: ${storageValue}`)
       try {
         return res.status(200).json(storageValue);

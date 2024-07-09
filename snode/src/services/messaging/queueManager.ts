@@ -7,6 +7,7 @@ import {QueueServer} from '../messaging-dset/queueServer'
 import {QueueClient} from '../messaging-dset/queueClient'
 import StorageNode from "./storageNode";
 import {QueueClientHelper} from "../messaging-common/queueClientHelper";
+import {EnvLoader} from "../../utilz/envLoader";
 
 
 @Service()
@@ -20,7 +21,7 @@ export class QueueManager {
 
 
   // PING: schedule
-  private readonly CLIENT_READ_SCHEDULE = '*/30 * * * * *'
+  private readonly CLIENT_READ_SCHEDULE = EnvLoader.getPropertyOrDefault('CLIENT_READ_SCHEDULE', '*/30 * * * * *');
 
   public static QUEUE_MBLOCK = 'mblock'
   mblockQueue: QueueServer
