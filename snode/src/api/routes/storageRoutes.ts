@@ -26,7 +26,6 @@ function logRequest(req: Request) {
 }
 
 // todo ValidatorContractState
-// todo remove logic from router
 export function storageRoutes(app: Router) {
   app.use(bodyParser.json());
 
@@ -84,6 +83,8 @@ export function storageRoutes(app: Router) {
       }
     }
   );
+
+
 
   // todo move to StorageNode
   // todo not tested with new sharing (we don't use it anymore)
@@ -200,3 +201,4 @@ export function storageRoutes(app: Router) {
     }
   );
 };
+// todo remove logic from router

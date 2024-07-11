@@ -1,3 +1,6 @@
+import {EnvLoader} from "./utilz/envLoader";
+EnvLoader.loadEnvOrFail();
+
 import 'reflect-metadata'; // We need this in order to use @Decorators
 import express from 'express';
 import chalk from 'chalk';
@@ -6,12 +9,12 @@ import StorageNode from "./services/messaging/storageNode";
 import {ValidatorContractState} from "./services/messaging-common/validatorContractState";
 import {MySqlUtil} from "./utilz/mySqlUtil";
 
+
 async function startServer(logLevel = null) {
   if (logLevel) {
     const changeLogLevel = (await require('./config/index')).changeLogLevel;
     changeLogLevel(logLevel);
   }
-
   // Continue Loading normally
   const config = (await require('./config/index')).default;
   logLevel = logLevel || config.logs.level;

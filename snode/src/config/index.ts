@@ -1,19 +1,7 @@
-import dotenv from 'dotenv';
 // import {logLevel} from '../app'
 // Set the NODE_ENV to 'development' by default
 process.env.NODE_ENV = process.env.NODE_ENV || 'development';
 
-// loads all .env variables into process.env.* variables
-// Optional support for CONFIG_DIR variable
-console.log(`config dir is ${process.env.CONFIG_DIR}`);
-let options = {};
-if(process.env.CONFIG_DIR) {
-  options = {path: `${process.env.CONFIG_DIR}/.env`};
-}
-const envFound = dotenv.config(options);
-if (envFound.error) {
-  throw new Error("⚠️  Couldn't find .env file  ⚠️")
-}
 
 export const changeLogLevel = (level: string) => {
   if (level) {

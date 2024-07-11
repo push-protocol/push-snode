@@ -6,7 +6,10 @@ import StrUtil from "./strUtil";
 import pg from "pg-promise/typescript/pg-subset";
 import {IDatabase} from "pg-promise";
 
+// PG PROMISE https://github.com/vitaly-t/pg-promise
 
+// NOTE: here are how named params are working in pg-async
+// https://github.com/vitaly-t/pg-promise/wiki/Learn-by-Example#named-parameters
 export class PgUtil {
   private static log: Logger = WinstonUtil.newLog('pg')
   static logSql = false

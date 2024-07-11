@@ -23,8 +23,12 @@ var mysqlPool = mysql.createPool({
 })
 MySqlUtil.init(mysqlPool);
 
-
+// postgres
+// todo fix variable substitution, see #putValueInTable()
 // todo move everything into PgUtil including connection management
+// todo use PgUtil
+// todo use placeholders (?)
+
 let logger = WinstonUtil.newLog('pg');
 let options = {
     query: function (e) {
@@ -38,8 +42,6 @@ const pg: pgPromise.IMain<{}, IClient> = pgPromise(options);
 export const pgPool = pg(`postgres://${EnvLoader.getPropertyOrFail('PG_USER')}:${EnvLoader.getPropertyOrFail('PG_PASS')}@${EnvLoader.getPropertyOrFail('PG_HOST')}:5432/${EnvLoader.getPropertyOrFail('PG_NAME')}`);
 PgUtil.init(pgPool);
 
-// todo use PgUtil
-// todo use placeholders (?)
 export default class DbHelper {
 
     public static async createStorageTablesIfNeeded() {
@@ -261,12 +263,19 @@ END $$ LANGUAGE plpgsql;
                                  storageTable: string, ts: string, skey: string, body: string) {
         log.debug(`putValueInTable() namespace=${ns}, namespaceShardId=${shardId}
         ,storageTable=${storageTable}, skey=${skey}, jsonValue=${body}`);
-        const sql = `INSERT INTO ${storageTable} 
-                    (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload)
-                    values ('${ns}',  '${shardId}', '${nsIndex}', to_timestamp(${ts}),'${skey}', 'v1', '${body}')
-                    ON CONFLICT (namespace,namespace_shard_id,namespace_id,skey) DO UPDATE SET payload = '${body}'`
-        log.debug(sql);
-        return pgPool.none(sql).then(data => {
+        const sql = `INSERT INTO ${storageTable} (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload)
+                     values (\${ns}, \${shardId}, \${nsIndex}, to_timestamp(\${ts}), \${skey}, 'v1', \${body})
+                     ON CONFLICT (namespace, namespace_shard_id, namespace_id, skey) DO UPDATE SET payload = \${body}`;
+        const params = {
+            ns,
+            shardId,
+            nsIndex,
+            ts,
+            skey,
+            body
+        }
+        console.log(sql, params);
+        return pgPool.none(sql, params).then(data => {
             log.debug(data);
             return Promise.resolve();
         }).catch(err => {

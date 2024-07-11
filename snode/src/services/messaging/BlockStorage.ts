@@ -78,7 +78,7 @@ export class BlockStorage {
       null, calculatedHash);
     if (hashFromDb != null) {
       this.log.info('received block with hash %s, ' +
-        'already exists in the storage at index %d, ignoring',
+        'already exists in the storage at index %s, ignoring',
         calculatedHash, hashFromDb);
       return false;
     }
