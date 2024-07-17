@@ -1,4 +1,3 @@
-import config from '../config';
 import {Injectable, Logger} from "@nestjs/common";
 import {IDatabase} from "pg-promise";
 const {DateTime} = require("luxon");

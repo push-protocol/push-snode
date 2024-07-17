@@ -1,6 +1,8 @@
 import chai from 'chai'
 import 'mocha'
 import DbHelper from '../src/helpers/dbHelper'
+import {Container} from "node-docker-api/lib/container";
+import {filter} from "lodash";
 
 chai.should()
 const crypto = require("crypto");
