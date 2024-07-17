@@ -140,7 +140,6 @@ external/
 
 # devtools secrets
 src/devtools/secrets.json
-yarn.lock
 
 # WebStorm
 .idea/
