@@ -137,12 +137,9 @@ logs/*
 .env
 epns-firebase-adminsdk.json
 external/
-package-lock.json
-yarn.lock
 
 # devtools secrets
 src/devtools/secrets.json
-yarn.lock
 
 # WebStorm
 .idea/
