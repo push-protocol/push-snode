@@ -13,7 +13,6 @@ import {DateTime} from "ts-luxon";
 import DbHelper from "../src/helpers/dbHelper";
 
 
-
 EnvLoader.loadEnvOrFail();
 
 class VNode1Constants {
