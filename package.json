@@ -3,11 +3,6 @@
   "version": "0.1",
   "description": "storage node",
   "main": "src/app.ts",
-"husky": {
-    "hooks": {
-      "pre-commit": "pretty-quick --staged"
-    }
-  },
   "scripts": {
     "build": "rimraf ./build && tsc",
     "dev": "ts-node-dev --respawn --inspect=9229 --transpile-only ./src/app.ts",
@@ -21,7 +16,7 @@
     "lint:eslint": "eslint --ignore-path .gitignore --ext .ts",
     "lint:js": "npm run lint:eslint src/",
     "lint:fix": "npm run lint:js -- --fix",
-    "format": "npx prettier --write .",
+    "format": "npx prettier --write '**/*.{js,ts,json,md,css,html,scss}'",
     "prepare": "husky install"
   },
   "repository": {
@@ -124,7 +119,7 @@
     "aws-sdk": "2.770.0",
     "eslint-config-prettier": "^4.2.0",
     "eslint-plugin-prettier": "^3.0.1",
-    "husky": "^9.1.0",
+    "husky": "^8.0.0",
     "jest": "^24.1.0",
     "mocha": "^9.1.3",
     "nodemon": "^2.0.1",
