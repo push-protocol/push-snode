@@ -11,9 +11,9 @@
     "start": "nodemon",
     "inspect": "nodemon --inspect src/app.ts",
     "test": "mocha --inspect=9229 -r ts-node/register tests/**/*.test.ts --require tests/root.ts --serial",
-    "lint": "eslint src/**/*.ts",
-    "lint:fix": "eslint --fix src/**/*.ts",
-    "format": "prettier --write src/**/*.ts",
+    "lint": "eslint '**/*.{js,ts,jsx,tsx}'",
+    "lint:fix": "eslint --fix '**/*.{js,ts,jsx,tsx}'",
+    "format": "prettier --write '**/*.{js,ts,jsx,tsx}'",
     "prepare": "husky"
   },
   "husky": {

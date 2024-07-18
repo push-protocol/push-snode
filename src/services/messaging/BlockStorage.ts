@@ -1,20 +1,20 @@
-import {Service} from "typedi";
-import {WinstonUtil} from "../../utilz/winstonUtil";
-import {Logger} from "winston";
-import {MySqlUtil} from "../../utilz/mySqlUtil";
-import {MessageBlock, MessageBlockUtil} from "../messaging-common/messageBlock";
-import StrUtil from "../../utilz/strUtil";
-import {Coll} from "../../utilz/coll";
-import {Check} from "../../utilz/check";
-import DbHelper from "../../helpers/dbHelper";
+import { Service } from 'typedi'
+import { Logger } from 'winston'
+
+import { Check } from '../../utilz/check'
+import { Coll } from '../../utilz/coll'
+import { MySqlUtil } from '../../utilz/mySqlUtil'
+import StrUtil from '../../utilz/strUtil'
+import { WinstonUtil } from '../../utilz/winstonUtil'
+import { MessageBlock } from '../messaging-common/messageBlock'
 
 // stores everything in MySQL
 @Service()
 export class BlockStorage {
-  public log: Logger = WinstonUtil.newLog(BlockStorage);
+  public log: Logger = WinstonUtil.newLog(BlockStorage)
 
   public async postConstruct() {
-    await this.createStorageTablesIfNeeded();
+    await this.createStorageTablesIfNeeded()
   }
 
   private async createStorageTablesIfNeeded() {
@@ -27,7 +27,7 @@ export class BlockStorage {
             PRIMARY KEY (object_hash)
         ) ENGINE = InnoDB
           DEFAULT CHARSET = utf8;
-    `);
+    `)
 
     await MySqlUtil.insert(`
         CREATE TABLE IF NOT EXISTS dset_queue_mblock
@@ -41,7 +41,7 @@ export class BlockStorage {
             FOREIGN KEY (object_hash) REFERENCES blocks (object_hash)
         ) ENGINE = InnoDB
           DEFAULT CHARSET = utf8;
-    `);
+    `)
 
     await MySqlUtil.insert(`
         CREATE TABLE IF NOT EXISTS dset_client
@@ -56,7 +56,7 @@ export class BlockStorage {
             UNIQUE KEY uniq_dset_name_and_target (queue_name, target_node_id)
         ) ENGINE = InnoDB
           DEFAULT CHARSET = utf8;
-    `);
+    `)
 
     await MySqlUtil.insert(`
         CREATE TABLE IF NOT EXISTS contract_shards
@@ -67,40 +67,51 @@ export class BlockStorage {
         ) ENGINE = InnoDB
           DEFAULT CHARSET = utf8;
 
-    `);
+    `)
   }
 
-  async saveBlockWithShardData(mb: MessageBlock, calculatedHash: string, shardSet: Set<number>): Promise<boolean> {
+  async saveBlockWithShardData(
+    mb: MessageBlock,
+    calculatedHash: string,
+    shardSet: Set<number>
+  ): Promise<boolean> {
     // NOTE: the code already atomically updates the db ,
     //  so let's drop select because it's excessive)
-    let hashFromDb = await MySqlUtil.queryOneValueOrDefault(
+    const hashFromDb = await MySqlUtil.queryOneValueOrDefault(
       'SELECT object_hash FROM blocks where object_hash=?',
-      null, calculatedHash);
+      null,
+      calculatedHash
+    )
     if (hashFromDb != null) {
-      this.log.info('received block with hash %s, ' +
-        'already exists in the storage at index %s, ignoring',
-        calculatedHash, hashFromDb);
-      return false;
+      this.log.info(
+        'received block with hash %s, ' + 'already exists in the storage at index %s, ignoring',
+        calculatedHash,
+        hashFromDb
+      )
+      return false
     }
     // insert block
-    this.log.info('received block with hash %s, adding to the db', calculatedHash);
-    const objectAsJson = JSON.stringify(mb);
-    const shardSetAsJson = JSON.stringify(Coll.setToArray(shardSet));
+    this.log.info('received block with hash %s, adding to the db', calculatedHash)
+    const objectAsJson = JSON.stringify(mb)
+    const shardSetAsJson = JSON.stringify(Coll.setToArray(shardSet))
     const res = await MySqlUtil.insert(
       `INSERT
            IGNORE
        INTO blocks(object, object_hash, object_shards)
        VALUES (?, ?, ?)`,
-      objectAsJson, calculatedHash, shardSetAsJson);
-    let requiresProcessing = res.affectedRows === 1;
+      objectAsJson,
+      calculatedHash,
+      shardSetAsJson
+    )
+    const requiresProcessing = res.affectedRows === 1
     if (!requiresProcessing) {
-      return false;
+      return false
     }
     // insert block to shard mapping
-    let valuesStr = '';
-    let valuesArr = [];
+    let valuesStr = ''
+    const valuesArr = []
     for (const shardId of shardSet) {
-      valuesArr.push(calculatedHash, shardId);
+      valuesArr.push(calculatedHash, shardId)
       valuesStr += valuesStr.length == 0 ? '(? , ?)' : ',(? , ?)'
     }
     const res2 = await MySqlUtil.insert(
@@ -109,8 +120,9 @@ export class BlockStorage {
        INTO dset_queue_mblock(object_hash, object_shard)
        VALUES
            ${valuesStr}`,
-      ...valuesArr);
-    return true;
+      ...valuesArr
+    )
+    return true
   }
 
   /**
@@ -120,15 +132,17 @@ export class BlockStorage {
    */
   public async loadNodeShards(): Promise<Set<number> | null> {
     const shardsAssigned = await MySqlUtil.queryOneValueOrDefault<string>(
-      'select shards_assigned from contract_shards order by ts desc limit 1', null);
-    let result: Set<number>;
+      'select shards_assigned from contract_shards order by ts desc limit 1',
+      null
+    )
+    let result: Set<number>
     if (shardsAssigned != null && !StrUtil.isEmpty(shardsAssigned)) {
-      const arr = JSON.parse(shardsAssigned);
-      result = new Set(arr);
+      const arr = JSON.parse(shardsAssigned)
+      result = new Set(arr)
     } else {
-      result = new Set<number>();
+      result = new Set<number>()
     }
-    return result;
+    return result
   }
 
   /**
@@ -137,9 +151,12 @@ export class BlockStorage {
    * @param nodeShards
    */
   public async saveNodeShards(nodeShards: Set<number>): Promise<void> {
-    let arr = Coll.setToArray(nodeShards);
-    let arrAsJson = JSON.stringify(arr);
-    await MySqlUtil.insert('INSERT IGNORE INTO contract_shards(shards_assigned) VALUES(?)', arrAsJson);
+    const arr = Coll.setToArray(nodeShards)
+    const arrAsJson = JSON.stringify(arr)
+    await MySqlUtil.insert(
+      'INSERT IGNORE INTO contract_shards(shards_assigned) VALUES(?)',
+      arrAsJson
+    )
   }
 
   /**
@@ -154,41 +171,47 @@ export class BlockStorage {
    * @param shardsToLookFor shards filter
    * @param handler callback for processing
    */
-  public async iterateAllStoredBlocks(shardCountFromStorageContract: number,
-                                      pageSize: number,
-                                      shardsToLookFor: Set<number>,
-                                      handler: (messageBlockJson: string,
-                                                messageBlockHash: string,
-                                                messageBlockShards: Set<number>) => Promise<void>) {
+  public async iterateAllStoredBlocks(
+    shardCountFromStorageContract: number,
+    pageSize: number,
+    shardsToLookFor: Set<number>,
+    handler: (
+      messageBlockJson: string,
+      messageBlockHash: string,
+      messageBlockShards: Set<number>
+    ) => Promise<void>
+  ) {
     if (shardsToLookFor.size == 0) {
-      this.log.debug('iterateAllStoredBlocks(): no shards to unpack ');
-      return;
+      this.log.debug('iterateAllStoredBlocks(): no shards to unpack ')
+      return
     }
     // [1,2] => (1, 2)
-    let shardsAsCsv = Array.from(shardsToLookFor.keys()).join(',');
+    const shardsAsCsv = Array.from(shardsToLookFor.keys()).join(',')
 
     // query size
-    let queryLimit = pageSize;
-    Check.isTrue(queryLimit > 0 && queryLimit < 1000, 'bad query limit');
-    let subqueryRowLimit = Math.round(3 * pageSize * shardCountFromStorageContract / 2);
-    Check.isTrue(shardCountFromStorageContract > 0 && shardCountFromStorageContract < 1000,
-      'bad subquery limit');
+    const queryLimit = pageSize
+    Check.isTrue(queryLimit > 0 && queryLimit < 1000, 'bad query limit')
+    const subqueryRowLimit = Math.round((3 * pageSize * shardCountFromStorageContract) / 2)
+    Check.isTrue(
+      shardCountFromStorageContract > 0 && shardCountFromStorageContract < 1000,
+      'bad subquery limit'
+    )
 
     // remember last N object hashes;
     // this is the amount of a page that should be enough to remove duplicate object hashes
     // i.e. 32 shards x 30 rows = approx 1000 rows of history
-    let cache = new Set<string>();
-    let cacheMaxSize = 2 * subqueryRowLimit;
+    const cache = new Set<string>()
+    const cacheMaxSize = 2 * subqueryRowLimit
 
-    let fromId = null;
-    let rows = null;
+    let fromId = null
+    let rows = null
     do {
       /*
       Finds rows
         | minId | object_hash | shardsJson |
         | 3     | 1           | [2,1]      |
      */
-      rows = await MySqlUtil.queryArr<{ minId: number, object_hash: string, shardsJson: string }>(
+      rows = await MySqlUtil.queryArr<{ minId: number; object_hash: string; shardsJson: string }>(
         `SELECT MIN(id) as minId, object_hash, CONCAT('[', GROUP_CONCAT(object_shard), ']') as shardsJson
          FROM (SELECT id, object_hash, object_shard
                FROM dset_queue_mblock
@@ -199,30 +222,37 @@ export class BlockStorage {
          GROUP BY object_hash
          ORDER BY minId DESC
          LIMIT ?`,
-        fromId, fromId, subqueryRowLimit, queryLimit);
+        fromId,
+        fromId,
+        subqueryRowLimit,
+        queryLimit
+      )
 
       for (const row of rows) {
-        const mbHash = row.object_hash;
+        const mbHash = row.object_hash
         if (!cache.has(mbHash)) {
-          const row = await MySqlUtil.queryOneRow<{ object: string, object_shards: string }>(
-            'select object, object_shards from blocks where object_hash=?', mbHash);
+          const row = await MySqlUtil.queryOneRow<{ object: string; object_shards: string }>(
+            'select object, object_shards from blocks where object_hash=?',
+            mbHash
+          )
           if (row == null || StrUtil.isEmpty(row.object)) {
-            this.log.error('skipping objectHash=%s because there is no matching shard info in blocks table',
-              mbHash);
-            continue;
+            this.log.error(
+              'skipping objectHash=%s because there is no matching shard info in blocks table',
+              mbHash
+            )
+            continue
           }
-          const mbShardSet = Coll.parseAsNumberSet(row.object_shards);
-          await handler(row.object, mbHash, mbShardSet);
-          cache.add(mbHash);
+          const mbShardSet = Coll.parseAsNumberSet(row.object_shards)
+          await handler(row.object, mbHash, mbShardSet)
+          cache.add(mbHash)
           if (cache.size > cacheMaxSize) {
-            const firstCachedValue = cache.values().next().value;
-            cache.delete(firstCachedValue);
+            const firstCachedValue = cache.values().next().value
+            cache.delete(firstCachedValue)
           }
         }
-        fromId = Math.min(fromId, row.minId);
+        fromId = Math.min(fromId, row.minId)
       }
-      Check.isTrue(cache.size <= cacheMaxSize);
-    } while (rows != null && rows.length > 0);
+      Check.isTrue(cache.size <= cacheMaxSize)
+    } while (rows != null && rows.length > 0)
   }
-
 }

@@ -1,8 +1,9 @@
 import { createClient, RedisClientType } from 'redis'
-import config from '../../config'
-import { Logger } from 'winston'
-import { WinstonUtil } from '../../utilz/winstonUtil'
 import { Service } from 'typedi'
+import { Logger } from 'winston'
+
+import config from '../../config'
+import { WinstonUtil } from '../../utilz/winstonUtil'
 
 @Service()
 export class RedisClient {

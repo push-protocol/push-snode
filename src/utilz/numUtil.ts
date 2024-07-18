@@ -11,7 +11,7 @@ export class NumUtil {
   }
 
   static isRoundedInteger(valN: number) {
-    return Number.isInteger(valN);
+    return Number.isInteger(valN)
   }
 
   public static toString(value: number) {

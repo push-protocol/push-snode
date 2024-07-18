@@ -1,7 +1,7 @@
-import winston from 'winston';
-import config from '../config';
-import {WinstonUtil} from "../utilz/winstonUtil";
+import winston from 'winston'
 
+import config from '../config'
+import { WinstonUtil } from '../utilz/winstonUtil'
 
 const customLevels = {
   levels: {
@@ -14,7 +14,7 @@ const customLevels = {
     saved: 6,
     verbose: 7,
     debug: 8,
-    silly: 9,
+    silly: 9
   },
   colors: {
     info: 'green',
@@ -23,16 +23,16 @@ const customLevels = {
     saved: 'italic white',
     debug: 'yellow'
   }
-};
+}
 
-let transports = [];
+const transports = []
 transports.push(
   // Console should always be at 0 and dynamic log should always be at 2
   // remember and not change it as it's manually baked in hijackLogger
   WinstonUtil.consoleTransport,
   WinstonUtil.debugFileTransport,
-  WinstonUtil.errorFileTransport,
-);
+  WinstonUtil.errorFileTransport
+)
 // WE SIMPLY REDIRECT ALL TO winstonUtil formatter x winstonUtil transports
 // this instance is being used across the whole codebase
 const LoggerInstance = winston.createLogger({
@@ -40,8 +40,8 @@ const LoggerInstance = winston.createLogger({
   levels: customLevels.levels,
   format: WinstonUtil.createFormat2WhichRendersClassName(),
   transports
-});
+})
 
-winston.addColors(customLevels.colors);
+winston.addColors(customLevels.colors)
 
-export default LoggerInstance;
+export default LoggerInstance

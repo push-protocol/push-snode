@@ -1,4 +1,5 @@
 import { NextFunction, Request, Response } from 'express'
+
 import { WinstonUtil } from './winstonUtil'
 
 export class ExpressUtil {

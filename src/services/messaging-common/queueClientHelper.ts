@@ -1,8 +1,9 @@
-import { Check } from '../../utilz/check'
-import { ValidatorContractState } from './validatorContractState'
-import { MySqlUtil } from '../../utilz/mySqlUtil'
 import { Logger } from 'winston'
+
+import { Check } from '../../utilz/check'
+import { MySqlUtil } from '../../utilz/mySqlUtil'
 import { WinstonUtil } from '../../utilz/winstonUtil'
+import { ValidatorContractState } from './validatorContractState'
 
 export class QueueClientHelper {
   private static log: Logger = WinstonUtil.newLog(QueueClientHelper)

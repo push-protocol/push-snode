@@ -1,12 +1,12 @@
-import { Service } from 'typedi'
+import { JsonRpcProvider } from '@ethersproject/providers/src.ts/json-rpc-provider'
 import { Contract, ethers, Wallet } from 'ethers'
-import StrUtil from '../../utilz/strUtil'
-
 import fs, { readFileSync } from 'fs'
 import path from 'path'
-import { JsonRpcProvider } from '@ethersproject/providers/src.ts/json-rpc-provider'
-import { EnvLoader } from '../../utilz/envLoader'
+import { Service } from 'typedi'
 import { Logger } from 'winston'
+
+import { EnvLoader } from '../../utilz/envLoader'
+import StrUtil from '../../utilz/strUtil'
 import { WinstonUtil } from '../../utilz/winstonUtil'
 
 /*

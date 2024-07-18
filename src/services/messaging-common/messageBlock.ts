@@ -9,15 +9,16 @@
  { s1, 0xD}, { s2, 0xE}, { s3, 0xF},
  { d1, 0x1}, { d2, 0x2}, { d3, 0x3} ]
  */
-import {Coll} from '../../utilz/coll'
+import { Logger } from 'winston'
+
+import { Check } from '../../utilz/check'
+import { Coll } from '../../utilz/coll'
+import { EthSig } from '../../utilz/ethSig'
+import { EthUtil } from '../../utilz/EthUtil'
+import { NumUtil } from '../../utilz/numUtil'
+import { ObjectHasher } from '../../utilz/objectHasher'
 import StrUtil from '../../utilz/strUtil'
-import {EthSig} from '../../utilz/ethSig'
-import {Logger} from 'winston'
-import {WinstonUtil} from '../../utilz/winstonUtil'
-import {ObjectHasher} from '../../utilz/objectHasher'
-import {EthUtil} from '../../utilz/EthUtil'
-import {Check} from '../../utilz/check'
-import {NumUtil} from "../../utilz/numUtil";
+import { WinstonUtil } from '../../utilz/winstonUtil'
 
 /*
 ex:
@@ -345,10 +346,10 @@ export class MessageBlockUtil {
     const shards = new Set<number>()
     for (const fi of block.responses) {
       for (const recipient of fi.header.recipientsResolved) {
-        let shardId = this.calculateAffectedShard(recipient.addr, shardCount);
+        const shardId = this.calculateAffectedShard(recipient.addr, shardCount)
         if (shardId == null) {
-          this.log.error('cannot calculate shardId for recipient %o in %o', recipient, fi);
-          continue;
+          this.log.error('cannot calculate shardId for recipient %o in %o', recipient, fi)
+          continue
         }
         shards.add(shardId)
       }
@@ -364,35 +365,36 @@ export class MessageBlockUtil {
   // lets read this value from a contract
   public static calculateAffectedShard(recipientAddr: string, shardCount: number): number | null {
     if (StrUtil.isEmpty(recipientAddr)) {
-      return null;
+      return null
     }
     let shardId: number = null
     const addrObj = EthUtil.parseCaipAddress(recipientAddr)
-    if (addrObj != null
-      && !StrUtil.isEmpty(addrObj.addr)
-      && addrObj.addr.startsWith('0x')
-      && addrObj.addr.length > 4) {
-      const firstByteAsHex = addrObj.addr.substring(2, 4).toLowerCase();
-      shardId = Number.parseInt(firstByteAsHex, 16);
+    if (
+      addrObj != null &&
+      !StrUtil.isEmpty(addrObj.addr) &&
+      addrObj.addr.startsWith('0x') &&
+      addrObj.addr.length > 4
+    ) {
+      const firstByteAsHex = addrObj.addr.substring(2, 4).toLowerCase()
+      shardId = Number.parseInt(firstByteAsHex, 16)
     }
     // 2) try to get sha256 otherwise
     if (shardId == null) {
-      const firstByteAsHex = ObjectHasher.hashToSha256(recipientAddr).toLowerCase().substring(0, 2);
-      shardId = Number.parseInt(firstByteAsHex, 16);
+      const firstByteAsHex = ObjectHasher.hashToSha256(recipientAddr).toLowerCase().substring(0, 2)
+      shardId = Number.parseInt(firstByteAsHex, 16)
     }
-    Check.notNull(shardId);
-    Check.isTrue(shardId >= 0 && shardId <= 255 && NumUtil.isRoundedInteger(shardId));
-    Check.isTrue(shardCount >= 1);
-    return shardId % shardCount;
+    Check.notNull(shardId)
+    Check.isTrue(shardId >= 0 && shardId <= 255 && NumUtil.isRoundedInteger(shardId))
+    Check.isTrue(shardCount >= 1)
+    return shardId % shardCount
   }
 
   public static getBlockCreationTimeMillis(block: MessageBlock): number | null {
-    if (block.responsesSignatures.length > 0
-      && block.responsesSignatures[0].length > 0) {
-      const sig = block.responsesSignatures[0][0];
-      return sig?.nodeMeta?.tsMillis;
+    if (block.responsesSignatures.length > 0 && block.responsesSignatures[0].length > 0) {
+      const sig = block.responsesSignatures[0][0]
+      return sig?.nodeMeta?.tsMillis
     }
-    return null;
+    return null
   }
 
   public static checkBlock(block: MessageBlock, validatorsFromContract: Set<string>): CheckResult {
@@ -463,10 +465,10 @@ export class CheckResult {
   err: string
 
   static failWithText(err: string): CheckResult {
-    return {success: false, err: err}
+    return { success: false, err: err }
   }
 
   static ok(): CheckResult {
-    return {success: true, err: ''}
+    return { success: true, err: '' }
   }
 }
