@@ -3,7 +3,7 @@
   "version": "0.1",
   "description": "storage node",
   "main": "src/app.ts",
-  "husky": {
+"husky": {
     "hooks": {
       "pre-commit": "pretty-quick --staged"
     }
