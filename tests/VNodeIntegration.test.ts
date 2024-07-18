@@ -8,9 +8,10 @@ const expect = chai.expect
 import assert from 'assert-ts';
 
 const axios = require('axios');
-import { RandomUtil, PromiseUtil, EnvLoader, DateUtil, VNodeClient } from 'dstorage-common'
+import { RandomUtil, PromiseUtil, EnvLoader, DateUtil, VNodeClient } from 'dstorage-common';
 import {DateTime} from "ts-luxon";
 import DbHelper from "../src/helpers/dbHelper";
+
 
 
 EnvLoader.loadEnvOrFail();
