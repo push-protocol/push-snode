@@ -17,8 +17,14 @@
     "lint:js": "npm run lint:eslint src/",
     "lint:fix": "npm run lint:js -- --fix",
     "format": "npx prettier --write '**/*.{js,ts,json,md,css,html,scss}'",
-    "prepare": "husky install"
+    "prepare": "husky install",
+    "precommit": "npm run format"
   },
+  "husky": {
+  "hooks": {
+    "pre-commit": "npm run precommit"
+  }
+},
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ethereum-push-notification-system/epns-push-register-service.git"
