@@ -8,23 +8,26 @@
     "dev": "ts-node-dev --respawn --inspect=9229 --transpile-only ./src/app.ts",
     "dev6001": "ts-node-dev --inspect=6001 --transpile-only ./src/app.ts",
     "dev6002": "ts-node-dev --inspect=6002 --transpile-only ./src/app.ts",
-    "heroku-postbuild": "npm run build",
     "start": "nodemon",
     "inspect": "nodemon --inspect src/app.ts",
     "test": "mocha --inspect=9229 -r ts-node/register tests/**/*.test.ts --require tests/root.ts --serial",
-    "lint": "npm run lint:js ",
-    "lint:eslint": "eslint --ignore-path .gitignore --ext .ts",
-    "lint:js": "npm run lint:eslint src/",
-    "lint:fix": "npm run lint:js -- --fix",
-    "format": "npx prettier --write '**/*.{js,ts,json,md,css,html,scss}'",
-    "prepare": "husky install",
-    "precommit": "npm run format"
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint --fix src/**/*.ts",
+    "format": "prettier --write src/**/*.ts",
+    "prepare": "husky"
   },
   "husky": {
-  "hooks": {
-    "pre-commit": "npm run precommit"
-  }
-},
+    "hooks": {
+      "pre-commit": "lint-staged"
+    }
+  },
+  "lint-staged": {
+    "*.js": [
+      "eslint — fix",
+      "prettier — write",
+      "git add"
+    ]
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ethereum-push-notification-system/epns-push-register-service.git"
@@ -120,16 +123,19 @@
     "@types/mongoose": "^5.3.17",
     "@types/mysql": "^2.15.21",
     "@types/node": "^10.17.60",
-    "@typescript-eslint/eslint-plugin": "^1.7.0",
-    "@typescript-eslint/parser": "^1.7.0",
+    "@typescript-eslint/eslint-plugin": "^7.16.1",
+    "@typescript-eslint/parser": "^7.16.1",
     "aws-sdk": "2.770.0",
+    "eslint": "^8.7.0",
     "eslint-config-prettier": "^4.2.0",
     "eslint-plugin-prettier": "^3.0.1",
-    "husky": "^8.0.0",
+    "eslint-plugin-simple-import-sort": "^12.1.1",
+    "eslint-plugin-unused-imports": "^4.0.0",
+    "husky": "^9.0.11",
     "jest": "^24.1.0",
     "mocha": "^9.1.3",
     "nodemon": "^2.0.1",
-    "prettier": "^1.17.0",
+    "prettier": "^3.3.3",
     "pretty-quick": "^4.0.0",
     "ts-jest": "^24.0.0",
     "ts-node": "^10.4.0",
