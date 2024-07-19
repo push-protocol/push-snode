@@ -1,7 +1,8 @@
+import cors from 'cors'
 import express from 'express'
-const bodyParser = require('body-parser')
-const cors = require('cors')
+
 import routes from '../api/index'
+
 export default ({ app }: { app: express.Application }) => {
   app.get('/status', (req, res) => {
     res.status(200).end()
@@ -38,7 +39,7 @@ export default ({ app }: { app: express.Application }) => {
     }
     return next(err)
   })
-  app.use((err, req, res) => {
+  app.use((err, req, res, next) => {
     res.status(err.status || 500)
     res.json({
       error: {

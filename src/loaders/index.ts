@@ -10,12 +10,12 @@ import logger from './logger'
 //We have to import at least all the events once so they can be triggered
 // import './events';
 
-export default async ({ expressApp, server, testMode }) => {
+export default async ({ expressApp, server, testMode = false }) => {
   logger.info('loaders init')
 
   // await dependencyInjectorLoader();
 
-  await expressLoader({ app: expressApp })
+  expressLoader({ app: expressApp })
 
   // await socketLoader({ server: server });
 }

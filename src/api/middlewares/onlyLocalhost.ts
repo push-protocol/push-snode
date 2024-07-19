@@ -1,9 +1,10 @@
+import dns from 'dns'
+import os from 'os'
 import { Container } from 'typedi'
+import { Logger } from 'winston'
 
 import config from '../../config'
 
-const dns = require('dns')
-const os = require('os')
 const ifaces = os.networkInterfaces()
 
 /**
@@ -12,7 +13,7 @@ const ifaces = os.networkInterfaces()
  * @param {*} next  Express next Function
  */
 const onlyLocalhost = async (req, res, next) => {
-  const Logger = Container.get('logger')
+  const Logger: Logger = Container.get('logger')
   try {
     // Check if ip is localhost and only continue
     const ip = req.connection.remoteAddress

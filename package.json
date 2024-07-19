@@ -29,7 +29,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ethereum-push-notification-system/epns-push-register-service.git"
+    "url": "git+https://github.com/push-protocol/push-snode.git"
   },
   "keywords": [
     "epns",
@@ -38,12 +38,12 @@
     "ios",
     "android"
   ],
-  "author": "Harsh Rajat",
+  "author": "Push Protocol",
   "license": "UNLICENSED",
   "bugs": {
-    "url": "https://github.com/ethereum-push-notification-system/epns-push-register-service/issues"
+    "url": "https://github.com/push-protocol/push-snode/issues"
   },
-  "homepage": "https://github.com/ethereum-push-notification-system/epns-push-register-service#readme",
+  "homepage": "https://github.com/push-protocol/push-snode#readme",
   "dependencies": {
     "@rodrigogs/mysql-events": "0.6.0",
     "agenda": "^2.0.2",
@@ -122,6 +122,7 @@
     "@types/mongoose": "^5.3.17",
     "@types/mysql": "^2.15.21",
     "@types/node": "^10.17.60",
+    "@types/object-hash": "^3.0.6",
     "@typescript-eslint/eslint-plugin": "^7.16.1",
     "@typescript-eslint/parser": "^7.16.1",
     "aws-sdk": "2.770.0",
