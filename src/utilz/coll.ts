@@ -1,7 +1,6 @@
 // CollectionUtils
 // all the proper type safe way to work with JS collections/sets/arrays
 export class Coll {
-
   public static arrayToMap<K extends keyof V, V>(arr: V[], keyField: K): Map<V[K], V> {
     if (arr == null || arr.length == 0) {
       return new Map()
@@ -13,20 +12,19 @@ export class Coll {
     if (map == null || map.size == 0) {
       return []
     }
-    return [...map.values()];
+    return [...map.values()]
   }
 
   public static mapKeysToArray<K>(map: Map<K, any>): K[] {
     if (map == null || map.size == 0) {
       return []
     }
-    return [...map.keys()];
+    return [...map.keys()]
   }
-
 
   public static arrayToSet<V>(arr: V[]): Set<V> {
     if (arr == null) {
-      return new Set<V>();
+      return new Set<V>()
     }
     return new Set<V>(arr)
   }
@@ -45,59 +43,65 @@ export class Coll {
 
   public static setToArray<V>(set: Set<V>): V[] {
     if (set == null) {
-      return [];
+      return []
     }
     return Array.from(set.keys())
   }
 
   // [1,2,3] - [2,3] = [1]
   public static substractSet<T>(set1: Set<T>, set2: Set<T>): Set<T> {
-    return new Set([...set1].filter(x => !set2.has(x)));
+    return new Set([...set1].filter((x) => !set2.has(x)))
   }
 
   // [1,2,3] x [2, 3] = [2,3]
   public static intersectSet<T>(set1: Set<T>, set2: Set<T>): Set<T> {
-    return new Set([...set1].filter(x => set2.has(x)));
+    return new Set([...set1].filter((x) => set2.has(x)))
   }
 
   // [1,2,3] x [2, 3] = [2,3]
   public static addSet<T>(set1: Set<T>, set2: Set<T>): Set<T> {
-    return new Set([...set1, ...set2]);
+    return new Set([...set1, ...set2])
   }
 
   public static sortNumbersAsc(array: number[]) {
     if (array == null || array.length == 0) {
-      return;
+      return
     }
     array.sort((a, b) => {
-      return a - b;
+      return a - b
     })
   }
 
   public static isEqualSet<T>(a: Set<T>, b: Set<T>) {
-    if (a === b) return true;
-    if (a.size !== b.size) return false;
+    if (a === b) return true
+    if (a.size !== b.size) return false
     for (const value of a) {
       if (!b.has(value)) {
-        return false;
+        return false
       }
     }
-    return true;
+    return true
   }
 
   // parse '[1,2,3]' into Set<number>: 1,2,3
   public static parseAsNumberSet(jsonArray: string): Set<number> {
-    const arr: number[] = JSON.parse(jsonArray);
-    return Coll.arrayToSet(arr);
+    const arr: number[] = JSON.parse(jsonArray)
+    return Coll.arrayToSet(arr)
   }
 
   // store set 1,2,3 as array: [1,2,3]
   public static numberSetToJson(s: Set<number>): string {
-    return JSON.stringify([...s]);
+    return JSON.stringify([...s])
   }
 
   // set 1,2,3 to sql: ('1','2','3')
   public static numberSetToSqlQuoted(s: Set<number>): string {
-    return '(' + Coll.setToArray(s).map(num => "'" + num + "'").join(',') + ')';
+    return (
+      '(' +
+      Coll.setToArray(s)
+        .map((num) => "'" + num + "'")
+        .join(',') +
+      ')'
+    )
   }
 }

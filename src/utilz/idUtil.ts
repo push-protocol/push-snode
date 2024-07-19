@@ -1,8 +1,7 @@
-import * as uuid from "uuid";
+import * as uuid from 'uuid'
 
 export default class IdUtil {
-
-    public static getUuidV4(): string {
-        return uuid.v4();
-    }
+  public static getUuidV4(): string {
+    return uuid.v4()
+  }
 }

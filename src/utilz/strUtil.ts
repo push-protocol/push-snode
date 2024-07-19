@@ -1,22 +1,21 @@
 export default class StrUtil {
-
   public static isEmpty(s: string): boolean {
     if (s == null) {
-      return true;
+      return true
     }
     if (typeof s !== 'string') {
-      return false;
+      return false
     }
     return s.length === 0
   }
 
   public static isHex(s: string): boolean {
     if (StrUtil.isEmpty(s)) {
-      return false;
+      return false
     }
-    let pattern = /^[A-F0-9]+$/i;
-    let result = pattern.test(s);
-    return result;
+    const pattern = /^[A-F0-9]+$/i
+    const result = pattern.test(s)
+    return result
   }
 
   /**
@@ -25,22 +24,25 @@ export default class StrUtil {
    * @param defaultValue
    */
   public static getOrDefault(s: string, defaultValue: string) {
-    return StrUtil.isEmpty(s) ? defaultValue : s;
+    return StrUtil.isEmpty(s) ? defaultValue : s
   }
 
   public static toStringDeep(obj: any): string {
-    return JSON.stringify(obj, null, 4);
+    return JSON.stringify(obj, null, 4)
   }
 
   // https://ethereum.stackexchange.com/questions/2045/is-ethereum-wallet-address-case-sensitive
   public static normalizeEthAddress(addr: string): string {
-    return addr;
+    return addr
   }
 
-  public static replaceAll(str: string,
-                             find: string[], replace: string[],
-                             regexFlags: string):string {
-    var gFlag = false
+  public static replaceAll(
+    str: string,
+    find: string[],
+    replace: string[],
+    regexFlags: string
+  ): string {
+    let gFlag = false
 
     if (typeof str !== 'string') {
       throw new TypeError('`str` parameter must be a string!')
@@ -74,12 +76,12 @@ export default class StrUtil {
       regexFlags = 'g'
     }
 
-    var done = []
-    var joined = find.join(')|(')
-    var regex = new RegExp('(' + joined + ')', regexFlags)
+    const done = []
+    const joined = find.join(')|(')
+    const regex = new RegExp('(' + joined + ')', regexFlags)
 
     return str.replace(regex, (match, ...finds) => {
-      var replaced
+      let replaced
 
       finds.some((found, index) => {
         if (found !== undefined) {
@@ -106,9 +108,9 @@ export default class StrUtil {
    * aaaa?bbbb?cccc? => aaaa$1bbbb$2cccc$3
    */
   public static replaceAllMySqlToPostre(s: string): string {
-    let cnt = 1;
+    let cnt = 1
     return s.replace(/\?/g, function () {
-      return `$${cnt++}`;
-    });
+      return `$${cnt++}`
+    })
   }
 }

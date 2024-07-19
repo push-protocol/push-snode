@@ -1,10 +1,11 @@
 // ------------------------------
 // reads other node queue fully, appends everything to the local queue/storage
-import {Logger} from 'winston'
-import {WinstonUtil} from '../../utilz/winstonUtil'
-import {MySqlUtil} from '../../utilz/mySqlUtil'
 import axios from 'axios'
-import {Consumer, QItem} from './queueTypes'
+import { Logger } from 'winston'
+
+import { MySqlUtil } from '../../utilz/mySqlUtil'
+import { WinstonUtil } from '../../utilz/winstonUtil'
+import { Consumer, QItem } from './queueTypes'
 
 export class QueueClient {
   public log: Logger = WinstonUtil.newLog(QueueClient)
@@ -66,12 +67,12 @@ export class QueueClient {
         }
         for (const item of reply.items) {
           endpointStats.downloadedItems++
-          let appendSuccessful = false;
+          let appendSuccessful = false
           try {
-            appendSuccessful = await this.consumer.accept(item);
+            appendSuccessful = await this.consumer.accept(item)
           } catch (e) {
-            this.log.error('error processing accept(): queue %s: ', this.queueName);
-            this.log.error(e);
+            this.log.error('error processing accept(): queue %s: ', this.queueName)
+            this.log.error(e)
           }
           if (appendSuccessful) {
             endpointStats.newItems++
@@ -113,7 +114,7 @@ export class QueueClient {
 
   public async readLastOffset(queueName: string, baseUri: string): Promise<number> {
     const url = `${baseUri}/api/v1/dset/queue/${queueName}/lastOffset`
-    const resp: { result: number } = await axios.get(url, {timeout: 3000})
+    const resp: { result: number } = await axios.get(url, { timeout: 3000 })
     return resp.result
   }
 }

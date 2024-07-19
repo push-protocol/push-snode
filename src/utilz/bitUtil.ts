@@ -1,4 +1,4 @@
-import {Coll} from "./coll";
+import { Coll } from './coll'
 
 export class BitUtil {
   /**
@@ -24,8 +24,8 @@ export class BitUtil {
       target = new Buffer(add.length)
       src.copy(target, 0, 0, src.length)
     }
-    var length = Math.min(target.length, add.length)
-    for (var i = 0; i < length; ++i) {
+    const length = Math.min(target.length, add.length)
+    for (let i = 0; i < length; ++i) {
       target[i] = target[i] ^ add[i]
     }
     return target
@@ -39,22 +39,22 @@ export class BitUtil {
     return Buffer.from(value, 'base64').toString('utf8')
   }
 
-  public static getBit(number:number, bitOffset:number) {
-    return (number & (1 << bitOffset)) === 0 ? 0 : 1;
+  public static getBit(number: number, bitOffset: number) {
+    return (number & (1 << bitOffset)) === 0 ? 0 : 1
   }
 
   public static bitsToPositions(number: number): number[] {
     // return null;
-    const result: number[] = [];
-    let position = 0;
+    const result: number[] = []
+    let position = 0
     while (number !== 0) {
       if ((number & 1) === 1) {
-        result.push(position);
+        result.push(position)
       }
-      number = number >>> 1;
-      position++;
+      number = number >>> 1
+      position++
     }
-    Coll.sortNumbersAsc(result);
-    return result;
+    Coll.sortNumbersAsc(result)
+    return result
   }
 }

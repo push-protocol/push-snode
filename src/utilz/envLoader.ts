@@ -1,17 +1,17 @@
 import dotenv from 'dotenv'
+
 import StrUtil from './strUtil'
 
 export class EnvLoader {
-
   public static loadEnvOrFail() {
     // loads all .env variables into process.env.* variables
     // Optional support for CONFIG_DIR variable
-    console.log(`config dir is ${process.env.CONFIG_DIR}`);
-    let options = {};
+    console.log(`config dir is ${process.env.CONFIG_DIR}`)
+    let options = {}
     if (process.env.CONFIG_DIR) {
-      options = {path: `${process.env.CONFIG_DIR}/.env`};
+      options = { path: `${process.env.CONFIG_DIR}/.env` }
     }
-    const envFound = dotenv.config(options);
+    const envFound = dotenv.config(options)
     if (envFound.error) {
       throw new Error("⚠️  Couldn't find .env file  ⚠️")
     }
@@ -31,10 +31,10 @@ export class EnvLoader {
     return val != null && val.toLowerCase() === 'true'
   }
 
-  public static getPropertyOrDefault(propName: string, def:string): string {
+  public static getPropertyOrDefault(propName: string, def: string): string {
     const val = process.env[propName]
     if (StrUtil.isEmpty(val)) {
-      return def;
+      return def
     }
     return val
   }

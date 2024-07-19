@@ -1,9 +1,10 @@
 import { Container } from 'typedi'
+
 import config from '../../config'
 
-var dns = require('dns')
-var os = require('os')
-var ifaces = os.networkInterfaces()
+const dns = require('dns')
+const os = require('os')
+const ifaces = os.networkInterfaces()
 
 /**
  * @param {*} req Express req Object
@@ -14,8 +15,8 @@ const onlyLocalhost = async (req, res, next) => {
   const Logger = Container.get('logger')
   try {
     // Check if ip is localhost and only continue
-    var ip = req.connection.remoteAddress
-    var host = req.get('host')
+    const ip = req.connection.remoteAddress
+    const host = req.get('host')
 
     if (config.environment === 'production') {
       // Return with unauthorized error

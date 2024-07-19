@@ -1,8 +1,9 @@
-import {Format, TransformableInfo} from 'logform'
-import {DateTime} from 'ts-luxon'
+import { Format, TransformableInfo } from 'logform'
+import { DateTime } from 'ts-luxon'
 import winston from 'winston'
+
+import { EnvLoader } from './envLoader'
 import StrUtil from './strUtil'
-import {EnvLoader} from './envLoader'
 
 /*
 Example usage:
@@ -52,17 +53,16 @@ I 230811 174624 [MyClass] Got alias List (SendMessage)
 
 */
 
-
 export class WinstonUtil {
   private static readonly CLASS_NAME_LENGTH = 23
-  private static readonly LOG_DIR = EnvLoader.getPropertyOrFail('LOG_DIR');
-  private static readonly LOG_LEVEL = EnvLoader.getPropertyOrFail('LOG_LEVEL');
-  private static loggerMap: Map<string, winston.Logger> = new Map();
+  private static readonly LOG_DIR = EnvLoader.getPropertyOrFail('LOG_DIR')
+  private static readonly LOG_LEVEL = EnvLoader.getPropertyOrFail('LOG_LEVEL')
+  private static loggerMap: Map<string, winston.Logger> = new Map()
 
   // all console writes drop here
   public static consoleTransport = new winston.transports.Console({
     format: WinstonUtil.createFormat2WhichRendersClassName()
-  });
+  })
 
   // add debug writes drop here
 
@@ -93,7 +93,7 @@ export class WinstonUtil {
   { "message": "Checking Node Version", "level": "info", "timestamp": "230809 180338", className?: "myClass"}
    */
   public static renderFormat2(info: TransformableInfo) {
-    const {timestamp, level, message, meta} = info
+    const { timestamp, level, message, meta } = info
     const levelFirstChar = level == null ? '' : level.toUpperCase()[0]
     const date = DateTime.now()
     const formattedDate = date.toFormat('yyMMdd HHmmss')
@@ -115,7 +115,7 @@ export class WinstonUtil {
       winston.format.timestamp({
         format: 'YYYY-MM-DD HH:mm:ss'
       }),
-      winston.format.errors({stack: true}),
+      winston.format.errors({ stack: true }),
       winston.format.splat(),
       winston.format.json(),
       winston.format.printf((info) => {
@@ -127,7 +127,7 @@ export class WinstonUtil {
 
   static createFormat2WhichRendersClassName(): Format {
     return winston.format.combine(
-      winston.format.errors({stack: true}),
+      winston.format.errors({ stack: true }),
       winston.format.splat(),
       winston.format.printf((info) => {
         return WinstonUtil.renderFormat2(info)
@@ -156,7 +156,7 @@ export class WinstonUtil {
         WinstonUtil.debugFileTransport,
         WinstonUtil.errorFileTransport
       ]
-    });
+    })
     WinstonUtil.loggerMap.set(loggerName, loggerObj)
     return loggerObj
   }

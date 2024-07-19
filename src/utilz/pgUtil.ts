@@ -1,10 +1,10 @@
-import {Logger} from 'winston'
-import {OkPacket, Pool} from 'mysql'
-import {WinstonUtil} from './winstonUtil'
-import {EnvLoader} from './envLoader'
-import StrUtil from "./strUtil";
-import pg from "pg-promise/typescript/pg-subset";
-import {IDatabase} from "pg-promise";
+import { IDatabase } from 'pg-promise'
+import pg from 'pg-promise/typescript/pg-subset'
+import { Logger } from 'winston'
+
+import { EnvLoader } from './envLoader'
+import StrUtil from './strUtil'
+import { WinstonUtil } from './winstonUtil'
 
 // PG PROMISE https://github.com/vitaly-t/pg-promise
 
@@ -13,10 +13,10 @@ import {IDatabase} from "pg-promise";
 export class PgUtil {
   private static log: Logger = WinstonUtil.newLog('pg')
   static logSql = false
-  static pool:IDatabase<{}, pg.IClient>; // todo unknown type ???
+  static pool: IDatabase<{}, pg.IClient> // todo unknown type ???
 
-  public static init(pool:IDatabase<{}, pg.IClient>) {
-    PgUtil.pool = pool;
+  public static init(pool: IDatabase<{}, pg.IClient>) {
+    PgUtil.pool = pool
     if (!PgUtil.logSql && EnvLoader.getPropertyAsBool('LOG_SQL_STATEMENTS')) {
       // todo add logging query + values
       PgUtil.logSql = true
@@ -61,26 +61,25 @@ export class PgUtil {
   }
 
   public static async update(query: string, ...sqlArgs: any[]): Promise<number> {
-    query = StrUtil.replaceAllMySqlToPostre(query);
-    this.log.debug(query, '     ---> args ', sqlArgs);
-    let result = await this.pool.result<number>(query, sqlArgs,r => r.rowCount);
-    return result;
+    query = StrUtil.replaceAllMySqlToPostre(query)
+    this.log.debug(query, '     ---> args ', sqlArgs)
+    const result = await this.pool.result<number>(query, sqlArgs, (r) => r.rowCount)
+    return result
   }
 
   public static async insert(query: string, ...sqlArgs: any[]): Promise<number> {
-    query = StrUtil.replaceAllMySqlToPostre(query);
-    this.log.debug(query, '     ---> args ', sqlArgs);
-    let result = await this.pool.result<number>(query, sqlArgs,r => r.rowCount);
-    return result;
+    query = StrUtil.replaceAllMySqlToPostre(query)
+    this.log.debug(query, '     ---> args ', sqlArgs)
+    const result = await this.pool.result<number>(query, sqlArgs, (r) => r.rowCount)
+    return result
   }
 
   public static async queryArr<R>(query: string, ...sqlArgs: any[]): Promise<R[]> {
-    query = StrUtil.replaceAllMySqlToPostre(query);
-    this.log.debug(query, '     ---> args ', sqlArgs);
-    let result = await this.pool.query<R[]>(query, sqlArgs);
-    return result;
+    query = StrUtil.replaceAllMySqlToPostre(query)
+    this.log.debug(query, '     ---> args ', sqlArgs)
+    const result = await this.pool.query<R[]>(query, sqlArgs)
+    return result
   }
-
 }
 
 /*

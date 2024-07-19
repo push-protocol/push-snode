@@ -3,11 +3,12 @@
 // this node: appends it - if storage says yes to a new item
 // other nodes: read this from client
 import { Logger } from 'winston'
-import { WinstonUtil } from '../../utilz/winstonUtil'
+
 import { MySqlUtil } from '../../utilz/mySqlUtil'
-import { Consumer, DCmd, QItem } from './queueTypes'
-import StrUtil from '../../utilz/strUtil'
 import { ObjectHasher } from '../../utilz/objectHasher'
+import StrUtil from '../../utilz/strUtil'
+import { WinstonUtil } from '../../utilz/winstonUtil'
+import { Consumer, DCmd, QItem } from './queueTypes'
 
 export class QueueServer implements Consumer<QItem> {
   private log: Logger = WinstonUtil.newLog(QueueServer)

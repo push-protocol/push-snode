@@ -1,7 +1,8 @@
-import { Logger } from 'winston'
 import { OkPacket, Pool } from 'mysql'
-import { WinstonUtil } from './winstonUtil'
+import { Logger } from 'winston'
+
 import { EnvLoader } from './envLoader'
+import { WinstonUtil } from './winstonUtil'
 
 /*
  A sync replacement of db.query callback-y code

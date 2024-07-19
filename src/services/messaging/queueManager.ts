@@ -1,27 +1,29 @@
-import {Inject, Service} from 'typedi'
-import {Logger} from 'winston'
 import schedule from 'node-schedule'
-import {ValidatorContractState} from '../messaging-common/validatorContractState'
-import {WinstonUtil} from '../../utilz/winstonUtil'
-import {QueueServer} from '../messaging-dset/queueServer'
-import {QueueClient} from '../messaging-dset/queueClient'
-import StorageNode from "./storageNode";
-import {QueueClientHelper} from "../messaging-common/queueClientHelper";
-import {EnvLoader} from "../../utilz/envLoader";
+import { Inject, Service } from 'typedi'
+import { Logger } from 'winston'
 
+import { EnvLoader } from '../../utilz/envLoader'
+import { WinstonUtil } from '../../utilz/winstonUtil'
+import { QueueClientHelper } from '../messaging-common/queueClientHelper'
+import { ValidatorContractState } from '../messaging-common/validatorContractState'
+import { QueueClient } from '../messaging-dset/queueClient'
+import { QueueServer } from '../messaging-dset/queueServer'
+import StorageNode from './storageNode'
 
 @Service()
 export class QueueManager {
   public log: Logger = WinstonUtil.newLog(QueueManager)
 
   @Inject((type) => ValidatorContractState)
-  private contract: ValidatorContractState;
-  @Inject(type => StorageNode)
-  private storageNode:StorageNode;
-
+  private contract: ValidatorContractState
+  @Inject((type) => StorageNode)
+  private storageNode: StorageNode
 
   // PING: schedule
-  private readonly CLIENT_READ_SCHEDULE = EnvLoader.getPropertyOrDefault('CLIENT_READ_SCHEDULE', '*/30 * * * * *');
+  private readonly CLIENT_READ_SCHEDULE = EnvLoader.getPropertyOrDefault(
+    'CLIENT_READ_SCHEDULE',
+    '*/30 * * * * *'
+  )
 
   public static QUEUE_MBLOCK = 'mblock'
   mblockQueue: QueueServer
@@ -36,17 +38,19 @@ export class QueueManager {
   public async postConstruct() {
     this.log.debug('postConstruct')
     this.mblockClient = new QueueClient(this.storageNode, QueueManager.QUEUE_MBLOCK)
-    await QueueClientHelper.initClientForEveryQueueForEveryValidator(this.contract, [QueueManager.QUEUE_MBLOCK])
+    await QueueClientHelper.initClientForEveryQueueForEveryValidator(this.contract, [
+      QueueManager.QUEUE_MBLOCK
+    ])
     const qs = this
     schedule.scheduleJob(this.CLIENT_READ_SCHEDULE, async function () {
       const dbgPrefix = 'PollRemoteQueue'
       try {
         await qs.mblockClient.pollRemoteQueue(qs.CLIENT_REQUEST_PER_SCHEDULED_JOB)
-        qs.log.info(`CRON %s started`, dbgPrefix);
+        qs.log.info(`CRON %s started`, dbgPrefix)
       } catch (err) {
-        qs.log.error(`CRON %s failed %o`, dbgPrefix, err);
+        qs.log.error(`CRON %s failed %o`, dbgPrefix, err)
       } finally {
-        qs.log.info(`CRON %s finished`, dbgPrefix);
+        qs.log.info(`CRON %s finished`, dbgPrefix)
       }
     })
   }
@@ -63,9 +67,9 @@ export class QueueManager {
     return { result: lastOffset }
   }
 
-  public async readItems(dsetName: string, firstOffset: number){
+  public async readItems(dsetName: string, firstOffset: number) {
     const q = this.getQueue(dsetName)
-    return await q.readWithLastOffset(firstOffset);
+    return await q.readWithLastOffset(firstOffset)
   }
 
   public async pollRemoteQueues(): Promise<any> {
@@ -73,5 +77,3 @@ export class QueueManager {
     return result
   }
 }
-
-
