@@ -25,18 +25,5 @@ export default {
   dbpass: process.env.DB_PASS,
   dbSeverName: process.env.DB_SERVER_NAME,
 
-  /**
-   * File system config
-   */
-  fsServerURL:
-    process.env.NODE_ENV == 'development' ? process.env.FS_SERVER_DEV : process.env.FS_SERVER_PROD,
-  staticServePath: process.env.SERVE_STATIC_FILES,
-  staticCachePath:
-    __dirname +
-    '/../../' +
-    process.env.SERVE_STATIC_FILES +
-    '/' +
-    process.env.SERVE_CACHE_FILES +
-    '/',
-  staticAppPath: __dirname + '/../../'
+  REDIS_URL: process.env.REDIS_URL
 }

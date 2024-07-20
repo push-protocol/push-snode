@@ -1,14 +1,18 @@
 import cors from 'cors'
 import express from 'express'
+import { NextFunction, Request, Response } from 'express'
 
 import routes from '../api/index'
 
+interface AppError extends Error {
+  status?: number
+}
+
 export default ({ app }: { app: express.Application }) => {
-  app.get('/status', (req, res) => {
+  app.get('/status', (req: Request, res: Response) => {
     res.status(200).end()
   })
-  app.head('/status', (req, res) => {
-    //
+  app.head('/status', (req: Request, res: Response) => {
     res.status(200).end()
   })
 
@@ -19,18 +23,15 @@ export default ({ app }: { app: express.Application }) => {
 
   app.use('/api', routes())
 
-  // Load Static Files
-  // app.use(express.static(config.staticServePath));
-
   /// catch 404 and forward to error handler
-  app.use((req, res, next) => {
+  app.use((req: Request, res: Response, next: NextFunction) => {
     const err = new Error('Not Found')
     err['status'] = 404
     next(err)
   })
 
   /// error handlers
-  app.use((err, req, res, next) => {
+  app.use((err: AppError, req: Request, res: Response, next: NextFunction) => {
     /**
      * Handle 401 thrown by express-jwt library
      */
@@ -39,7 +40,7 @@ export default ({ app }: { app: express.Application }) => {
     }
     return next(err)
   })
-  app.use((err, req, res, next) => {
+  app.use((err: AppError, req: Request, res: Response, next: NextFunction) => {
     res.status(err.status || 500)
     res.json({
       error: {
