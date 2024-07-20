@@ -391,7 +391,7 @@ END $$ LANGUAGE plpgsql;
           items.set(item.skey, item)
         }
         log.debug(
-          `extra query with ${data2.length} items to fix duplicate timestamps pagination, total size is ${items.length}`
+          `extra query with ${data2.length} items to fix duplicate timestamps pagination, total size is ${items.size}`
         )
       } else if (lastTsRowId > pageSize - 1) {
         // we have more rows with same timestamp, they fit in pageSize+pageLookAhead rows
