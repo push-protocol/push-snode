@@ -63,14 +63,14 @@ export class PgUtil {
   public static async update(query: string, ...sqlArgs: any[]): Promise<number> {
     query = StrUtil.replaceAllMySqlToPostre(query)
     this.log.debug(query, '     ---> args ', sqlArgs)
-    const result = await this.pool.result<number>(query, sqlArgs, (r) => r.rowCount)
+    const result = await this.pool.result(query, sqlArgs, (r) => r.rowCount)
     return result
   }
 
   public static async insert(query: string, ...sqlArgs: any[]): Promise<number> {
     query = StrUtil.replaceAllMySqlToPostre(query)
     this.log.debug(query, '     ---> args ', sqlArgs)
-    const result = await this.pool.result<number>(query, sqlArgs, (r) => r.rowCount)
+    const result = await this.pool.result(query, sqlArgs, (r) => r.rowCount)
     return result
   }
 
