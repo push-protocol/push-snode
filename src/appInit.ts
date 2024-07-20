@@ -25,18 +25,14 @@ async function startServer(logLevel = null) {
     chalk.bold.blue.inverse(`  ${logLevel}  `)
   )
 
-  // Load logger
-
-  Container.set('logger', Logger)
-
-  await Container.get(StorageNode).postConstruct()
-
   // load express app
   const app = express()
   // create express server
   const server = http.createServer(app)
   // load all loaders
   await loaders({ expressApp: app, server: server })
+
+  await Container.get(StorageNode).postConstruct()
 
   server.listen(config.port, (err) => {
     if (err) {
