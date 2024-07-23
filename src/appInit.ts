@@ -5,17 +5,18 @@ import 'reflect-metadata' // We need this in order to use @Decorators
 
 import chalk from 'chalk'
 import express from 'express'
+import http from 'http'
 import { Container } from 'typedi'
 
+import config, { changeLogLevel } from './config/index'
+import loaders from './loaders'
+import Logger from './loaders/logger'
 import StorageNode from './services/messaging/storageNode'
 
 async function startServer(logLevel = null) {
   if (logLevel) {
-    const changeLogLevel = (await require('./config/index')).changeLogLevel
     changeLogLevel(logLevel)
   }
-  // Continue Loading normally
-  const config = (await require('./config/index')).default
   logLevel = logLevel || config.logs.level
 
   // ONLY TIME CONSOLE IS USED
@@ -24,32 +25,19 @@ async function startServer(logLevel = null) {
     chalk.bold.blue.inverse(`  ${logLevel}  `)
   )
 
-  // Load logger
-  const Logger = (await require('./loaders/logger')).default
-
-  await require('./api/index')
-  await require('./loaders/express')
-  Container.set('logger', Logger)
+  // load express app
+  const app = express()
+  // create express server
+  const server = http.createServer(app)
+  // load all loaders
+  await loaders({ expressApp: app, server: server })
 
   await Container.get(StorageNode).postConstruct()
-
-  // load app
-  const app = express()
-  const server = require('http').createServer(app)
-
-  /**
-   * A little hack here
-   * Import/Export can only be used in 'top-level code'
-   * Well, at least in node 10 without babel and at the time of writing
-   * So we are using good old require.
-   **/
-  await require('./loaders').default({ expressApp: app, server: server })
 
   server.listen(config.port, (err) => {
     if (err) {
       Logger.error(err)
       process.exit(1)
-      return
     }
     Logger.info(`
       ################################################

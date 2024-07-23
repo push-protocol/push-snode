@@ -1,5 +1,6 @@
 // mysql
 import crypto from 'crypto'
+import mysql from 'mysql'
 import pgPromise from 'pg-promise'
 import { IClient } from 'pg-promise/typescript/pg-subset'
 import { DateTime } from 'ts-luxon'
@@ -11,7 +12,6 @@ import { PgUtil } from '../utilz/pgUtil'
 import StrUtil from '../utilz/strUtil'
 import { WinstonUtil } from '../utilz/winstonUtil'
 
-const mysql = require('mysql')
 const mysqlPool = mysql.createPool({
   connectionLimit: 10,
   host: EnvLoader.getPropertyOrFail('DB_HOST'),
@@ -391,7 +391,7 @@ END $$ LANGUAGE plpgsql;
           items.set(item.skey, item)
         }
         log.debug(
-          `extra query with ${data2.length} items to fix duplicate timestamps pagination, total size is ${items.length}`
+          `extra query with ${data2.length} items to fix duplicate timestamps pagination, total size is ${items.size}`
         )
       } else if (lastTsRowId > pageSize - 1) {
         // we have more rows with same timestamp, they fit in pageSize+pageLookAhead rows

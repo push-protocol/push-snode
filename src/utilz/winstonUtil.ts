@@ -72,7 +72,6 @@ export class WinstonUtil {
     handleExceptions: true,
     maxsize: 5242880,
     maxFiles: 5,
-    colorize: false,
     tailable: true,
     format: WinstonUtil.createFormat2WhichRendersClassName()
   })
@@ -84,7 +83,6 @@ export class WinstonUtil {
     handleExceptions: true,
     maxsize: 5242880,
     maxFiles: 5,
-    colorize: false,
     tailable: true,
     format: WinstonUtil.createFormat2WhichRendersClassName()
   })
