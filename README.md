@@ -75,6 +75,9 @@ Indexing transaction data is crucial for quick retrieval and efficient querying.
 
 ## Installation
 
+⚠️ **Warning: Work In Progress** ⚠️
+This project is currently a work in progress. Please be aware that things might break, and the installation process might change as we improve and dockerize it completely for public running of the node. Proceed with caution and check back frequently for updates.
+
 ### Prerequisites
 
 - [Node.js](https://nodejs.org/) (>= 18)
@@ -154,7 +157,7 @@ The `do.sh` script is included inside the **`zips`** folder. It provides shortcu
 
     > **Note:** It is expected that after this command you would have the following containers running: **mysql, postgres, redis**
 
-5.  MySQL Database Setup:
+<!-- 5.  MySQL Database Setup:
     For the nodes to function correctly, you need to set up two separate MySQL databases, one for each node. These databases will store the data related to each storage node.
 
     - Access the MySQL command-line interface by running the following command in your terminal:
@@ -168,9 +171,9 @@ The `do.sh` script is included inside the **`zips`** folder. It provides shortcu
       ```bash
       CREATE DATABASE snode1 CHARACTER SET utf8 COLLATE utf8_general_ci;
       CREATE DATABASE snode2 CHARACTER SET utf8 COLLATE utf8_general_ci;
-      ```
+      ``` -->
 
-6.  Postgres Database Setup:
+5.  Postgres Database Setup:
     For the nodes to function correctly, you need to set up two separate Postgres databases, one for each node. These databases will store the data related to each storage node.
 
     - Access the pSql command-line interface by running the following command in your terminal:
@@ -186,7 +189,7 @@ The `do.sh` script is included inside the **`zips`** folder. It provides shortcu
       create database snode2;
       ```
 
-7.  Run the nodes in separate terminals:
+6.  Run the nodes in separate terminals:
 
     ```bash
     # Run Storage Node 1
