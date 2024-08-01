@@ -47,6 +47,10 @@ Push Storage Nodes ensure reliable and efficient storage of transaction data by 
 
 ## Architecture
 
+### Staking Requirement
+
+To operate a storage node, participants must stake a certain amount of tokens. This staking process serves as a security deposit, ensuring that storage nodes act in the network's best interest.
+
 ### Interaction in Network
 
 In the network, once blocks are processed by validator nodes, they are picked up by storage nodes for further handling. The following diagram illustrates the interaction between the network and the storage nodes:
