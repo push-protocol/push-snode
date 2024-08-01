@@ -71,8 +71,7 @@ Indexing transaction data is crucial for quick retrieval and efficient querying.
 | ------------- | ------------------------------------ | ------------------------------------ | -------- | ------------------------ | --------- |
 | eip155:1:0xAA | b0249fbb-a03d-4292-9599-042c6993958e | 2608d687-fe55-4fe9-9fa5-1f782dcebb34 | email    | protobuf_serialized_data | epoch     |
 
-!!! note
-    The above table example is a simplified representation of the transaction indexation structure. The actual implementation may include additional fields based on the requirements of the network.
+> **Note:** The above table example is a simplified representation of the transaction indexation structure. The actual implementation may include additional fields based on the requirements of the network.
 
 ## Installation
 
@@ -141,11 +140,11 @@ The `do.sh` script is included inside the **`zips`** folder. It provides shortcu
     To set up the storage nodes, you'll need to configure specific directories for each node. This setup ensures that each node runs independently with its own environment and key files.
 
     - **Download and Unpack Docker Directory:**
-        Get the `docker-dir-for-snodes.zip` file from the `zips` folder and extract it into your project's root directory. After extraction, you'll find a `/docker` directory containing subdirectories for each node: `/docker/01, /docker/02`.
-        Each node directory (e.g., docker/01, docker/02) contains the necessary configuration files and scripts to run the node.
+      Get the `docker-dir-for-snodes.zip` file from the `zips` folder and extract it into your project's root directory. After extraction, you'll find a `/docker` directory containing subdirectories for each node: `/docker/01, /docker/02`.
+      Each node directory (e.g., docker/01, docker/02) contains the necessary configuration files and scripts to run the node.
 
     - **Key Files within Each Node Directory:**
-     This file contains environment-specific properties, such as database credentials, node identifiers, and other configuration settings that the node requires to operate.
+      This file contains environment-specific properties, such as database credentials, node identifiers, and other configuration settings that the node requires to operate.
 
 4.  Start the docker container:
 
@@ -153,42 +152,39 @@ The `do.sh` script is included inside the **`zips`** folder. It provides shortcu
     docker-compose up
     ```
 
-    !!! note
-        It is expexted that after this command you would have the following containers running:
-        - mysql
-        - postgres
-        - redis
+    > **Note:** It is expected that after this command you would have the following containers running: **mysql, postgres, redis**
 
 5.  MySQL Database Setup:
     For the nodes to function correctly, you need to set up two separate MySQL databases, one for each node. These databases will store the data related to each storage node.
 
     - Access the MySQL command-line interface by running the following command in your terminal:
-        ```bash
-        mysql -u root -p PASSWORD=pass
-        ```
+
+      ```bash
+      mysql -u root -p PASSWORD=pass
+      ```
 
     - Once you're in the MySQL CLI, create each of the databases by running the following commands:
 
-        ```bash
-        CREATE DATABASE snode1 CHARACTER SET utf8 COLLATE utf8_general_ci;
-        CREATE DATABASE snode2 CHARACTER SET utf8 COLLATE utf8_general_ci;
-        ```
+      ```bash
+      CREATE DATABASE snode1 CHARACTER SET utf8 COLLATE utf8_general_ci;
+      CREATE DATABASE snode2 CHARACTER SET utf8 COLLATE utf8_general_ci;
+      ```
 
 6.  Postgres Database Setup:
     For the nodes to function correctly, you need to set up two separate Postgres databases, one for each node. These databases will store the data related to each storage node.
 
     - Access the pSql command-line interface by running the following command in your terminal:
 
-        ```bash
-        psql -U postgres -d postgres
-        ```
+      ```bash
+      psql -U postgres -d postgres
+      ```
 
     - Once you're in the pSql CLI, create each of the databases by running the following commands:
 
-        ```bash
-        create database snode1;
-        create database snode2;
-        ```
+      ```bash
+      create database snode1;
+      create database snode2;
+      ```
 
 7.  Run the nodes in separate terminals:
 
