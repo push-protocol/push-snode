@@ -76,6 +76,7 @@ Indexing transaction data is crucial for quick retrieval and efficient querying.
 ## Installation
 
 ⚠️ **Warning: Work In Progress** ⚠️
+
 This project is currently a work in progress. Please be aware that things might break, and the installation process might change as we improve and dockerize it completely for public running of the node. Proceed with caution and check back frequently for updates.
 
 ### Prerequisites
