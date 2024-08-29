@@ -20,6 +20,8 @@ services:
       MYSQL_DATABASE: snode1
       MYSQL_USER: 2roor
       MYSQL_PASSWORD: s1mpl3
+    ports:
+      - 3306:3306
     # Change this to your local path
     volumes:
       - ./external/mysql-s01:/var/lib/mysql/
@@ -28,6 +30,7 @@ services:
 
   phpmyadmin-s01:
     image: phpmyadmin/phpmyadmin
+    platform: linux/amd64
     container_name: phpmyadmin-s01
     depends_on:
       - mysql-s01
@@ -76,6 +79,8 @@ services:
       - POSTGRES_DB=snode1
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
+    ports:
+      - '5432:5432'
     networks:
       - push-shared-network
     volumes:

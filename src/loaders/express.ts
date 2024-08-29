@@ -1,8 +1,9 @@
 import cors from 'cors'
 import express from 'express'
 import { NextFunction, Request, Response } from 'express'
+import jsonRouter from 'express-json-rpc-router'
 
-import routes from '../api/index'
+import { rpcControllerConfigs } from '../rpc/index'
 
 interface AppError extends Error {
   status?: number
@@ -21,7 +22,17 @@ export default ({ app }: { app: express.Application }) => {
   // Enable Cross Origin Resource Sharing to all origins by default
   app.use(cors())
 
-  app.use('/api', routes())
+  app.use(express.json())
+
+  app.use(
+    jsonRouter({
+      methods: rpcControllerConfigs.controllers,
+      afterMethods: rpcControllerConfigs.afterController,
+      onError(err) {
+        console.log(err)
+      }
+    })
+  )
 
   /// catch 404 and forward to error handler
   app.use((req: Request, res: Response, next: NextFunction) => {

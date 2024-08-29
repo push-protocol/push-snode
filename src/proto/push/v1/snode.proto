@@ -1,0 +1,23 @@
+syntax = "proto3";
+package push.v1;
+
+enum Category {
+    NOTIF = 0;
+}
+
+enum Order {
+    ASC = 0;
+    DESC = 1;
+}
+message GetTransactionsRequest  {
+    string wallet = 1;
+    Category category = 2;
+    string sortkey = 3;
+    Order order = 4;   
+}
+
+message GetTransactionRequest {
+    string wallet = 1;
+    Category category = 2;
+    string key = 3;
+}
