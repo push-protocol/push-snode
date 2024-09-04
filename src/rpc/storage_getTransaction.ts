@@ -1,20 +1,26 @@
 import { ethers } from 'ethers'
+import Container from 'typedi'
 import z from 'zod'
 
 import { GetTransactionRequest } from '../generated/push/v1/snode_pb'
+import { Transactions } from '../services/transactions/transactions'
 import { BitUtil } from '../utilz/bitUtil'
 import { Check } from '../utilz/check'
 
 enum Category {
-  NOTIF = 0
+  INBOX = 0
 }
 
-const StorageGetTransactionParamsSchema = z.object({
+const CategoryMap = {
+  0: 'inbox'
+}
+
+const StorageGetTransactionsParamsSchema = z.object({
   wallet: z.string(),
   category: z.nativeEnum(Category),
   key: z.string()
 })
-type StorageGetTransactionParams = z.infer<typeof StorageGetTransactionParamsSchema>
+type StorageGetTransactionsParams = z.infer<typeof StorageGetTransactionsParamsSchema>
 
 export class StorageGetTransaction {
   constructor() {}
@@ -25,16 +31,20 @@ export class StorageGetTransaction {
     return error
   }
 
-  public static storageGetTransactions([params], raw) {
-    const bytes = BitUtil.base16ToBytes(params)
+  public static async storageGetTransaction(params: [string]) {
+    const bytes = BitUtil.base16ToBytes(params[0])
     const request = GetTransactionRequest.deserializeBinary(bytes)
     const { wallet, category, key } = request.toObject()
-    this.validateGetTransaction({ wallet, category, key }, raw)
-    // TODO: implement the logic
-    return { wallet, category, key }
+    StorageGetTransaction.validateGetTransaction({
+      wallet,
+      category,
+      key
+    })
+    const transaction = Container.get(Transactions)
+    return await transaction.getTransaction(CategoryMap[category], wallet, key)
   }
 
-  public static validateGetTransaction(params: StorageGetTransactionParams, raw) {
+  public static validateGetTransaction(params: StorageGetTransactionsParams) {
     // check if the wallet is in caip10 format
     const walletComponents = params.wallet.split(':')
     if (!Check.isEqual<number>(walletComponents.length, 3)) {
@@ -47,7 +57,7 @@ export class StorageGetTransaction {
     }
   }
 
-  public static afterStorageGetTransactions = [
+  public static afterStorageGetTransaction = [
     (params, result, raw) => console.log('Transaction result:', result)
   ]
 }

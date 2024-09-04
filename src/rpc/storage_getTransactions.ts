@@ -1,22 +1,34 @@
 import { ethers } from 'ethers'
+import Container from 'typedi'
 import z from 'zod'
 
 import { GetTransactionsRequest } from '../generated/push/v1/snode_pb'
+import { Transactions } from '../services/transactions/transactions'
 import { BitUtil } from '../utilz/bitUtil'
 import { Check } from '../utilz/check'
 
 enum Category {
-  NOTIF = 0
+  INBOX = 0
+}
+
+const CategoryMap = {
+  0: 'inbox'
 }
 
 enum Order {
   ASC = 0,
   DESC = 1
 }
+
+const OrderMap = {
+  0: 'ASC',
+  1: 'DESC'
+}
+
 const StorageGetTransactionsParamsSchema = z.object({
   wallet: z.string(),
   category: z.nativeEnum(Category),
-  sortKey: z.string(),
+  timestamp: z.string(),
   order: z.nativeEnum(Order)
 })
 type StorageGetTransactionsParams = z.infer<typeof StorageGetTransactionsParamsSchema>
@@ -30,13 +42,24 @@ export class StorageGetTransactions {
     return error
   }
 
-  public static storageGetTransactions(params: string) {
-    const bytes = BitUtil.base64ToBytes(params)
+  public static async storageGetTransactions(params: [string]) {
+    const bytes = BitUtil.base16ToBytes(params[0])
     const request = GetTransactionsRequest.deserializeBinary(bytes)
-    const { wallet, category, sortkey, order } = request.toObject()
-    StorageGetTransactions.validateGetTransactions({ wallet, category, sortKey: sortkey, order })
-    // TODO: implement the logic
-    return { wallet, category, sortkey, order }
+    const { wallet, category, timestamp, order } = request.toObject()
+    StorageGetTransactions.validateGetTransactions({
+      wallet,
+      category,
+      timestamp: timestamp,
+      order
+    })
+    const transaction = Container.get(Transactions)
+    const orderValue = OrderMap[order] as 'ASC' | 'DESC'
+    return await transaction.getTransactions({
+      namespace: CategoryMap[category],
+      timestamp,
+      namespaceId: wallet,
+      order: orderValue
+    })
   }
 
   public static validateGetTransactions(params: StorageGetTransactionsParams) {

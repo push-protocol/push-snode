@@ -4,13 +4,13 @@ import { StorageGetTransactions } from './storage_getTransactions'
 // put the controllers here
 const controllers = {
   storage_getTransactions: StorageGetTransactions.storageGetTransactions,
-  storage_getTransaction: StorageGetTransaction.storageGetTransactions
+  storage_getTransaction: StorageGetTransaction.storageGetTransaction
 }
 
 // put the after test controllers here, keep in mind to keep the function name same as controller
 const afterController = {
   storage_getTransactions: StorageGetTransactions.afterStorageGetTransactions,
-  storage_getTransaction: StorageGetTransaction.afterStorageGetTransactions
+  storage_getTransaction: StorageGetTransaction.afterStorageGetTransaction
 }
 
 export const rpcControllerConfigs = {

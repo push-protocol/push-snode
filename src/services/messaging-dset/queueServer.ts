@@ -4,8 +4,8 @@
 // other nodes: read this from client
 import { Logger } from 'winston'
 
-import { MySqlUtil } from '../../utilz/mySqlUtil'
 import { ObjectHasher } from '../../utilz/objectHasher'
+import { PgUtil } from '../../utilz/pgUtil'
 import StrUtil from '../../utilz/strUtil'
 import { WinstonUtil } from '../../utilz/winstonUtil'
 import { Consumer, DCmd, QItem } from './queueTypes'
@@ -69,13 +69,14 @@ export class QueueServer implements Consumer<QItem> {
      we will return true only if there are affected rows
      another option is to remove IGNORE and catch the exception
     */
-    const res = await MySqlUtil.insert(
-      `INSERT IGNORE INTO dset_queue_${this.queueName}(object, object_hash)
-       VALUES (?, ?)`,
+    const res = await PgUtil.insert(
+      `INSERT INTO dset_queue_${this.queueName}(object, object_hash)
+       VALUES ($1, $2)
+       ON CONFLICT DO NOTHING`, // PostgreSQL equivalent for "INSERT IGNORE"
       cmdStr,
       cmdHash
     )
-    return res.affectedRows === 1
+    return res === 1
   }
 
   /*
@@ -84,32 +85,33 @@ export class QueueServer implements Consumer<QItem> {
   public async appendDirect(cmd: DCmd) {
     const object = JSON.stringify(cmd)
     const objectHash = ObjectHasher.hashToSha256(cmd)
-    const res = await MySqlUtil.insert(
+    const res = await PgUtil.insert(
       `INSERT INTO dset_queue_${this.queueName}(object, object_hash)
-       VALUES (?,?)`,
+         VALUES ($1, $2)`,
       object,
       objectHash
     )
-    return res.affectedRows === 1
+    return res === 1
   }
 
   public async getFirstRowIdAfter(offset: number): Promise<number | null> {
-    return await MySqlUtil.queryOneValue(
-      `select min(id) as id
-       from dset_queue_${this.queueName}
-       where id > ?`,
+    return await PgUtil.queryOneValue<number>(
+      `SELECT min(id) as id
+         FROM dset_queue_${this.queueName}
+         WHERE id > $1`,
       offset
     )
   }
 
   public async readItems(offset: number): Promise<QItem[]> {
-    const rows = await MySqlUtil.queryArr<{ id: number; object: string; object_hash: string }>(
-      `select id, object, object_hash
-       from dset_queue_${this.queueName}
-       where id > ?
-       order by id asc
-       limit ${this.replyPageSize} `,
-      offset
+    const rows = await PgUtil.queryArr<{ id: number; object: string; object_hash: string }>(
+      `SELECT id, object, object_hash
+         FROM dset_queue_${this.queueName}
+         WHERE id > $1
+         ORDER BY id ASC
+         LIMIT $2`,
+      offset,
+      this.replyPageSize
     )
     const items: QItem[] = rows.map((row) => ({
       id: row.id,
@@ -124,10 +126,10 @@ export class QueueServer implements Consumer<QItem> {
   }
 
   public async getLastOffset(): Promise<number> {
-    const row = await MySqlUtil.queryOneRow<{ lastOffset: number }>(
-      `select max(id) as lastOffset
-       from dset_queue_${this.queueName}
-       limit 1`
+    const row = await PgUtil.queryOneRow<{ lastOffset: number }>(
+      `SELECT max(id) as lastOffset
+       FROM dset_queue_${this.queueName}
+       LIMIT 1`
     )
     return row == null ? 0 : row.lastOffset
   }

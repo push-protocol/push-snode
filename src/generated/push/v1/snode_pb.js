@@ -95,7 +95,7 @@ proto.push.v1.GetTransactionsRequest.toObject = function(includeInstance, msg) {
   var f, obj = {
     wallet: jspb.Message.getFieldWithDefault(msg, 1, ""),
     category: jspb.Message.getFieldWithDefault(msg, 2, 0),
-    sortkey: jspb.Message.getFieldWithDefault(msg, 3, ""),
+    timestamp: jspb.Message.getFieldWithDefault(msg, 3, ""),
     order: jspb.Message.getFieldWithDefault(msg, 4, 0)
   };
 
@@ -143,7 +143,7 @@ proto.push.v1.GetTransactionsRequest.deserializeBinaryFromReader = function(msg,
       break;
     case 3:
       var value = /** @type {string} */ (reader.readString());
-      msg.setSortkey(value);
+      msg.setTimestamp(value);
       break;
     case 4:
       var value = /** @type {!proto.push.v1.Order} */ (reader.readEnum());
@@ -192,7 +192,7 @@ proto.push.v1.GetTransactionsRequest.serializeBinaryToWriter = function(message,
       f
     );
   }
-  f = message.getSortkey();
+  f = message.getTimestamp();
   if (f.length > 0) {
     writer.writeString(
       3,
@@ -246,10 +246,10 @@ proto.push.v1.GetTransactionsRequest.prototype.setCategory = function(value) {
 
 
 /**
- * optional string sortkey = 3;
+ * optional string timestamp = 3;
  * @return {string}
  */
-proto.push.v1.GetTransactionsRequest.prototype.getSortkey = function() {
+proto.push.v1.GetTransactionsRequest.prototype.getTimestamp = function() {
   return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 3, ""));
 };
 
@@ -258,7 +258,7 @@ proto.push.v1.GetTransactionsRequest.prototype.getSortkey = function() {
  * @param {string} value
  * @return {!proto.push.v1.GetTransactionsRequest} returns this
  */
-proto.push.v1.GetTransactionsRequest.prototype.setSortkey = function(value) {
+proto.push.v1.GetTransactionsRequest.prototype.setTimestamp = function(value) {
   return jspb.Message.setProto3StringField(this, 3, value);
 };
 

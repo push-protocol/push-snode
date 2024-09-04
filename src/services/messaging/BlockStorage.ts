@@ -3,12 +3,12 @@ import { Logger } from 'winston'
 
 import { Check } from '../../utilz/check'
 import { Coll } from '../../utilz/coll'
-import { MySqlUtil } from '../../utilz/mySqlUtil'
+import { PgUtil } from '../../utilz/pgUtil' // Use PgUtil instead of MySqlUtil
 import StrUtil from '../../utilz/strUtil'
 import { WinstonUtil } from '../../utilz/winstonUtil'
 import { MessageBlock } from '../messaging-common/messageBlock'
 
-// stores everything in MySQL
+// stores everything in postgres
 @Service()
 export class BlockStorage {
   public log: Logger = WinstonUtil.newLog(BlockStorage)
@@ -18,56 +18,68 @@ export class BlockStorage {
   }
 
   private async createStorageTablesIfNeeded() {
-    await MySqlUtil.insert(`
+    await PgUtil.insert(`
         CREATE TABLE IF NOT EXISTS blocks
         (
-            object_hash   VARCHAR(255) NOT NULL COMMENT 'optional: a uniq field to fight duplicates',
-            object        MEDIUMTEXT   NOT NULL,
-            object_shards JSON         NOT NULL COMMENT 'message block shards',
+            object_hash   VARCHAR(255) NOT NULL, -- optional: a uniq field to fight duplicates
+            object        TEXT         NOT NULL,
+            object_shards JSONB        NOT NULL, -- message block shards
             PRIMARY KEY (object_hash)
-        ) ENGINE = InnoDB
-          DEFAULT CHARSET = utf8;
+        );
     `)
 
-    await MySqlUtil.insert(`
-        CREATE TABLE IF NOT EXISTS dset_queue_mblock
-        (
-            id           BIGINT       NOT NULL AUTO_INCREMENT,
-            ts           timestamp default CURRENT_TIMESTAMP() COMMENT 'timestamp is used for querying the queu',
-            object_hash  VARCHAR(255) NOT NULL,
-            object_shard INT          NOT NULL COMMENT 'message block shard',
-            PRIMARY KEY (id),
-            UNIQUE KEY uniq_mblock_object_hash (object_hash, object_shard),
-            FOREIGN KEY (object_hash) REFERENCES blocks (object_hash)
-        ) ENGINE = InnoDB
-          DEFAULT CHARSET = utf8;
-    `)
+    await PgUtil.insert(`
+      CREATE TABLE IF NOT EXISTS dset_queue_mblock
+      (
+          id           BIGSERIAL   NOT NULL,
+          ts           TIMESTAMP   DEFAULT CURRENT_TIMESTAMP, -- timestamp is used for querying the queue
+          object_hash  VARCHAR(255) NOT NULL,
+          object_shard INT          NOT NULL, -- message block shard
+          PRIMARY KEY (id),
+          UNIQUE (object_hash, object_shard),
+          FOREIGN KEY (object_hash) REFERENCES blocks (object_hash)
+      );
+  `)
 
-    await MySqlUtil.insert(`
+    await PgUtil.insert(`
         CREATE TABLE IF NOT EXISTS dset_client
         (
-            id              INT          NOT NULL AUTO_INCREMENT,
-            queue_name      varchar(32)  NOT NULL COMMENT 'target node queue name',
-            target_node_id  varchar(128) NOT NULL COMMENT 'target node eth address',
-            target_node_url varchar(128) NOT NULL COMMENT 'target node url, filled from the contract',
-            target_offset   bigint(20)   NOT NULL DEFAULT 0 COMMENT 'initial offset to fetch target queue',
-            state           tinyint(1)   NOT NULL DEFAULT 1 COMMENT '1 = enabled, 0 = disabled',
+            id              SERIAL       NOT NULL,
+            queue_name      VARCHAR(32)  NOT NULL, -- target node queue name
+            target_node_id  VARCHAR(128) NOT NULL, -- target node eth address
+            target_node_url VARCHAR(128) NOT NULL, -- target node url, filled from the contract
+            target_offset   BIGINT       NOT NULL DEFAULT 0, -- initial offset to fetch target queue
+            state           SMALLINT     NOT NULL DEFAULT 1, -- 1 = enabled, 0 = disabled
             PRIMARY KEY (id),
-            UNIQUE KEY uniq_dset_name_and_target (queue_name, target_node_id)
-        ) ENGINE = InnoDB
-          DEFAULT CHARSET = utf8;
+            UNIQUE (queue_name, target_node_id)
+        );
     `)
 
-    await MySqlUtil.insert(`
-        CREATE TABLE IF NOT EXISTS contract_shards
-        (
-            ts              timestamp default CURRENT_TIMESTAMP() COMMENT 'update timestamp',
-            shards_assigned json NOT NULL COMMENT 'optional: a uniq field to fight duplicates',
-            PRIMARY KEY (ts)
-        ) ENGINE = InnoDB
-          DEFAULT CHARSET = utf8;
+    await PgUtil.insert(`
+      CREATE TABLE IF NOT EXISTS contract_shards
+      (
+          ts              TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- update timestamp
+          shards_assigned JSONB NOT NULL, -- optional: a uniq field to fight duplicates
+          PRIMARY KEY (ts)
+      );
+  `)
 
-    `)
+    await PgUtil.update(`
+    CREATE TABLE IF NOT EXISTS storage_node
+    (
+        namespace VARCHAR(20) NOT NULL,
+        namespace_shard_id VARCHAR(64) NOT NULL,
+        namespace_id VARCHAR(64) NOT NULL,
+        ts TIMESTAMP NOT NULL default NOW(),
+        skey VARCHAR(64) NOT NULL,
+        dataSchema VARCHAR(20) NOT NULL,
+        payload JSONB,
+        PRIMARY KEY(namespace,namespace_shard_id,namespace_id,skey)
+    );`)
+
+    await PgUtil.update(`CREATE INDEX IF NOT EXISTS 
+    storage_node_idx ON storage_node
+    USING btree (namespace ASC, namespace_id ASC, ts ASC);`)
   }
 
   async saveBlockWithShardData(
@@ -75,16 +87,16 @@ export class BlockStorage {
     calculatedHash: string,
     shardSet: Set<number>
   ): Promise<boolean> {
-    // NOTE: the code already atomically updates the db ,
-    //  so let's drop select because it's excessive)
-    const hashFromDb = await MySqlUtil.queryOneValueOrDefault(
-      'SELECT object_hash FROM blocks where object_hash=?',
+    // NOTE: the code already atomically updates the db,
+    // so let's drop select because it's excessive)
+    const hashFromDb = await PgUtil.queryOneValueOrDefault<string>(
+      'SELECT object_hash FROM blocks WHERE object_hash = $1',
       null,
       calculatedHash
     )
     if (hashFromDb != null) {
       this.log.info(
-        'received block with hash %s, ' + 'already exists in the storage at index %s, ignoring',
+        'received block with hash %s, already exists in the storage at index %s, ignoring',
         calculatedHash,
         hashFromDb
       )
@@ -94,32 +106,29 @@ export class BlockStorage {
     this.log.info('received block with hash %s, adding to the db', calculatedHash)
     const objectAsJson = JSON.stringify(mb)
     const shardSetAsJson = JSON.stringify(Coll.setToArray(shardSet))
-    const res = await MySqlUtil.insert(
-      `INSERT
-           IGNORE
-       INTO blocks(object, object_hash, object_shards)
-       VALUES (?, ?, ?)`,
+    const res = await PgUtil.insert(
+      `INSERT INTO blocks(object, object_hash, object_shards)
+       VALUES ($1, $2, $3)
+       ON CONFLICT DO NOTHING`,
       objectAsJson,
       calculatedHash,
       shardSetAsJson
     )
-    const requiresProcessing = res.affectedRows === 1
+    const requiresProcessing = res === 1
     if (!requiresProcessing) {
       return false
     }
     // insert block to shard mapping
     let valuesStr = ''
-    const valuesArr = []
+    const valuesArr: any[] = []
     for (const shardId of shardSet) {
       valuesArr.push(calculatedHash, shardId)
-      valuesStr += valuesStr.length == 0 ? '(? , ?)' : ',(? , ?)'
+      valuesStr += valuesStr.length == 0 ? '($1, $2)' : ',($1, $2)'
     }
-    const res2 = await MySqlUtil.insert(
-      `INSERT
-           IGNORE
-       INTO dset_queue_mblock(object_hash, object_shard)
-       VALUES
-           ${valuesStr}`,
+    await PgUtil.insert(
+      `INSERT INTO dset_queue_mblock(object_hash, object_shard)
+       VALUES ${valuesStr}
+       ON CONFLICT DO NOTHING`,
       ...valuesArr
     )
     return true
@@ -131,12 +140,17 @@ export class BlockStorage {
    * and returns a set of {0,1,2..,31}
    */
   public async loadNodeShards(): Promise<Set<number> | null> {
-    const shardsAssigned = await MySqlUtil.queryOneValueOrDefault<string>(
-      'select shards_assigned from contract_shards order by ts desc limit 1',
+    const shardsAssigned = await PgUtil.queryOneValueOrDefault<string>(
+      'SELECT shards_assigned FROM contract_shards ORDER BY ts DESC LIMIT 1',
       null
     )
     let result: Set<number>
-    if (shardsAssigned != null && !StrUtil.isEmpty(shardsAssigned)) {
+    console.log(shardsAssigned)
+    if (
+      typeof shardsAssigned == 'string' &&
+      shardsAssigned != null &&
+      !StrUtil.isEmpty(shardsAssigned)
+    ) {
       const arr = JSON.parse(shardsAssigned)
       result = new Set(arr)
     } else {
@@ -153,8 +167,8 @@ export class BlockStorage {
   public async saveNodeShards(nodeShards: Set<number>): Promise<void> {
     const arr = Coll.setToArray(nodeShards)
     const arrAsJson = JSON.stringify(arr)
-    await MySqlUtil.insert(
-      'INSERT IGNORE INTO contract_shards(shards_assigned) VALUES(?)',
+    await PgUtil.insert(
+      'INSERT INTO contract_shards(shards_assigned) VALUES($1) ON CONFLICT DO NOTHING',
       arrAsJson
     )
   }
@@ -181,14 +195,15 @@ export class BlockStorage {
       messageBlockShards: Set<number>
     ) => Promise<void>
   ) {
-    if (shardsToLookFor.size == 0) {
-      this.log.debug('iterateAllStoredBlocks(): no shards to unpack ')
+    if (shardsToLookFor.size === 0) {
+      this.log.debug('iterateAllStoredBlocks(): no shards to unpack')
       return
     }
-    // [1,2] => (1, 2)
+
+    // Convert the set of shards to a comma-separated string for SQL
     const shardsAsCsv = Array.from(shardsToLookFor.keys()).join(',')
 
-    // query size
+    // Validate the query size
     const queryLimit = pageSize
     Check.isTrue(queryLimit > 0 && queryLimit < 1000, 'bad query limit')
     const subqueryRowLimit = Math.round((3 * pageSize * shardCountFromStorageContract) / 2)
@@ -197,31 +212,31 @@ export class BlockStorage {
       'bad subquery limit'
     )
 
-    // remember last N object hashes;
-    // this is the amount of a page that should be enough to remove duplicate object hashes
-    // i.e. 32 shards x 30 rows = approx 1000 rows of history
+    // Set up a cache to track unique object hashes
     const cache = new Set<string>()
     const cacheMaxSize = 2 * subqueryRowLimit
 
     let fromId = null
     let rows = null
+
     do {
       /*
       Finds rows
         | minId | object_hash | shardsJson |
         | 3     | 1           | [2,1]      |
-     */
-      rows = await MySqlUtil.queryArr<{ minId: number; object_hash: string; shardsJson: string }>(
-        `SELECT MIN(id) as minId, object_hash, CONCAT('[', GROUP_CONCAT(object_shard), ']') as shardsJson
+      */
+      rows = await PgUtil.queryArr<{ minId: number; object_hash: string; shardsJson: string }>(
+        `SELECT MIN(id) as minId, object_hash, 
+                CONCAT('[', STRING_AGG(object_shard::text, ','), ']') as shardsJson
          FROM (SELECT id, object_hash, object_shard
                FROM dset_queue_mblock
                WHERE object_shard IN (${shardsAsCsv})
-                 and (? IS NULL OR id < ?)
+                 AND ($1::bigint IS NULL OR id < $2::bigint)
                ORDER BY id DESC
-               LIMIT ?) as sub
+               LIMIT $3) AS sub
          GROUP BY object_hash
          ORDER BY minId DESC
-         LIMIT ?`,
+         LIMIT $4`,
         fromId,
         fromId,
         subqueryRowLimit,
@@ -231,19 +246,22 @@ export class BlockStorage {
       for (const row of rows) {
         const mbHash = row.object_hash
         if (!cache.has(mbHash)) {
-          const row = await MySqlUtil.queryOneRow<{ object: string; object_shards: string }>(
-            'select object, object_shards from blocks where object_hash=?',
+          const blockRow = await PgUtil.queryOneRow<{ object: string; object_shards: string }>(
+            'SELECT object, object_shards FROM blocks WHERE object_hash = $1',
             mbHash
           )
-          if (row == null || StrUtil.isEmpty(row.object)) {
+
+          if (blockRow == null || StrUtil.isEmpty(blockRow.object)) {
             this.log.error(
               'skipping objectHash=%s because there is no matching shard info in blocks table',
               mbHash
             )
             continue
           }
-          const mbShardSet = Coll.parseAsNumberSet(row.object_shards)
-          await handler(row.object, mbHash, mbShardSet)
+
+          const mbShardSet = Coll.parseAsNumberSet(blockRow.object_shards)
+          await handler(blockRow.object, mbHash, mbShardSet)
+
           cache.add(mbHash)
           if (cache.size > cacheMaxSize) {
             const firstCachedValue = cache.values().next().value
@@ -252,6 +270,7 @@ export class BlockStorage {
         }
         fromId = Math.min(fromId, row.minId)
       }
+
       Check.isTrue(cache.size <= cacheMaxSize)
     } while (rows != null && rows.length > 0)
   }

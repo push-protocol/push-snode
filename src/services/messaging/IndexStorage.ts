@@ -124,11 +124,10 @@ export class IndexStorage {
         storageTable = tableName
       }
     }
-    const storageValue = await DbHelper.putValueInTable(
+    const storageValue = await DbHelper.putValueInStorageTable(
       nsName,
       nsShardId,
       nsId,
-      storageTable,
       ts,
       key,
       JSON.stringify(fpayload)

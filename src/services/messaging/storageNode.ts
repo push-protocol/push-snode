@@ -95,7 +95,7 @@ export default class StorageNode implements Consumer<QItem>, StorageContractList
 
   public async handleReshard(
     currentNodeShards: Set<number> | null,
-    allNodeShards: Map<string, Set<number>>
+    allNodeShards?: Map<string, Set<number>>
   ) {
     const newShards = currentNodeShards ?? new Set()
     const oldShards = await this.blockStorage.loadNodeShards()

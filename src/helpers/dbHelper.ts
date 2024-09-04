@@ -1,26 +1,14 @@
 // mysql
 import crypto from 'crypto'
-import mysql from 'mysql'
 import pgPromise from 'pg-promise'
 import { IClient } from 'pg-promise/typescript/pg-subset'
 import { DateTime } from 'ts-luxon'
 
 import log from '../loaders/logger'
 import { EnvLoader } from '../utilz/envLoader'
-import { MySqlUtil } from '../utilz/mySqlUtil'
 import { PgUtil } from '../utilz/pgUtil'
 import StrUtil from '../utilz/strUtil'
 import { WinstonUtil } from '../utilz/winstonUtil'
-
-const mysqlPool = mysql.createPool({
-  connectionLimit: 10,
-  host: EnvLoader.getPropertyOrFail('DB_HOST'),
-  user: EnvLoader.getPropertyOrFail('DB_USER'),
-  password: EnvLoader.getPropertyOrFail('DB_PASS'),
-  database: EnvLoader.getPropertyOrFail('DB_NAME'),
-  port: Number(EnvLoader.getPropertyOrFail('DB_NAME'))
-})
-MySqlUtil.init(mysqlPool)
 
 // postgres
 // todo fix variable substitution, see #putValueInTable()
@@ -159,7 +147,7 @@ END $$ LANGUAGE plpgsql;
         insert into node_storage_layout (namespace, namespace_shard_id, ts_start, ts_end, table_name) 
         values ($1, $2, $3, $4, $5) on conflict do nothing;
         `
-    console.log(sql)
+    // console.log(sql)
     return pgPool
       .result(sql, [namespace, namespaceShardId, ts_start, ts_end, table_name], (r) => r.rowCount)
       .then((rowCount) => {
@@ -262,6 +250,32 @@ END $$ LANGUAGE plpgsql;
       })
   }
 
+  public static async findValueInStorageTable(
+    skey: string,
+    namespace: string,
+    namespace_id: string
+  ): Promise<string> {
+    log.debug(`tableName is storage_node , skey is ${skey}`)
+    const sql = `select payload
+                     from storage_node
+                     where skey = '${skey}' and namespace='${namespace}' and namespace_id='${namespace_id}'`
+    log.debug(sql)
+    return pgPool
+      .query(sql)
+      .then((data) => {
+        log.debug(data)
+        if (data.length != 1) {
+          return Promise.reject('missing table with the correct name')
+        }
+        log.debug(`data found: ${JSON.stringify(data[0].payload)}`)
+        return data[0].payload
+      })
+      .catch((err) => {
+        log.debug(err)
+        return Promise.resolve('')
+      })
+  }
+
   public static async findStorageItem(
     ns: string,
     nsIndex: string,
@@ -293,7 +307,7 @@ END $$ LANGUAGE plpgsql;
       })
   }
 
-  static async putValueInTable(
+  static async putValueInTableDeprecated(
     ns: string,
     shardId: number,
     nsIndex: string,
@@ -328,14 +342,50 @@ END $$ LANGUAGE plpgsql;
       })
   }
 
+  static async putValueInStorageTable(
+    ns: string,
+    shardId: number,
+    nsIndex: string,
+    ts: string,
+    skey: string,
+    body: string
+  ) {
+    log.debug(`putValueInStorageTable() namespace=${ns}, namespaceShardId=${shardId}
+        , skey=${skey}, jsonValue=${body}`)
+    const sql = `INSERT INTO storage_node (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload)
+                     values (\${ns}, \${shardId}, \${nsIndex}, to_timestamp(\${ts}), \${skey}, 'v1', \${body})
+                     ON CONFLICT (namespace, namespace_shard_id, namespace_id, skey) DO UPDATE SET payload = \${body}`
+    const params = {
+      ns,
+      shardId,
+      nsIndex,
+      ts,
+      skey,
+      body
+    }
+    console.log(sql, params)
+    return pgPool
+      .none(sql, params)
+      .then((data) => {
+        log.debug(data)
+        return Promise.resolve()
+      })
+      .catch((err) => {
+        log.debug(err)
+        return Promise.reject(err)
+      })
+  }
+
   static async listInbox(
     namespace: string,
     namespaceShardId: number,
     nsIndex: string,
     storageTable: string,
     firstTsExcluded: string,
-    pageSize: number
+    pageSize: number,
+    order?: 'ASC' | 'DESC'
   ): Promise<object> {
+    order = order || 'ASC'
     const pageLookAhead = 3
     const pageSizeForSameTimestamp = pageSize * 20
     const isFirstQuery = StrUtil.isEmpty(firstTsExcluded)
@@ -346,7 +396,7 @@ END $$ LANGUAGE plpgsql;
                      where namespace='${namespace}'
                            and namespace_id='${nsIndex}' 
                            ${isFirstQuery ? '' : `and ts > to_timestamp(${firstTsExcluded})`}
-                     order by ts
+                     order by ts ${order}
                      limit ${pageSize + pageLookAhead}`
     log.debug(sql)
     const data1 = await pgPool.any(sql)
@@ -379,6 +429,88 @@ END $$ LANGUAGE plpgsql;
                      extract(epoch from ts) as ts,
                      payload as payload
                      from ${storageTable}
+                     where namespace='${namespace}'
+                           and namespace_id='${nsIndex}' 
+                           and ts = to_timestamp(${lastTs})
+                     order by ts
+                     limit ${pageSizeForSameTimestamp}`
+        log.debug(sql2)
+        const data2 = await pgPool.any(sql2)
+        for (const row of data2) {
+          const item = DbHelper.convertRowToItem(row, namespace)
+          items.set(item.skey, item)
+        }
+        log.debug(
+          `extra query with ${data2.length} items to fix duplicate timestamps pagination, total size is ${items.size}`
+        )
+      } else if (lastTsRowId > pageSize - 1) {
+        // we have more rows with same timestamp, they fit in pageSize+pageLookAhead rows
+        for (let i = pageSize; i <= lastTsRowId; i++) {
+          const item = DbHelper.convertRowToItem(data1[i], namespace)
+          items.set(item.skey, item)
+        }
+        log.debug(`updated to ${items.size} items to fix duplicate timestamps pagination`)
+      }
+    }
+    const itemsArr = [...items.values()]
+    return {
+      items: itemsArr,
+      lastTs: lastTs
+    }
+  }
+
+  static async listInboxV2(
+    namespace: string,
+    namespaceShardId: number,
+    nsIndex: string,
+    firstTsExcluded: string,
+    pageSize: number,
+    order?: 'ASC' | 'DESC'
+  ): Promise<object> {
+    order = order || 'ASC'
+    const pageLookAhead = 3
+    const pageSizeForSameTimestamp = pageSize * 20
+    const isFirstQuery = StrUtil.isEmpty(firstTsExcluded)
+    const sql = `select skey as skey,
+                     extract(epoch from ts) as ts,
+                     payload as payload
+                     from storage_node 
+                     where namespace='${namespace}'
+                           and namespace_id='${nsIndex}' 
+                           ${isFirstQuery ? '' : `and ts > to_timestamp(${firstTsExcluded})`}
+                     order by ts ${order}
+                     limit ${pageSize + pageLookAhead}`
+    log.debug(sql)
+    const data1 = await pgPool.any(sql)
+    const items = new Map<string, any>()
+    let lastTs: number = 0
+    for (let i = 0; i < Math.min(data1.length, pageSize); i++) {
+      const item = DbHelper.convertRowToItem(data1[i], namespace)
+      items.set(item.skey, item)
+      lastTs = data1[i].ts
+    }
+    log.debug(`added ${items.size} items; lastTs=${lastTs}`)
+    // [0...{pagesize-1 (lastTs)}...{data1.length-1 (lastTsRowId)}....]
+    // we always request pageSize+3 rows; so if we have these additional rows we can verify that their ts != last row ts,
+    // otherwise we should add these additional rows to the output (works only for 2..3 rows)
+    // otherwise we should execute and additional page request
+    let lastTsRowId = pageSize - 1
+    if (data1.length > pageSize) {
+      // add extra rows for ts = lastTs
+      for (let i = pageSize; i < data1.length; i++) {
+        if (data1[i].ts == lastTs) {
+          lastTsRowId = i
+        } else {
+          break
+        }
+      }
+      if (lastTsRowId == data1.length - 1) {
+        // we have more rows with same timestamp, they won't fit in pageSize+pageLookAhead rows
+        // let's peform additional select for ts = lastTs
+        const sql2 = `select skey as skey,
+                     extract(epoch from ts) as ts,
+                     payload as payload
+                     from storage_node
                      where namespace='${namespace}'
                            and namespace_id='${nsIndex}' 
                            and ts = to_timestamp(${lastTs})

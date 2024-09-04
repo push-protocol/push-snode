@@ -12,7 +12,7 @@ enum Order {
 message GetTransactionsRequest  {
     string wallet = 1;
     Category category = 2;
-    string sortkey = 3;
+    string timestamp = 3;
     Order order = 4;   
 }
 

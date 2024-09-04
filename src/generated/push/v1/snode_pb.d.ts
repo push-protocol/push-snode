@@ -10,8 +10,8 @@ export class GetTransactionsRequest extends jspb.Message {
   getCategory(): CategoryMap[keyof CategoryMap]
   setCategory(value: CategoryMap[keyof CategoryMap]): void
 
-  getSortkey(): string
-  setSortkey(value: string): void
+  getTimestamp(): string
+  setTimestamp(value: string): void
 
   getOrder(): OrderMap[keyof OrderMap]
   setOrder(value: OrderMap[keyof OrderMap]): void
@@ -36,7 +36,7 @@ export namespace GetTransactionsRequest {
   export type AsObject = {
     wallet: string
     category: CategoryMap[keyof CategoryMap]
-    sortkey: string
+    timestamp: string
     order: OrderMap[keyof OrderMap]
   }
 }
