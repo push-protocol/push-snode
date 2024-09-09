@@ -1,17 +1,49 @@
 version: '3'
 services:
+  redis:
+    image: 'redis:latest'
+    container_name: redis
+    restart: always
+    networks:
+      push-shared-network:
+        aliases:
+          - redis.local
+    ports:
+      - 6379:6379
+    volumes:
+      - ./external/redis:/data
+
   db:
     image: postgres:15.1
+    container_name: postgres
     restart: always
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      - PG_USER=postgres
+      - PG_PASS=postgres
     ports:
       - '5432:5432'
     volumes:
       - ./external/postgresql:/var/lib/postgresql/data
 #      - db:/var/lib/postgresql/data
+    networks:
+      push-shared-network:
+        aliases:
+          - postgres.local
+
+  hardhat:
+    image: hardhat-main
+    container_name: hardhat
+    networks:
+      push-shared-network:
+        aliases:
+          - hardhat.local
+    ports:
+      - "8545:8545"
+    restart: always
+    environment:
+      SEPOLIA_RPC_URL: 11
+      SEPOLIA_PRIVATE_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 
 networks:
-  main:
-    driver: bridge
+  push-shared-network:
+    external: true
