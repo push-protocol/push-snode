@@ -230,13 +230,20 @@ export class ValidatorCtClient {
     )
   }
 
+  private fixNodeUrl(nodeUrl: string) {
+    if (EnvLoader.getPropertyAsBool('LOCALH') && !StrUtil.isEmpty(nodeUrl)) {
+      return nodeUrl.replace('.local', '.localh')
+    }
+    return nodeUrl
+  }
+
   private async loadVSDNodesAndSubscribeToUpdates() {
     const vNodes = await this.contract.getVNodes()
     for (const nodeAddr of vNodes) {
       const niFromCt = await this.contract.getNodeInfo(nodeAddr)
       const ni = new NodeInfo(
         niFromCt.nodeWallet,
-        niFromCt.nodeApiBaseUrl,
+        this.fixNodeUrl(niFromCt.nodeApiBaseUrl),
         niFromCt.nodeType,
         niFromCt.status
       )
@@ -249,7 +256,7 @@ export class ValidatorCtClient {
       const niFromCt = await this.contract.getNodeInfo(nodeAddr)
       const ni = new NodeInfo(
         niFromCt.nodeWallet,
-        niFromCt.nodeApiBaseUrl,
+        this.fixNodeUrl(niFromCt.nodeApiBaseUrl),
         niFromCt.nodeType,
         niFromCt.status
       )
@@ -262,7 +269,7 @@ export class ValidatorCtClient {
       const niFromCt = await this.contract.getNodeInfo(nodeAddr)
       const ni = new NodeInfo(
         niFromCt.nodeWallet,
-        niFromCt.nodeApiBaseUrl,
+        this.fixNodeUrl(niFromCt.nodeApiBaseUrl),
         niFromCt.nodeType,
         niFromCt.status
       )
@@ -279,6 +286,7 @@ export class ValidatorCtClient {
         nodeTokens: number,
         nodeApiBaseUrl: string
       ) => {
+        nodeApiBaseUrl = this.fixNodeUrl(nodeApiBaseUrl)
         this.log.info('NodeAdded %o', arguments)
         this.log.info(
           'NodeAdded %s %s %s %s %s',

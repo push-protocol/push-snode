@@ -1,0 +1,73 @@
+version: '3'
+services:
+  snode1:
+    image: snode-main
+    container_name: snode1
+    networks:
+      push-shared-network:
+        aliases:
+          - snode1.local
+    environment:
+      DB_NAME: snode1
+      PORT: 3001
+      CONFIG_DIR: /config
+      LOG_DIR: /log
+      DB_HOST: postgres.local
+      REDIS_URL: redis://redis.local:6379
+      VALIDATOR_RPC_ENDPOINT: http://hardhat.local:8545
+      VALIDATOR_RPC_NETWORK: 1337
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./docker/01:/config
+      - ./docker/01/log:/log
+
+
+  snode2:
+    image: snode-main
+    container_name: snode2
+    networks:
+      push-shared-network:
+        aliases:
+          - snode2.local
+    environment:
+      DB_NAME: snode2
+      PORT: 3001
+      CONFIG_DIR: /config
+      LOG_DIR: /log
+      DB_HOST: postgres.local
+      REDIS_URL: redis://redis.local:6379
+      VALIDATOR_RPC_ENDPOINT: http://hardhat.local:8545
+      VALIDATOR_RPC_NETWORK: 1337
+    ports:
+      - "3002:3001"
+    volumes:
+      - ./docker/02:/config
+      - ./docker/02/log:/log
+
+
+  snode3:
+    image: snode-main
+    container_name: snode3
+    networks:
+      push-shared-network:
+        aliases:
+          - snode3.local
+    environment:
+      DB_NAME: snode3
+      PORT: 3001
+      CONFIG_DIR: /config
+      LOG_DIR: /log
+      DB_HOST: postgres.local
+      REDIS_URL: redis://redis.local:6379
+      VALIDATOR_RPC_ENDPOINT: http://hardhat.local:8545
+      VALIDATOR_RPC_NETWORK: 1337
+    ports:
+      - "3003:3001"
+    volumes:
+      - ./docker/03:/config
+      - ./docker/03/log:/log
+
+networks:
+  push-shared-network:
+    external: true
