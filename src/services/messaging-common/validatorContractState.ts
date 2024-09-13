@@ -230,11 +230,17 @@ export class ValidatorCtClient {
     )
   }
 
-  private fixNodeUrl(nodeUrl: string) {
-    if (EnvLoader.getPropertyAsBool('LOCALH') && !StrUtil.isEmpty(nodeUrl)) {
-      return nodeUrl.replace('.local', '.localh')
+  private fixNodeUrl(nodeUrl: string): string {
+    try {
+      const url = new URL(nodeUrl)
+      if (url.hostname.endsWith('.local')) {
+        url.hostname = 'localhost'
+      }
+      return url.toString()
+    } catch (error) {
+      // Handle invalid URLs if necessary
+      return nodeUrl
     }
-    return nodeUrl
   }
 
   private async loadVSDNodesAndSubscribeToUpdates() {
