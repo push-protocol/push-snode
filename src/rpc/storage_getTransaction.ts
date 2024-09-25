@@ -2,13 +2,12 @@ import { ethers } from 'ethers'
 import Container from 'typedi'
 import z from 'zod'
 
-import { GetTransactionRequest } from '../generated/push/v1/snode_pb'
 import { Transactions } from '../services/transactions/transactions'
-import { BitUtil } from '../utilz/bitUtil'
 import { Check } from '../utilz/check'
 
 enum Category {
-  INBOX = 0
+  INBOX = 'INBOX',
+  INIT_DID = 'INIT_DID'
 }
 
 const CategoryMap = {
@@ -31,17 +30,15 @@ export class StorageGetTransaction {
     return error
   }
 
-  public static async storageGetTransaction(params: [string]) {
-    const bytes = BitUtil.base16ToBytes(params[0])
-    const request = GetTransactionRequest.deserializeBinary(bytes)
-    const { wallet, category, key } = request.toObject()
+  public static async storageGetTransaction(params: [string, string, string]) {
+    const [wallet, category, key] = params
     StorageGetTransaction.validateGetTransaction({
       wallet,
-      category,
+      category: category as Category,
       key
     })
     const transaction = Container.get(Transactions)
-    return await transaction.getTransaction(CategoryMap[category], wallet, key)
+    return await transaction.getTransaction(category, wallet, key)
   }
 
   public static validateGetTransaction(params: StorageGetTransactionsParams) {

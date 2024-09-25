@@ -2,13 +2,11 @@ import { ethers } from 'ethers'
 import Container from 'typedi'
 import z from 'zod'
 
-import { GetTransactionsRequest } from '../generated/push/v1/snode_pb'
 import { Transactions } from '../services/transactions/transactions'
-import { BitUtil } from '../utilz/bitUtil'
 import { Check } from '../utilz/check'
 
 enum Category {
-  'INIT_DID' = 0
+  'INIT_DID' = 'INIT_DID'
 }
 
 const CategoryMap = {
@@ -16,8 +14,8 @@ const CategoryMap = {
 }
 
 enum Order {
-  ASC = 0,
-  DESC = 1
+  ASC = 'ASC',
+  DESC = 'DESC'
 }
 
 const OrderMap = {
@@ -42,23 +40,20 @@ export class StorageGetTransactions {
     return error
   }
 
-  public static async storageGetTransactions(params: [string]) {
-    const bytes = BitUtil.base16ToBytes(params[0])
-    const request = GetTransactionsRequest.deserializeBinary(bytes)
-    const { wallet, category, timestamp, order } = request.toObject()
+  public static async storageGetTransactions(params: [string, string, string, string]) {
+    const [wallet, category, timestamp, order] = params
     StorageGetTransactions.validateGetTransactions({
       wallet,
-      category,
+      category: category as Category,
       timestamp: timestamp,
-      order
+      order: order as Order
     })
     const transaction = Container.get(Transactions)
-    const orderValue = OrderMap[order] as 'ASC' | 'DESC'
     return await transaction.getTransactions({
-      namespace: CategoryMap[category],
+      namespace: category,
       timestamp,
       namespaceId: wallet,
-      order: orderValue
+      order: order as Order
     })
   }
 
