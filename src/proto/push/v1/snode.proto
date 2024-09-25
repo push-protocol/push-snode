@@ -2,7 +2,7 @@ syntax = "proto3";
 package push.v1;
 
 enum Category {
-    NOTIF = 0;
+    INIT_DID = 0;
 }
 
 enum Order {

@@ -1,4 +1,4 @@
-// package: push.v1
+// package: push
 // file: push/v1/block.proto
 
 import * as jspb from 'google-protobuf'
@@ -112,14 +112,10 @@ export namespace TransactionObj {
 }
 
 export class Signer extends jspb.Message {
-  getNode(): string
-  setNode(value: string): void
-
-  getRole(): RoleMap[keyof RoleMap]
-  setRole(value: RoleMap[keyof RoleMap]): void
-
-  getSig(): string
-  setSig(value: string): void
+  getSig(): Uint8Array | string
+  getSig_asU8(): Uint8Array
+  getSig_asB64(): string
+  setSig(value: Uint8Array | string): void
 
   serializeBinary(): Uint8Array
   toObject(includeInstance?: boolean): Signer.AsObject
@@ -133,15 +129,18 @@ export class Signer extends jspb.Message {
 
 export namespace Signer {
   export type AsObject = {
-    node: string
-    role: RoleMap[keyof RoleMap]
-    sig: string
+    sig: Uint8Array | string
   }
 }
 
 export class Block extends jspb.Message {
   getTs(): number
   setTs(value: number): void
+
+  getAttesttoken(): Uint8Array | string
+  getAttesttoken_asU8(): Uint8Array
+  getAttesttoken_asB64(): string
+  setAttesttoken(value: Uint8Array | string): void
 
   clearTxobjList(): void
   getTxobjList(): Array<TransactionObj>
@@ -152,11 +151,6 @@ export class Block extends jspb.Message {
   getSignersList(): Array<Signer>
   setSignersList(value: Array<Signer>): void
   addSigners(value?: Signer, index?: number): Signer
-
-  getAttesttoken(): Uint8Array | string
-  getAttesttoken_asU8(): Uint8Array
-  getAttesttoken_asB64(): string
-  setAttesttoken(value: Uint8Array | string): void
 
   serializeBinary(): Uint8Array
   toObject(includeInstance?: boolean): Block.AsObject
@@ -171,9 +165,65 @@ export class Block extends jspb.Message {
 export namespace Block {
   export type AsObject = {
     ts: number
+    attesttoken: Uint8Array | string
     txobjList: Array<TransactionObj.AsObject>
     signersList: Array<Signer.AsObject>
-    attesttoken: Uint8Array | string
+  }
+}
+
+export class AttestorReply extends jspb.Message {
+  clearAttestordataList(): void
+  getAttestordataList(): Array<TxAttestorData>
+  setAttestordataList(value: Array<TxAttestorData>): void
+  addAttestordata(value?: TxAttestorData, index?: number): TxAttestorData
+
+  hasSigner(): boolean
+  clearSigner(): void
+  getSigner(): Signer | undefined
+  setSigner(value?: Signer): void
+
+  serializeBinary(): Uint8Array
+  toObject(includeInstance?: boolean): AttestorReply.AsObject
+  static toObject(includeInstance: boolean, msg: AttestorReply): AttestorReply.AsObject
+  static extensions: { [key: number]: jspb.ExtensionFieldInfo<jspb.Message> }
+  static extensionsBinary: { [key: number]: jspb.ExtensionFieldBinaryInfo<jspb.Message> }
+  static serializeBinaryToWriter(message: AttestorReply, writer: jspb.BinaryWriter): void
+  static deserializeBinary(bytes: Uint8Array): AttestorReply
+  static deserializeBinaryFromReader(
+    message: AttestorReply,
+    reader: jspb.BinaryReader
+  ): AttestorReply
+}
+
+export namespace AttestorReply {
+  export type AsObject = {
+    attestordataList: Array<TxAttestorData.AsObject>
+    signer?: Signer.AsObject
+  }
+}
+
+export class AttestorReplies extends jspb.Message {
+  clearAttestationsList(): void
+  getAttestationsList(): Array<AttestorReply>
+  setAttestationsList(value: Array<AttestorReply>): void
+  addAttestations(value?: AttestorReply, index?: number): AttestorReply
+
+  serializeBinary(): Uint8Array
+  toObject(includeInstance?: boolean): AttestorReplies.AsObject
+  static toObject(includeInstance: boolean, msg: AttestorReplies): AttestorReplies.AsObject
+  static extensions: { [key: number]: jspb.ExtensionFieldInfo<jspb.Message> }
+  static extensionsBinary: { [key: number]: jspb.ExtensionFieldBinaryInfo<jspb.Message> }
+  static serializeBinaryToWriter(message: AttestorReplies, writer: jspb.BinaryWriter): void
+  static deserializeBinary(bytes: Uint8Array): AttestorReplies
+  static deserializeBinaryFromReader(
+    message: AttestorReplies,
+    reader: jspb.BinaryReader
+  ): AttestorReplies
+}
+
+export namespace AttestorReplies {
+  export type AsObject = {
+    attestationsList: Array<AttestorReply.AsObject>
   }
 }
 
@@ -184,8 +234,8 @@ export class Transaction extends jspb.Message {
   getCategory(): string
   setCategory(value: string): void
 
-  getSource(): string
-  setSource(value: string): void
+  getSender(): string
+  setSender(value: string): void
 
   clearRecipientsList(): void
   getRecipientsList(): Array<string>
@@ -229,7 +279,7 @@ export namespace Transaction {
   export type AsObject = {
     type: number
     category: string
-    source: string
+    sender: string
     recipientsList: Array<string>
     data: Uint8Array | string
     salt: Uint8Array | string
@@ -252,9 +302,8 @@ export class InitDid extends jspb.Message {
   getDerivedpubkey(): string
   setDerivedpubkey(value: string): void
 
-  getEncderivedprivkey(): string
-  setEncderivedprivkey(value: string): void
-
+  getWallettoencderivedkeyMap(): jspb.Map<string, string>
+  clearWallettoencderivedkeyMap(): void
   serializeBinary(): Uint8Array
   toObject(includeInstance?: boolean): InitDid.AsObject
   static toObject(includeInstance: boolean, msg: InitDid): InitDid.AsObject
@@ -271,7 +320,7 @@ export namespace InitDid {
     masterpubkey: string
     derivedkeyindex: number
     derivedpubkey: string
-    encderivedprivkey: string
+    wallettoencderivedkeyMap: Array<[string, string]>
   }
 }
 

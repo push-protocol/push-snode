@@ -7,6 +7,7 @@ export interface QItem {
   object_hash?: string
   // a json payload with data
   object: DCmd
+  serialisedBlock?: Uint8Array
 }
 
 // abstract command, only for type checks

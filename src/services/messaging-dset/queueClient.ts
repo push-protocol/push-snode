@@ -1,8 +1,10 @@
 import { Logger } from 'winston'
 
+import { Block } from '../../generated/push/v1/block_pb'
+import { BitUtil } from '../../utilz/bitUtil'
 import { PgUtil } from '../../utilz/pgUtil' // Assuming pgutil is the PostgreSQL utility file
-import { RpcUtils } from '../../utilz/rpcUtil'
 import { WinstonUtil } from '../../utilz/winstonUtil'
+import { validatorRpc } from '../validatorRpc/validatorRpc'
 import { Consumer, QItem } from './queueTypes'
 
 export class QueueClient {
@@ -91,17 +93,33 @@ export class QueueClient {
     }
   }
 
+  private getDeserialisedBlock(items: QItem[]) {
+    const blocks = []
+    for (const item of items) {
+      const itemBytes = BitUtil.base16ToBytes(item.object as string)
+      const deserilisedBlock = Block.deserializeBinary(itemBytes).toObject()
+      blocks.push({ ...item, object: deserilisedBlock, serialisedBlock: itemBytes })
+    }
+    return blocks
+  }
+
   public async readItems(
     queueName: string,
     baseUri: string,
     firstOffset: number = 0
   ): Promise<{ items: QItem[]; lastOffset: number } | null> {
-    const url = `${baseUri}/apis/v1/dset/queue/${queueName}`
+    const url = `${baseUri}/api/v1/rpc/`
     try {
-      const re = await new RpcUtils(url, 'push_readBlockQueue', [`${firstOffset}`]).call()
-      // TODO: implement the logic to deserialise the blocks
-      this.log.debug('readItems %s from offset %d %o', url, firstOffset, re?.data)
-      const obj: { items: QItem[]; lastOffset: number } = re.data
+      const re = await validatorRpc.callPushReadBlockQueue(url, [firstOffset.toString()])
+
+      this.log.debug('readItems %s from offset %d %o', url, firstOffset, re?.items)
+
+      // Create the object with response data
+      const obj: { items: QItem[]; lastOffset: number } = {
+        items: this.getDeserialisedBlock(re.items), // Use the fetched items here
+        lastOffset: re.lastOffset
+      }
+
       return obj
     } catch (e) {
       this.log.warn('readItems failed for url %s', url)
@@ -109,10 +127,8 @@ export class QueueClient {
     }
   }
 
-  public async readLastOffset(queueName: string, baseUri: string): Promise<number> {
-    const url = `${baseUri}/api/v1/dset/queue/${queueName}/`
-    const resp = await new RpcUtils(url, 'push_readBlockQueueSize', []).call()
-    const result: number = resp.data.result
-    return result
+  public async readLastOffset({ queueName, baseUri }: { queueName?: string; baseUri: string }) {
+    const url = `${baseUri}/api/v1/rpc/`
+    return await validatorRpc.callPushReadBlockQueueSizeRpc(url)
   }
 }

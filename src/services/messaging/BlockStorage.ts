@@ -145,7 +145,6 @@ export class BlockStorage {
       null
     )
     let result: Set<number>
-    console.log(shardsAssigned)
     if (
       typeof shardsAssigned == 'string' &&
       shardsAssigned != null &&
@@ -216,7 +215,7 @@ export class BlockStorage {
     const cache = new Set<string>()
     const cacheMaxSize = 2 * subqueryRowLimit
 
-    let fromId = null
+    let fromId = 0
     let rows = null
 
     do {
@@ -268,7 +267,7 @@ export class BlockStorage {
             cache.delete(firstCachedValue)
           }
         }
-        fromId = Math.min(fromId, row.minId)
+        fromId = Math.min(fromId, parseInt(row.minId))
       }
 
       Check.isTrue(cache.size <= cacheMaxSize)

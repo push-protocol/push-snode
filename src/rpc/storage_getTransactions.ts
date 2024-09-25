@@ -8,11 +8,11 @@ import { BitUtil } from '../utilz/bitUtil'
 import { Check } from '../utilz/check'
 
 enum Category {
-  INBOX = 0
+  'INIT_DID' = 0
 }
 
 const CategoryMap = {
-  0: 'inbox'
+  0: 'INIT_DID'
 }
 
 enum Order {

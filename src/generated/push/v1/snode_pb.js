@@ -475,7 +475,7 @@ proto.push.v1.GetTransactionRequest.prototype.setKey = function(value) {
  * @enum {number}
  */
 proto.push.v1.Category = {
-  NOTIF: 0
+  INIT_DID: 0
 };
 
 /**

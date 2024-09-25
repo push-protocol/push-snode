@@ -365,7 +365,6 @@ END $$ LANGUAGE plpgsql;
       skey,
       body
     }
-    console.log(sql, params)
     return pgPool
       .none(sql, params)
       .then((data) => {

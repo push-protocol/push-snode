@@ -49,8 +49,8 @@ export class IndexStorage {
       tsString = '' + DateUtil.currentTimeSeconds()
     }
     const currentNodeId = this.valContractState.nodeId
-    for (let i = 0; i < mb.responses.length; i++) {
-      const feedItem = mb.responses[i]
+    for (let i = 0; i < mb.txobjList.length; i++) {
+      const feedItem = mb.txobjList[i]
       const targetWallets: string[] = MessageBlockUtil.calculateRecipients(mb, i)
       for (let i1 = 0; i1 < targetWallets.length; i1++) {
         const targetAddr = targetWallets[i1]
@@ -62,12 +62,12 @@ export class IndexStorage {
           continue
         }
         await this.putPayloadToInbox(
-          'inbox',
+          feedItem.tx.category,
           targetShard,
           targetAddr,
           tsString,
           currentNodeId,
-          feedItem.payload
+          feedItem.tx
         )
       }
     }
@@ -94,7 +94,7 @@ export class IndexStorage {
     nodeId: string,
     fpayload: FPayload
   ) {
-    const key = fpayload.data.sid
+    const key = fpayload.salt
     fpayload.recipients = null // null recipients field because we don't need that
     const date = DateUtil.parseUnixFloatAsDateTime(ts)
     this.log.debug(`parsed date ${ts} -> ${date}`)

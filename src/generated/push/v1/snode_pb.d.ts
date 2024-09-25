@@ -76,7 +76,7 @@ export namespace GetTransactionRequest {
 }
 
 export interface CategoryMap {
-  NOTIF: 0
+  INIT_DID: 0
 }
 
 export const Category: CategoryMap

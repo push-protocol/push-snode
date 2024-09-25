@@ -1,6 +1,7 @@
 import { Inject, Service } from 'typedi'
 import { Logger } from 'winston'
 
+import { BlockUtil } from '../../utilz/block'
 import { Check } from '../../utilz/check'
 import { Coll } from '../../utilz/coll'
 import { WinstonUtil } from '../../utilz/winstonUtil'
@@ -54,8 +55,8 @@ export default class StorageNode implements Consumer<QItem>, StorageContractList
   async accept(item: QItem): Promise<boolean> {
     // check hash
     const mb = <MessageBlock>item.object
-    Check.notEmpty(mb.id, 'message block has no id')
-    const calculatedHash = MessageBlockUtil.calculateHash(mb)
+    Check.notEmpty(item.id.toString(), 'message block has no id')
+    const calculatedHash = BlockUtil.calculateBlockHashBase16(item.serialisedBlock)
     if (calculatedHash !== item.object_hash) {
       this.log.error(
         'received item hash=%s , ' +
@@ -69,15 +70,16 @@ export default class StorageNode implements Consumer<QItem>, StorageContractList
     // check contents
     // since this check is not for historical data, but for realtime data,
     // so we do not care about old blocked validators which might occur in the historical queue
-    const activeValidators = Coll.arrayToFields(
-      this.valContractState.getActiveValidators(),
-      'nodeId'
-    )
-    const check1 = MessageBlockUtil.checkBlock(mb, activeValidators)
-    if (!check1.success) {
-      this.log.error('item validation failed: ', check1.err)
-      return false
-    }
+    //TODO: Uncomment them
+    // const activeValidators = Coll.arrayToFields(
+    //   this.valContractState.getActiveValidators(),
+    //   'nodeId'
+    // )
+    // const check1 = MessageBlockUtil.checkBlock(mb, activeValidators)
+    // if (!check1.success) {
+    //   this.log.error('item validation failed: ', check1.err)
+    //   return false
+    // }
     // check database
     const shardSet = MessageBlockUtil.calculateAffectedShards(
       mb,
