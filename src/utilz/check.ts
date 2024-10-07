@@ -31,4 +31,8 @@ export class Check {
       throw new Error(StrUtil.isEmpty(err) ? 'Set empty check failed' : err)
     }
   }
+
+  public static isEqual<T>(a: T, b: T, err?: string) {
+    return a === b
+  }
 }

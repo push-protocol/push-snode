@@ -12,7 +12,6 @@
 import { Logger } from 'winston'
 
 import { Check } from '../../utilz/check'
-import { Coll } from '../../utilz/coll'
 import { EthSig } from '../../utilz/ethSig'
 import { EthUtil } from '../../utilz/EthUtil'
 import { NumUtil } from '../../utilz/numUtil'
@@ -314,18 +313,18 @@ export class MessageBlockUtil {
       requestOffset = block.requests.findIndex((value) => value.id === requestSid)
     }
     Check.isTrue(requestOffset >= 0, 'requestOffset not found')
-    const recipientsV = block.responses[requestOffset].header.recipientsResolved
-    const signaturesA = block.responsesSignatures[requestOffset]
-    const allRecipients = Coll.arrayToMap(recipientsV, 'addr')
-    for (const signatureA of signaturesA) {
-      const recipientsMissing = signatureA.data.recipientsMissing
-      if (recipientsMissing != null) {
-        for (const itemToRemove of recipientsMissing.recipients) {
-          allRecipients.delete(itemToRemove.addr)
-        }
-      }
-    }
-    return Array.from(allRecipients.keys())
+    return block.txobjList[requestOffset].tx.recipientsList
+    // const signaturesA = block.signersList[requestOffset]
+    // const allRecipients = Coll.arrayToMap(recipientsV, 'addr')
+    // for (const signatureA of signaturesA) {
+    //   const recipientsMissing = signatureA.data.recipientsMissing
+    //   if (recipientsMissing != null) {
+    //     for (const itemToRemove of recipientsMissing.recipients) {
+    //       allRecipients.delete(itemToRemove.addr)
+    //     }
+    //   }
+    // }
+    // return Array.from(allRecipients.keys())
   }
 
   static calculateHash(block: Readonly<MessageBlock>) {
@@ -344,9 +343,9 @@ export class MessageBlockUtil {
    */
   static calculateAffectedShards(block: Readonly<MessageBlock>, shardCount: number): Set<number> {
     const shards = new Set<number>()
-    for (const fi of block.responses) {
-      for (const recipient of fi.header.recipientsResolved) {
-        const shardId = this.calculateAffectedShard(recipient.addr, shardCount)
+    for (const fi of block.txobjList) {
+      for (const recipient of fi.tx.recipientsList) {
+        const shardId = this.calculateAffectedShard(recipient, shardCount)
         if (shardId == null) {
           this.log.error('cannot calculate shardId for recipient %o in %o', recipient, fi)
           continue
@@ -390,11 +389,12 @@ export class MessageBlockUtil {
   }
 
   public static getBlockCreationTimeMillis(block: MessageBlock): number | null {
-    if (block.responsesSignatures.length > 0 && block.responsesSignatures[0].length > 0) {
-      const sig = block.responsesSignatures[0][0]
-      return sig?.nodeMeta?.tsMillis
-    }
-    return null
+    // if (block.responsesSignatures.length > 0 && block.responsesSignatures[0].length > 0) {
+    //   const sig = block.responsesSignatures[0][0]
+    //   return sig?.nodeMeta?.tsMillis
+    // }
+    // return null
+    return block.ts ? block.ts : null
   }
 
   public static checkBlock(block: MessageBlock, validatorsFromContract: Set<string>): CheckResult {

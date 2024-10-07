@@ -85,7 +85,7 @@ export class Coll {
 
   // parse '[1,2,3]' into Set<number>: 1,2,3
   public static parseAsNumberSet(jsonArray: string): Set<number> {
-    const arr: number[] = JSON.parse(jsonArray)
+    const arr: number[] = typeof jsonArray == 'string' ? JSON.parse(jsonArray) : jsonArray
     return Coll.arrayToSet(arr)
   }
 

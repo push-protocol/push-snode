@@ -1,7 +1,7 @@
 import { Logger } from 'winston'
 
 import { Check } from '../../utilz/check'
-import { MySqlUtil } from '../../utilz/mySqlUtil'
+import { PgUtil } from '../../utilz/pgUtil'
 import { WinstonUtil } from '../../utilz/winstonUtil'
 import { ValidatorContractState } from './validatorContractState'
 
@@ -20,26 +20,29 @@ export class QueueClientHelper {
         const targetNodeId = nodeInfo.nodeId
         const targetNodeUrl = nodeInfo.url
         const targetState = ValidatorContractState.isEnabled(nodeInfo) ? 1 : 0
-        await MySqlUtil.insert(
+
+        // PostgreSQL version of the insert or update (UPSERT)
+        await PgUtil.insert(
           `INSERT INTO dset_client (queue_name, target_node_id, target_node_url, target_offset, state)
-           VALUES (?, ?, ?, 0, ?)
-           ON DUPLICATE KEY UPDATE target_node_url=?,
-                                   state=?`,
+           VALUES ($1, $2, $3, 0, $4)
+           ON CONFLICT (queue_name, target_node_id) 
+           DO UPDATE SET target_node_url = EXCLUDED.target_node_url,
+                         state = EXCLUDED.state`,
           queueName,
           targetNodeId,
           targetNodeUrl,
-          targetState,
-          targetNodeUrl,
           targetState
         )
-        const targetOffset = await MySqlUtil.queryOneValue<number>(
+
+        const targetOffset = await PgUtil.queryOneValue<number>(
           `SELECT target_offset
            FROM dset_client
-           where queue_name = ?
-             and target_node_id = ?`,
+           WHERE queue_name = $1
+             AND target_node_id = $2`,
           queueName,
           targetNodeId
         )
+
         this.log.info(
           'client polls (%s) queue: %s node: %s from offset: %d ',
           targetState,

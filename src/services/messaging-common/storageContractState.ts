@@ -152,6 +152,6 @@ export interface StorageContractAPI {
 export interface StorageContractListener {
   handleReshard(
     currentNodeShards: Set<number> | null,
-    allNodeShards: Map<string, Set<number>>
+    allNodeShards?: Map<string, Set<number>>
   ): Promise<void>
 }

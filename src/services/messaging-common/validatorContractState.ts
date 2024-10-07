@@ -3,6 +3,7 @@ import { Contract, ethers, Wallet } from 'ethers'
 import fs, { readFileSync } from 'fs'
 import path from 'path'
 import { Service } from 'typedi'
+import { URL } from 'url'
 import { Logger } from 'winston'
 
 import { EnvLoader } from '../../utilz/envLoader'
@@ -230,13 +231,38 @@ export class ValidatorCtClient {
     )
   }
 
+  private fixNodeUrl(nodeUrl: string): string {
+    if (nodeUrl.length > 100) {
+      this.log.error('nodeUrl should be less than 100 chars')
+      return null
+    }
+
+    try {
+      const urlObj = new URL(nodeUrl)
+      if (EnvLoader.getPropertyAsBool('LOCALH') && !StrUtil.isEmpty(nodeUrl)) {
+        if (urlObj.hostname.endsWith('.local')) {
+          urlObj.hostname = 'localhost'
+        }
+      }
+
+      let fixedUrl = urlObj.toString()
+      if (fixedUrl.endsWith('/')) {
+        fixedUrl = fixedUrl.slice(0, -1)
+      }
+      return fixedUrl
+    } catch (e) {
+      this.log.error(e)
+      return null
+    }
+  }
+
   private async loadVSDNodesAndSubscribeToUpdates() {
     const vNodes = await this.contract.getVNodes()
     for (const nodeAddr of vNodes) {
       const niFromCt = await this.contract.getNodeInfo(nodeAddr)
       const ni = new NodeInfo(
         niFromCt.nodeWallet,
-        niFromCt.nodeApiBaseUrl,
+        this.fixNodeUrl(niFromCt.nodeApiBaseUrl),
         niFromCt.nodeType,
         niFromCt.status
       )
@@ -249,7 +275,7 @@ export class ValidatorCtClient {
       const niFromCt = await this.contract.getNodeInfo(nodeAddr)
       const ni = new NodeInfo(
         niFromCt.nodeWallet,
-        niFromCt.nodeApiBaseUrl,
+        this.fixNodeUrl(niFromCt.nodeApiBaseUrl),
         niFromCt.nodeType,
         niFromCt.status
       )
@@ -262,7 +288,7 @@ export class ValidatorCtClient {
       const niFromCt = await this.contract.getNodeInfo(nodeAddr)
       const ni = new NodeInfo(
         niFromCt.nodeWallet,
-        niFromCt.nodeApiBaseUrl,
+        this.fixNodeUrl(niFromCt.nodeApiBaseUrl),
         niFromCt.nodeType,
         niFromCt.status
       )
@@ -279,6 +305,7 @@ export class ValidatorCtClient {
         nodeTokens: number,
         nodeApiBaseUrl: string
       ) => {
+        nodeApiBaseUrl = this.fixNodeUrl(nodeApiBaseUrl)
         this.log.info('NodeAdded %o', arguments)
         this.log.info(
           'NodeAdded %s %s %s %s %s',

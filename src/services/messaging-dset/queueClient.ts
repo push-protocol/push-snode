@@ -1,10 +1,10 @@
-// ------------------------------
-// reads other node queue fully, appends everything to the local queue/storage
-import axios from 'axios'
 import { Logger } from 'winston'
 
-import { MySqlUtil } from '../../utilz/mySqlUtil'
+import { Block } from '../../generated/push/v1/block_pb'
+import { BitUtil } from '../../utilz/bitUtil'
+import { PgUtil } from '../../utilz/pgUtil' // Assuming pgutil is the PostgreSQL utility file
 import { WinstonUtil } from '../../utilz/winstonUtil'
+import { validatorRpc } from '../validatorRpc/validatorRpc'
 import { Consumer, QItem } from './queueTypes'
 
 export class QueueClient {
@@ -27,20 +27,21 @@ export class QueueClient {
    */
   public async pollRemoteQueue(maxRequests: number): Promise<any> {
     const result = []
-    const sameQueueEndpoints = await MySqlUtil.queryArr<{
+    const sameQueueEndpoints = await PgUtil.queryArr<{
       id: number
       queue_name: string
       target_node_id: string
       target_node_url: string
       target_offset: number
     }>(
-      `select id, queue_name, target_node_id, target_node_url, target_offset
-       from dset_client
-       where queue_name = ?
-         and state = 1
-       order by id asc`,
+      `SELECT id, queue_name, target_node_id, target_node_url, target_offset
+       FROM dset_client
+       WHERE queue_name = $1
+         AND state = 1
+       ORDER BY id ASC`,
       this.queueName
     )
+
     for (const endpoint of sameQueueEndpoints) {
       // todo EVERY ENDPOINT CAN BE DONE IN PARALLEL
       // read data from the endpoint (in cycle) , update the offset in db
@@ -78,8 +79,8 @@ export class QueueClient {
             endpointStats.newItems++
           }
         }
-        await MySqlUtil.update(
-          'UPDATE dset_client SET target_offset=? WHERE id=?',
+        await PgUtil.update(
+          'UPDATE dset_client SET target_offset = $1 WHERE id = $2',
           reply.lastOffset,
           endpoint.id
         )
@@ -92,19 +93,33 @@ export class QueueClient {
     }
   }
 
+  private getDeserialisedBlock(items: QItem[]) {
+    const blocks = []
+    for (const item of items) {
+      const itemBytes = BitUtil.base16ToBytes(item.object as string)
+      const deserilisedBlock = Block.deserializeBinary(itemBytes).toObject()
+      blocks.push({ ...item, object: deserilisedBlock, serialisedBlock: itemBytes })
+    }
+    return blocks
+  }
+
   public async readItems(
     queueName: string,
     baseUri: string,
     firstOffset: number = 0
   ): Promise<{ items: QItem[]; lastOffset: number } | null> {
-    const url = `${baseUri}/apis/v1/dset/queue/${queueName}?firstOffset=${firstOffset}`
+    const url = `${baseUri}/api/v1/rpc/`
     try {
-      const re = await axios.get(url, {
-        timeout: 3000
-        // signal: AbortSignal.timeout(3000)
-      })
-      this.log.debug('readItems %s from offset %d %o', url, firstOffset, re?.data)
-      const obj: { items: QItem[]; lastOffset: number } = re.data
+      const re = await validatorRpc.callPushReadBlockQueue(url, [firstOffset.toString()])
+
+      this.log.debug('readItems %s from offset %d %o', url, firstOffset, re?.items)
+
+      // Create the object with response data
+      const obj: { items: QItem[]; lastOffset: number } = {
+        items: this.getDeserialisedBlock(re.items), // Use the fetched items here
+        lastOffset: re.lastOffset
+      }
+
       return obj
     } catch (e) {
       this.log.warn('readItems failed for url %s', url)
@@ -112,9 +127,8 @@ export class QueueClient {
     }
   }
 
-  public async readLastOffset(queueName: string, baseUri: string): Promise<number> {
-    const url = `${baseUri}/api/v1/dset/queue/${queueName}/lastOffset`
-    const resp: { result: number } = await axios.get(url, { timeout: 3000 })
-    return resp.result
+  public async readLastOffset({ queueName, baseUri }: { queueName?: string; baseUri: string }) {
+    const url = `${baseUri}/api/v1/rpc/`
+    return await validatorRpc.callPushReadBlockQueueSizeRpc(url)
   }
 }
