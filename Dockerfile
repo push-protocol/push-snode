@@ -2,9 +2,9 @@ FROM node:20.9.0
 WORKDIR /app
 COPY . .
 RUN yarn install
-EXPOSE 4001
-EXPOSE 4002
-EXPOSE 4003
+EXPOSE 3001
+EXPOSE 3002
+EXPOSE 3003
 CMD ["yarn", "start"]
 
 # todo find an error here ; probably a package json is not copied
