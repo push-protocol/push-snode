@@ -3,6 +3,7 @@ import { Contract, ethers, Wallet } from 'ethers'
 import fs, { readFileSync } from 'fs'
 import path from 'path'
 import { Service } from 'typedi'
+import { URL } from 'url'
 import { Logger } from 'winston'
 
 import { EnvLoader } from '../../utilz/envLoader'
@@ -230,11 +231,29 @@ export class ValidatorCtClient {
     )
   }
 
-  private fixNodeUrl(nodeUrl: string) {
-    if (EnvLoader.getPropertyAsBool('LOCALH') && !StrUtil.isEmpty(nodeUrl)) {
-      return nodeUrl.replace('.local', '.localh')
+  private fixNodeUrl(nodeUrl: string): string {
+    if (nodeUrl.length > 100) {
+      this.log.error('nodeUrl should be less than 100 chars')
+      return null
     }
-    return nodeUrl
+
+    try {
+      const urlObj = new URL(nodeUrl)
+      if (EnvLoader.getPropertyAsBool('LOCALH') && !StrUtil.isEmpty(nodeUrl)) {
+        if (urlObj.hostname.endsWith('.local')) {
+          urlObj.hostname = 'localhost'
+        }
+      }
+
+      let fixedUrl = urlObj.toString()
+      if (fixedUrl.endsWith('/')) {
+        fixedUrl = fixedUrl.slice(0, -1)
+      }
+      return fixedUrl
+    } catch (e) {
+      this.log.error(e)
+      return null
+    }
   }
 
   private async loadVSDNodesAndSubscribeToUpdates() {
