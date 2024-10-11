@@ -4,10 +4,14 @@ import pgPromise from 'pg-promise'
 import { IClient } from 'pg-promise/typescript/pg-subset'
 import { DateTime } from 'ts-luxon'
 
+import { InitDid } from '../generated/push/v1/block_pb'
 import log from '../loaders/logger'
+import { PushKeys } from '../services/transactions/pushKeys'
+import { PushWallets } from '../services/transactions/pushWallets'
 import { EnvLoader } from '../utilz/envLoader'
 import { PgUtil } from '../utilz/pgUtil'
 import StrUtil from '../utilz/strUtil'
+import { arrayToMap } from '../utilz/typeConversionUtil'
 import { WinstonUtil } from '../utilz/winstonUtil'
 
 // postgres
@@ -331,7 +335,6 @@ END $$ LANGUAGE plpgsql;
       skey,
       body
     }
-    console.log(sql, params)
     return pgPool
       .none(sql, params)
       .then((data) => {
@@ -367,14 +370,78 @@ END $$ LANGUAGE plpgsql;
     }
     return pgPool
       .none(sql, params)
-      .then((data) => {
+      .then(async (data) => {
         log.debug(data)
+        await DbHelper.indexTransactionCategory(ns, shardId, nsIndex, ts, skey, body)
         return Promise.resolve()
       })
       .catch((err) => {
         log.debug(err)
         return Promise.reject(err)
       })
+  }
+
+  static async indexTransactionCategory(
+    ns: string,
+    shardId: number,
+    nsIndex: string,
+    ts: string,
+    skey: string,
+    body: string
+  ) {
+    const parsedBody = typeof body == 'string' ? JSON.parse(body) : body
+    // parent function that calls functions to store and index trxs based on category
+    if (ns == 'INIT_DID') {
+      const deserializedData = InitDid.deserializeBinary(parsedBody['data']).toObject()
+      const masterPubKey = deserializedData['masterpubkey']
+      const did = parsedBody['sender']
+      const derivedKeyIndex = deserializedData['derivedkeyindex']
+      const derivedPublicKey = deserializedData['derivedpubkey']
+      const walletToEncodedDerivedKeyMap = arrayToMap(deserializedData['wallettoencderivedkeyMap'])
+      await DbHelper.putInitDidTransaction({
+        masterPublicKey: masterPubKey,
+        did: did,
+        derivedKeyIndex: derivedKeyIndex,
+        derivedPublicKey: derivedPublicKey,
+        walletToEncodedDerivedKeyMap: walletToEncodedDerivedKeyMap
+      })
+    }
+    if (ns == 'INIT_SESSION_KEY') {
+    } else {
+      logger.error('Unknown category')
+    }
+  }
+
+  static async putInitDidTransaction({
+    masterPublicKey,
+    did,
+    derivedKeyIndex,
+    derivedPublicKey,
+    walletToEncodedDerivedKeyMap
+  }: {
+    masterPublicKey: string
+    did: string
+    derivedKeyIndex: number
+    derivedPublicKey: string
+    walletToEncodedDerivedKeyMap: Map<string, string>
+  }) {
+    // Adding initial PushKeys for the masterPublicKey
+    await PushKeys.addPushKeys({
+      masterPublicKey,
+      did,
+      derivedKeyIndex,
+      derivedPublicKey
+    })
+
+    walletToEncodedDerivedKeyMap.forEach(async (value, wallet) => {
+      await PushWallets.addPushWallets({
+        address: wallet,
+        did: did,
+        derivedKeyIndex: derivedKeyIndex.toString(),
+        encryptedDervivedPrivateKey: value['encderivedprivkey'],
+        signature: value['signature']
+      })
+    })
   }
 
   static async listInbox(

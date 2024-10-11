@@ -313,7 +313,10 @@ export class MessageBlockUtil {
       requestOffset = block.requests.findIndex((value) => value.id === requestSid)
     }
     Check.isTrue(requestOffset >= 0, 'requestOffset not found')
-    return block.txobjList[requestOffset].tx.recipientsList
+    return [
+      ...block.txobjList[requestOffset].tx.recipientsList,
+      block.txobjList[requestOffset].tx.sender
+    ]
     // const signaturesA = block.signersList[requestOffset]
     // const allRecipients = Coll.arrayToMap(recipientsV, 'addr')
     // for (const signatureA of signaturesA) {

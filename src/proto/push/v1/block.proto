@@ -99,15 +99,26 @@ message Transaction {
 // PAYLOADS ------------------------------------------------------------------------------------------------------------
 
 
+message EncryptedText {
+    string ciphertext = 1;
+    string salt = 2;
+    string nonce = 3;
+    string version = 4; 
+    string preKey = 5;
+  }
+
+message WalletToEncDerivedKey {
+    EncryptedText encDerivedPrivKey = 1;
+    // Helps Vnode to proof that encryptedData is indeed signed by account
+    bytes signature = 2;
+}
 // INIT_DID
+
 message InitDid {
-    string did = 1;
-    string masterPubKey = 2;
-    uint32 derivedKeyIndex = 3;
-    string derivedPubKey = 4;
-    // Map to store wallet address and corresponding encrypted derived key
-    // Note:- There will always be altest 1 mapping
-    map<string, string> walletToEncDerivedKey = 6;
+    string masterPubKey = 1;
+    uint32 derivedKeyIndex = 2;
+    string derivedPubKey = 3;
+    map<string, WalletToEncDerivedKey> walletToEncDerivedKey = 4;
 }
 
 enum KeyAction {
