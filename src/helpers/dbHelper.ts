@@ -644,6 +644,27 @@ END $$ LANGUAGE plpgsql;
         return Promise.reject(err)
       })
   }
+
+  static async getAccountInfo(wallet: string) {
+    const sql = `SELECT pk.masterpublickey, pk.did, pk.derivedkeyindex, pk.derivedpublickey,
+       pw.address, pw.encrypteddervivedprivatekey, pw.signature
+FROM push_keys pk
+JOIN push_wallets pw
+  ON pk.did = pw.did
+WHERE pk.did = '${wallet}'
+  AND pk.derivedkeyindex = pw.derivedkeyindex;`
+    log.debug(sql)
+    return pgPool
+      .query(sql)
+      .then((data) => {
+        log.debug(data)
+        return Promise.resolve(data)
+      })
+      .catch((err) => {
+        log.debug(err)
+        return Promise.resolve([])
+      })
+  }
 }
 
 export class StorageRecord {
