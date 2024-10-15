@@ -1,4 +1,13 @@
+// @ts-ignore
+import bs58 from 'bs58'
+
 import { Coll } from './coll'
+
+// bytes      (as hex numbers)            = 0x41 0x41 0x42 0x42
+// Uint8Array (as decimal numbers)        = 65 65 66 66
+//        string (as non printable chars) = ..
+// base16 string                          = 0xAABB
+// base64 string                          = QUFCQg==
 
 export class BitUtil {
   /**
@@ -62,11 +71,47 @@ export class BitUtil {
     return Uint8Array.from(Buffer.from(base16String, 'hex'))
   }
 
-  public static base64ToBytes(base16String: string): Uint8Array {
-    return Uint8Array.from(Buffer.from(base16String, 'base64'))
-  }
-
   public static bytesToBase16(arr: Uint8Array): string {
     return Buffer.from(arr).toString('hex')
+  }
+
+  public static bytesBufToBase16(buf: Buffer): string {
+    return buf.toString('hex')
+  }
+
+  public static base64ToString(base64String: string): string {
+    return Buffer.from(base64String, 'base64').toString('utf8')
+  }
+
+  public static bytesToBase64(bytes: Uint8Array): string {
+    return Buffer.from(bytes).toString('base64')
+  }
+
+  public static base64ToBytes(base64String: string): Uint8Array {
+    return new Uint8Array(Buffer.from(base64String, 'base64'))
+  }
+
+  public static bytesUtfToString(bytes: Uint8Array): string {
+    return Buffer.from(bytes).toString('utf8')
+  }
+
+  public static stringToBytesUtf(str: string): Uint8Array {
+    return new Uint8Array(Buffer.from(str, 'utf-8'))
+  }
+
+  public static stringToBase64(str: string): string {
+    return Buffer.from(str, 'utf-8').toString('base64')
+  }
+
+  public static base64ToBase16(base64String: string): string {
+    return Buffer.from(base64String, 'base64').toString('hex')
+  }
+
+  public static base58ToBytes(base58String: string): Uint8Array {
+    return bs58.decode(base58String)
+  }
+
+  public static bytesToBase58(bytes: Uint8Array): string {
+    return bs58.encode(bytes)
   }
 }

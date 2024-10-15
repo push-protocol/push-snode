@@ -66,16 +66,34 @@ message Block {
     repeated Signer signers = 3;
 }
 
-message AttestorReply {
-   // reply per transaction (same order as in block)
-   repeated TxAttestorData attestorData = 1;
-   // signature for the whole block
-   // assuming that on this node TxAttestorData is filled per every tx
-   Signer signer = 2;
+// INTERNAL NODE API
+
+// BLOCK ATTESTATION
+message AttestBlockResult {
+    // reply per transaction (same order as in block)
+    repeated TxAttestorData attestorData = 1;
+    // signature for the whole block
+    // assuming that on this node TxAttestorData is filled per every tx
+    Signer signer = 2;
 }
 
-message AttestorReplies {
-   repeated AttestorReply attestations = 1;
+// SIGNATURE ATTESTATION
+message AttestSignaturesRequest {
+    repeated AttestBlockResult attestations = 1;
+    bytes initialBlockHash = 2;
+    bytes finalBlockHash = 3;
+}
+
+message AttestSignaturesResponse {
+    repeated AttestorReport attestations = 1;
+}
+
+message AttestorReport {
+    string nodeId = 1 ;
+    string transactionHash = 2;
+    int32 vote = 3;
+    bytes dataForSc = 4;
+    bytes dataSigForSc = 5;
 }
 
 

@@ -1,12 +1,13 @@
 import { Service } from 'typedi'
 import { Logger } from 'winston'
 
+import { Block } from '../../generated/push/v1/block_pb'
 import { Check } from '../../utilz/check'
 import { Coll } from '../../utilz/coll'
 import { PgUtil } from '../../utilz/pgUtil' // Use PgUtil instead of MySqlUtil
 import StrUtil from '../../utilz/strUtil'
 import { WinstonUtil } from '../../utilz/winstonUtil'
-import { MessageBlock } from '../messaging-common/messageBlock'
+import { BlockUtil } from '../messaging-common/BlockUtil'
 
 // stores everything in postgres
 @Service()
@@ -128,7 +129,7 @@ export class BlockStorage {
   }
 
   async saveBlockWithShardData(
-    mb: MessageBlock,
+    mb: Block,
     calculatedHash: string,
     shardSet: Set<number>
   ): Promise<boolean> {
@@ -149,7 +150,7 @@ export class BlockStorage {
     }
     // insert block
     this.log.info('received block with hash %s, adding to the db', calculatedHash)
-    const objectAsJson = JSON.stringify(mb)
+    const objectAsJson = JSON.stringify(BlockUtil.blockToJson(mb))
     const shardSetAsJson = JSON.stringify(Coll.setToArray(shardSet))
     const res = await PgUtil.insert(
       `INSERT INTO blocks(object, object_hash, object_shards)

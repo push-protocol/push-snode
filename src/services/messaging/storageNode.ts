@@ -1,11 +1,12 @@
 import { Inject, Service } from 'typedi'
 import { Logger } from 'winston'
 
-import { BlockUtil } from '../../utilz/block'
+import { Block } from '../../generated/push/v1/block_pb'
+import { BitUtil } from '../../utilz/bitUtil'
 import { Check } from '../../utilz/check'
 import { Coll } from '../../utilz/coll'
 import { WinstonUtil } from '../../utilz/winstonUtil'
-import { MessageBlock, MessageBlockUtil } from '../messaging-common/messageBlock'
+import { BlockUtil } from '../messaging-common/BlockUtil'
 import {
   StorageContractListener,
   StorageContractState
@@ -13,6 +14,7 @@ import {
 import { ValidatorContractState } from '../messaging-common/validatorContractState'
 import { QueueClient } from '../messaging-dset/queueClient'
 import { Consumer, QItem } from '../messaging-dset/queueTypes'
+import { BlockError } from './blockError'
 import { BlockStorage } from './BlockStorage'
 import { IndexStorage } from './IndexStorage'
 import { QueueManager } from './queueManager'
@@ -54,9 +56,9 @@ export default class StorageNode implements Consumer<QItem>, StorageContractList
   // remote queue handler
   async accept(item: QItem): Promise<boolean> {
     // check hash
-    const mb = <MessageBlock>item.object
+    const mb = BitUtil.base16ToBytes(item.object as string)
     Check.notEmpty(item.id.toString(), 'message block has no id')
-    const calculatedHash = BlockUtil.calculateBlockHashBase16(item.serialisedBlock)
+    const calculatedHash = BlockUtil.hashBlockAsHex(mb)
     if (calculatedHash !== item.object_hash) {
       this.log.error(
         'received item hash=%s , ' +
@@ -67,32 +69,37 @@ export default class StorageNode implements Consumer<QItem>, StorageContractList
       )
       return false
     }
-    // check contents
-    // since this check is not for historical data, but for realtime data,
-    // so we do not care about old blocked validators which might occur in the historical queue
-    //TODO: Uncomment them
-    // const activeValidators = Coll.arrayToFields(
-    //   this.valContractState.getActiveValidators(),
-    //   'nodeId'
-    // )
-    // const check1 = MessageBlockUtil.checkBlock(mb, activeValidators)
-    // if (!check1.success) {
-    //   this.log.error('item validation failed: ', check1.err)
-    //   return false
-    // }
+
+    // check for validation
+    const parsedBlock = BlockUtil.parseBlock(mb)
+    const blockObject = parsedBlock.toObject()
+    const validatorSet = new Set(this.valContractState.getAllNodesMap().keys())
+    const checkResult = await BlockUtil.checkBlockFinalized(
+      parsedBlock,
+      validatorSet,
+      this.valContractState.contractCli.valPerBlock
+    )
+    if (!checkResult.success) {
+      throw new BlockError('Block validation failed' + checkResult.err)
+    }
     // check database
-    const shardSet = MessageBlockUtil.calculateAffectedShards(
-      mb,
+
+    const shardSet = BlockUtil.calculateAffectedShards(
+      parsedBlock,
       this.storageContractState.shardCount
     )
-    const isNew = await this.blockStorage.saveBlockWithShardData(mb, calculatedHash, shardSet)
+    const isNew = await this.blockStorage.saveBlockWithShardData(
+      parsedBlock,
+      calculatedHash,
+      shardSet
+    )
     if (!isNew) {
       // this is not an error, because we read duplicates from every validator
-      this.log.debug('block %s already exists ', mb.id)
+      this.log.debug('block %s already exists ', item.id)
       return false
     }
     // send block
-    await this.indexStorage.unpackBlockToInboxes(mb, shardSet)
+    await this.indexStorage.unpackBlockToInboxes(blockObject, shardSet)
   }
 
   public async handleReshard(
@@ -131,7 +138,7 @@ export default class StorageNode implements Consumer<QItem>, StorageContractList
       pageSize,
       shardsToAdd,
       async (messageBlockJson, messageBlockHash, messageBlockShards) => {
-        const mb: MessageBlock = JSON.parse(messageBlockJson)
+        const mb: Block.AsObject = JSON.parse(messageBlockJson)
         const shardsToAddFromBlock = Coll.intersectSet(shardsToAdd, messageBlockShards)
         this.log.debug(
           'reindexing block %s, blockShards %s, shardsToAdd %s,, shardsToAddFromBlock',

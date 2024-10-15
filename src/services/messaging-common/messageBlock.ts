@@ -11,10 +11,9 @@
  */
 import { Logger } from 'winston'
 
+import { Block } from '../../generated/push/v1/block_pb'
 import { Check } from '../../utilz/check'
 import { EthSig } from '../../utilz/ethSig'
-import { EthUtil } from '../../utilz/EthUtil'
-import { NumUtil } from '../../utilz/numUtil'
 import { ObjectHasher } from '../../utilz/objectHasher'
 import StrUtil from '../../utilz/strUtil'
 import { WinstonUtil } from '../../utilz/winstonUtil'
@@ -302,102 +301,21 @@ export class MessageBlockUtil {
    *
    * @param block
    * @param requestOffset search by an offset
-   * @param requestSid OR search by sid
    */
-  static calculateRecipients(
-    block: Readonly<MessageBlock>,
-    requestOffset: number,
-    requestSid?: string
-  ): string[] {
-    if (requestOffset == null) {
-      requestOffset = block.requests.findIndex((value) => value.id === requestSid)
-    }
+  static calculateRecipients(block: Block.AsObject, requestOffset: number): string[] {
     Check.isTrue(requestOffset >= 0, 'requestOffset not found')
     return [
       ...block.txobjList[requestOffset].tx.recipientsList,
       block.txobjList[requestOffset].tx.sender
     ]
-    // const signaturesA = block.signersList[requestOffset]
-    // const allRecipients = Coll.arrayToMap(recipientsV, 'addr')
-    // for (const signatureA of signaturesA) {
-    //   const recipientsMissing = signatureA.data.recipientsMissing
-    //   if (recipientsMissing != null) {
-    //     for (const itemToRemove of recipientsMissing.recipients) {
-    //       allRecipients.delete(itemToRemove.addr)
-    //     }
-    //   }
-    // }
-    // return Array.from(allRecipients.keys())
   }
 
   static calculateHash(block: Readonly<MessageBlock>) {
     return ObjectHasher.hashToSha256(block)
   }
 
-  /**
-   * Evaluates all messageBlock target recipients (normally these are addresses)
-   * for every included packet
-   *
-   * And for every recipient finds which shard will host this address
-   *
-   * @param block
-   * @param shardCount total amount of shards; see smart contract for this value
-   * @returns a set of shard ids
-   */
-  static calculateAffectedShards(block: Readonly<MessageBlock>, shardCount: number): Set<number> {
-    const shards = new Set<number>()
-    for (const fi of block.txobjList) {
-      for (const recipient of fi.tx.recipientsList) {
-        const shardId = this.calculateAffectedShard(recipient, shardCount)
-        if (shardId == null) {
-          this.log.error('cannot calculate shardId for recipient %o in %o', recipient, fi)
-          continue
-        }
-        shards.add(shardId)
-      }
-    }
-    return shards
-  }
-
-  // 1) try to get first byte from caip address
-  // eip155:5:0xD8634C39BBFd4033c0d3289C4515275102423681 -> d8 -> 216
-  // and use it as shard
-  // 2) take sha256(addr) ->
-  // shard count is a smart contract constant; normally it should never change
-  // lets read this value from a contract
-  public static calculateAffectedShard(recipientAddr: string, shardCount: number): number | null {
-    if (StrUtil.isEmpty(recipientAddr)) {
-      return null
-    }
-    let shardId: number = null
-    const addrObj = EthUtil.parseCaipAddress(recipientAddr)
-    if (
-      addrObj != null &&
-      !StrUtil.isEmpty(addrObj.addr) &&
-      addrObj.addr.startsWith('0x') &&
-      addrObj.addr.length > 4
-    ) {
-      const firstByteAsHex = addrObj.addr.substring(2, 4).toLowerCase()
-      shardId = Number.parseInt(firstByteAsHex, 16)
-    }
-    // 2) try to get sha256 otherwise
-    if (shardId == null) {
-      const firstByteAsHex = ObjectHasher.hashToSha256(recipientAddr).toLowerCase().substring(0, 2)
-      shardId = Number.parseInt(firstByteAsHex, 16)
-    }
-    Check.notNull(shardId)
-    Check.isTrue(shardId >= 0 && shardId <= 255 && NumUtil.isRoundedInteger(shardId))
-    Check.isTrue(shardCount >= 1)
-    return shardId % shardCount
-  }
-
-  public static getBlockCreationTimeMillis(block: MessageBlock): number | null {
-    // if (block.responsesSignatures.length > 0 && block.responsesSignatures[0].length > 0) {
-    //   const sig = block.responsesSignatures[0][0]
-    //   return sig?.nodeMeta?.tsMillis
-    // }
-    // return null
-    return block.ts ? block.ts : null
+  public static getBlockCreationTimeMillis(block: Block): number | null {
+    return block.getTs() ? block.getTs() : null
   }
 
   public static checkBlock(block: MessageBlock, validatorsFromContract: Set<string>): CheckResult {

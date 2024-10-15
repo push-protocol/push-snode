@@ -1,12 +1,14 @@
 import { Inject, Service } from 'typedi'
 import { Logger } from 'winston'
 
+import { Block, Transaction } from '../../generated/push/v1/block_pb'
 import DbHelper from '../../helpers/dbHelper'
 import { Coll } from '../../utilz/coll'
 import DateUtil from '../../utilz/dateUtil'
 import { PgUtil } from '../../utilz/pgUtil'
 import { WinstonUtil } from '../../utilz/winstonUtil'
-import { FPayload, MessageBlock, MessageBlockUtil } from '../messaging-common/messageBlock'
+import { BlockUtil } from '../messaging-common/BlockUtil'
+import { MessageBlockUtil } from '../messaging-common/messageBlock'
 import { StorageContractState } from '../messaging-common/storageContractState'
 import { ValidatorContractState } from '../messaging-common/validatorContractState'
 
@@ -31,19 +33,19 @@ export class IndexStorage {
 
    This is POSTGRES
   */
-  public async unpackBlockToInboxes(mb: MessageBlock, shardSet: Set<number>) {
+  public async unpackBlockToInboxes(mb: Block.AsObject, shardSet: Set<number>) {
     // this is the list of shards that we support on this node
     const nodeShards = this.storageContractState.getNodeShards()
     this.log.debug('storage node supports %s shards: %o', nodeShards.size, nodeShards)
     const shardsToProcess = Coll.intersectSet(shardSet, nodeShards)
-    this.log.debug('block %s has %d inboxes to unpack', mb.id, shardsToProcess)
+    this.log.debug('block %s has %d inboxes to unpack', mb.ts, shardsToProcess)
     if (shardsToProcess.size == 0) {
       this.log.debug('finished')
       return
     }
 
     // ex: 1661214142.123456
-    let tsString = '' + MessageBlockUtil.getBlockCreationTimeMillis(mb) / 1000.0
+    let tsString = (mb.ts / 1000.0).toString()
     if (tsString == null) {
       tsString = '' + DateUtil.currentTimeSeconds()
     }
@@ -53,13 +55,15 @@ export class IndexStorage {
       const targetWallets: string[] = MessageBlockUtil.calculateRecipients(mb, i)
       for (let i1 = 0; i1 < targetWallets.length; i1++) {
         const targetAddr = targetWallets[i1]
-        const targetShard = MessageBlockUtil.calculateAffectedShard(
+        const targetShard = BlockUtil.calculateAffectedShard(
           targetAddr,
           this.storageContractState.shardCount
         )
         if (!shardsToProcess.has(targetShard)) {
           continue
         }
+        // const trx = feedItem.getTx()
+        // console.log(trx.toObject())
         await this.putPayloadToInbox(
           feedItem.tx.category,
           targetShard,
@@ -91,10 +95,11 @@ export class IndexStorage {
     nsId: string,
     ts: string,
     nodeId: string,
-    fpayload: FPayload
+    fpayload: Transaction.AsObject
   ) {
-    const key = fpayload.salt
-    fpayload.recipients = null // null recipients field because we don't need that
+    const parsedPayload = fpayload
+    const key = parsedPayload.salt
+    // fpayload.recipients = null // null recipients field because we don't need that
     // const date = DateUtil.parseUnixFloatAsDateTime(ts)
     // this.log.debug(`parsed date ${ts} -> ${date}`)
     // let storageTable = await DbHelper.findStorageTableByDate(nsName, nsShardId, date)
@@ -128,8 +133,8 @@ export class IndexStorage {
       nsShardId,
       nsId,
       ts,
-      key,
-      JSON.stringify(fpayload)
+      key as string,
+      JSON.stringify(parsedPayload)
     )
     this.log.debug(`found value: ${storageValue}`)
   }

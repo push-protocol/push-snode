@@ -171,7 +171,7 @@ export namespace Block {
   }
 }
 
-export class AttestorReply extends jspb.Message {
+export class AttestBlockResult extends jspb.Message {
   clearAttestordataList(): void
   getAttestordataList(): Array<TxAttestorData>
   setAttestordataList(value: Array<TxAttestorData>): void
@@ -183,47 +183,133 @@ export class AttestorReply extends jspb.Message {
   setSigner(value?: Signer): void
 
   serializeBinary(): Uint8Array
-  toObject(includeInstance?: boolean): AttestorReply.AsObject
-  static toObject(includeInstance: boolean, msg: AttestorReply): AttestorReply.AsObject
+  toObject(includeInstance?: boolean): AttestBlockResult.AsObject
+  static toObject(includeInstance: boolean, msg: AttestBlockResult): AttestBlockResult.AsObject
   static extensions: { [key: number]: jspb.ExtensionFieldInfo<jspb.Message> }
   static extensionsBinary: { [key: number]: jspb.ExtensionFieldBinaryInfo<jspb.Message> }
-  static serializeBinaryToWriter(message: AttestorReply, writer: jspb.BinaryWriter): void
-  static deserializeBinary(bytes: Uint8Array): AttestorReply
+  static serializeBinaryToWriter(message: AttestBlockResult, writer: jspb.BinaryWriter): void
+  static deserializeBinary(bytes: Uint8Array): AttestBlockResult
   static deserializeBinaryFromReader(
-    message: AttestorReply,
+    message: AttestBlockResult,
     reader: jspb.BinaryReader
-  ): AttestorReply
+  ): AttestBlockResult
 }
 
-export namespace AttestorReply {
+export namespace AttestBlockResult {
   export type AsObject = {
     attestordataList: Array<TxAttestorData.AsObject>
     signer?: Signer.AsObject
   }
 }
 
-export class AttestorReplies extends jspb.Message {
+export class AttestSignaturesRequest extends jspb.Message {
   clearAttestationsList(): void
-  getAttestationsList(): Array<AttestorReply>
-  setAttestationsList(value: Array<AttestorReply>): void
-  addAttestations(value?: AttestorReply, index?: number): AttestorReply
+  getAttestationsList(): Array<AttestBlockResult>
+  setAttestationsList(value: Array<AttestBlockResult>): void
+  addAttestations(value?: AttestBlockResult, index?: number): AttestBlockResult
+
+  getInitialblockhash(): Uint8Array | string
+  getInitialblockhash_asU8(): Uint8Array
+  getInitialblockhash_asB64(): string
+  setInitialblockhash(value: Uint8Array | string): void
+
+  getFinalblockhash(): Uint8Array | string
+  getFinalblockhash_asU8(): Uint8Array
+  getFinalblockhash_asB64(): string
+  setFinalblockhash(value: Uint8Array | string): void
 
   serializeBinary(): Uint8Array
-  toObject(includeInstance?: boolean): AttestorReplies.AsObject
-  static toObject(includeInstance: boolean, msg: AttestorReplies): AttestorReplies.AsObject
+  toObject(includeInstance?: boolean): AttestSignaturesRequest.AsObject
+  static toObject(
+    includeInstance: boolean,
+    msg: AttestSignaturesRequest
+  ): AttestSignaturesRequest.AsObject
   static extensions: { [key: number]: jspb.ExtensionFieldInfo<jspb.Message> }
   static extensionsBinary: { [key: number]: jspb.ExtensionFieldBinaryInfo<jspb.Message> }
-  static serializeBinaryToWriter(message: AttestorReplies, writer: jspb.BinaryWriter): void
-  static deserializeBinary(bytes: Uint8Array): AttestorReplies
+  static serializeBinaryToWriter(message: AttestSignaturesRequest, writer: jspb.BinaryWriter): void
+  static deserializeBinary(bytes: Uint8Array): AttestSignaturesRequest
   static deserializeBinaryFromReader(
-    message: AttestorReplies,
+    message: AttestSignaturesRequest,
     reader: jspb.BinaryReader
-  ): AttestorReplies
+  ): AttestSignaturesRequest
 }
 
-export namespace AttestorReplies {
+export namespace AttestSignaturesRequest {
   export type AsObject = {
-    attestationsList: Array<AttestorReply.AsObject>
+    attestationsList: Array<AttestBlockResult.AsObject>
+    initialblockhash: Uint8Array | string
+    finalblockhash: Uint8Array | string
+  }
+}
+
+export class AttestSignaturesResponse extends jspb.Message {
+  clearAttestationsList(): void
+  getAttestationsList(): Array<AttestorReport>
+  setAttestationsList(value: Array<AttestorReport>): void
+  addAttestations(value?: AttestorReport, index?: number): AttestorReport
+
+  serializeBinary(): Uint8Array
+  toObject(includeInstance?: boolean): AttestSignaturesResponse.AsObject
+  static toObject(
+    includeInstance: boolean,
+    msg: AttestSignaturesResponse
+  ): AttestSignaturesResponse.AsObject
+  static extensions: { [key: number]: jspb.ExtensionFieldInfo<jspb.Message> }
+  static extensionsBinary: { [key: number]: jspb.ExtensionFieldBinaryInfo<jspb.Message> }
+  static serializeBinaryToWriter(message: AttestSignaturesResponse, writer: jspb.BinaryWriter): void
+  static deserializeBinary(bytes: Uint8Array): AttestSignaturesResponse
+  static deserializeBinaryFromReader(
+    message: AttestSignaturesResponse,
+    reader: jspb.BinaryReader
+  ): AttestSignaturesResponse
+}
+
+export namespace AttestSignaturesResponse {
+  export type AsObject = {
+    attestationsList: Array<AttestorReport.AsObject>
+  }
+}
+
+export class AttestorReport extends jspb.Message {
+  getNodeid(): string
+  setNodeid(value: string): void
+
+  getTransactionhash(): string
+  setTransactionhash(value: string): void
+
+  getVote(): number
+  setVote(value: number): void
+
+  getDataforsc(): Uint8Array | string
+  getDataforsc_asU8(): Uint8Array
+  getDataforsc_asB64(): string
+  setDataforsc(value: Uint8Array | string): void
+
+  getDatasigforsc(): Uint8Array | string
+  getDatasigforsc_asU8(): Uint8Array
+  getDatasigforsc_asB64(): string
+  setDatasigforsc(value: Uint8Array | string): void
+
+  serializeBinary(): Uint8Array
+  toObject(includeInstance?: boolean): AttestorReport.AsObject
+  static toObject(includeInstance: boolean, msg: AttestorReport): AttestorReport.AsObject
+  static extensions: { [key: number]: jspb.ExtensionFieldInfo<jspb.Message> }
+  static extensionsBinary: { [key: number]: jspb.ExtensionFieldBinaryInfo<jspb.Message> }
+  static serializeBinaryToWriter(message: AttestorReport, writer: jspb.BinaryWriter): void
+  static deserializeBinary(bytes: Uint8Array): AttestorReport
+  static deserializeBinaryFromReader(
+    message: AttestorReport,
+    reader: jspb.BinaryReader
+  ): AttestorReport
+}
+
+export namespace AttestorReport {
+  export type AsObject = {
+    nodeid: string
+    transactionhash: string
+    vote: number
+    dataforsc: Uint8Array | string
+    datasigforsc: Uint8Array | string
   }
 }
 

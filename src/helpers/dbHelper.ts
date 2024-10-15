@@ -8,6 +8,7 @@ import { InitDid } from '../generated/push/v1/block_pb'
 import log from '../loaders/logger'
 import { PushKeys } from '../services/transactions/pushKeys'
 import { PushWallets } from '../services/transactions/pushWallets'
+import { BitUtil } from '../utilz/bitUtil'
 import { EnvLoader } from '../utilz/envLoader'
 import { PgUtil } from '../utilz/pgUtil'
 import StrUtil from '../utilz/strUtil'
@@ -372,7 +373,7 @@ END $$ LANGUAGE plpgsql;
       .none(sql, params)
       .then(async (data) => {
         log.debug(data)
-        await DbHelper.indexTransactionCategory(ns, shardId, nsIndex, ts, skey, body)
+        await DbHelper.indexTransactionCategory(ns, body)
         return Promise.resolve()
       })
       .catch((err) => {
@@ -381,23 +382,18 @@ END $$ LANGUAGE plpgsql;
       })
   }
 
-  static async indexTransactionCategory(
-    ns: string,
-    shardId: number,
-    nsIndex: string,
-    ts: string,
-    skey: string,
-    body: string
-  ) {
+  static async indexTransactionCategory(ns: string, body: string) {
     const parsedBody = typeof body == 'string' ? JSON.parse(body) : body
     // parent function that calls functions to store and index trxs based on category
     if (ns == 'INIT_DID') {
-      const deserializedData = InitDid.deserializeBinary(parsedBody['data']).toObject()
-      const masterPubKey = deserializedData['masterpubkey']
+      const deserializedData = InitDid.deserializeBinary(
+        BitUtil.base16ToBytes(parsedBody.data)
+      ).toObject()
+      const masterPubKey = deserializedData.masterpubkey
       const did = parsedBody['sender']
-      const derivedKeyIndex = deserializedData['derivedkeyindex']
-      const derivedPublicKey = deserializedData['derivedpubkey']
-      const walletToEncodedDerivedKeyMap = arrayToMap(deserializedData['wallettoencderivedkeyMap'])
+      const derivedKeyIndex = deserializedData.derivedkeyindex
+      const derivedPublicKey = deserializedData.derivedpubkey
+      const walletToEncodedDerivedKeyMap = arrayToMap(deserializedData.wallettoencderivedkeyMap)
       await DbHelper.putInitDidTransaction({
         masterPublicKey: masterPubKey,
         did: did,
@@ -408,7 +404,7 @@ END $$ LANGUAGE plpgsql;
     }
     if (ns == 'INIT_SESSION_KEY') {
     } else {
-      logger.error('Unknown category')
+      logger.info('No category found for ns: ', ns)
     }
   }
 
@@ -426,13 +422,25 @@ END $$ LANGUAGE plpgsql;
     walletToEncodedDerivedKeyMap: Map<string, string>
   }) {
     // Adding initial PushKeys for the masterPublicKey
+    if (
+      masterPublicKey == null ||
+      did == null ||
+      derivedKeyIndex == null ||
+      derivedPublicKey == null
+    ) {
+      logger.info('Fields are missing, skipping for masterPublicKey: ', masterPublicKey)
+      return false
+    }
+    if (walletToEncodedDerivedKeyMap.size == 0) {
+      logger.info('No walletToEncodedDerivedKeyMap found for masterPublicKey: ', masterPublicKey)
+      return false
+    }
     await PushKeys.addPushKeys({
       masterPublicKey,
       did,
       derivedKeyIndex,
       derivedPublicKey
     })
-
     walletToEncodedDerivedKeyMap.forEach(async (value, wallet) => {
       await PushWallets.addPushWallets({
         address: wallet,
@@ -442,6 +450,7 @@ END $$ LANGUAGE plpgsql;
         signature: value['signature']
       })
     })
+    return true
   }
 
   static async listInbox(
