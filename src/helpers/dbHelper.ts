@@ -387,7 +387,7 @@ END $$ LANGUAGE plpgsql;
     // parent function that calls functions to store and index trxs based on category
     if (ns == 'INIT_DID') {
       const deserializedData = InitDid.deserializeBinary(
-        BitUtil.base16ToBytes(parsedBody.data)
+        BitUtil.base64ToBytes(parsedBody.data)
       ).toObject()
       const masterPubKey = deserializedData.masterpubkey
       const did = parsedBody['sender']
