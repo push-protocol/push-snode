@@ -3,7 +3,7 @@ import {
   InitDid,
   Transaction,
   WalletToEncDerivedKey
-} from '../src/generated/push/v1/block_pb'
+} from '../src/generated/push/block_pb'
 import { BitUtil } from '../src/utilz/bitUtil'
 // import DateUtil from '../src/utilz/dateUtil'
 import { HashUtil } from '../src/utilz/hashUtil'

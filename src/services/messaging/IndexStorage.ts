@@ -1,7 +1,7 @@
 import { Inject, Service } from 'typedi'
 import { Logger } from 'winston'
 
-import { Block, Transaction } from '../../generated/push/v1/block_pb'
+import { Block, Transaction } from '../../generated/push/block_pb'
 import DbHelper from '../../helpers/dbHelper'
 import { Coll } from '../../utilz/coll'
 import DateUtil from '../../utilz/dateUtil'
