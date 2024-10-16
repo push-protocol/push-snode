@@ -55,9 +55,9 @@ I 230811 174624 [MyClass] Got alias List (SendMessage)
 
 export class WinstonUtil {
   private static readonly CLASS_NAME_LENGTH = 23
-  private static readonly LOG_DIR = EnvLoader.getPropertyOrFail('LOG_DIR')
-  private static readonly LOG_LEVEL = EnvLoader.getPropertyOrFail('LOG_LEVEL')
-  private static loggerMap: Map<string, winston.Logger> = new Map()
+  private static readonly LOG_DIR = EnvLoader.getPropertyOrDefault('LOG_DIR', 'log');
+  private static readonly LOG_LEVEL = EnvLoader.getPropertyOrDefault('LOG_LEVEL', 'debug');
+  private static loggerMap: Map<string, winston.Logger> = new Map();
 
   // all console writes drop here
   public static consoleTransport = new winston.transports.Console({
