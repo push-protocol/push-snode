@@ -99,35 +99,6 @@ export class IndexStorage {
   ) {
     const parsedPayload = fpayload
     const key = parsedPayload.salt
-    // fpayload.recipients = null // null recipients field because we don't need that
-    // const date = DateUtil.parseUnixFloatAsDateTime(ts)
-    // this.log.debug(`parsed date ${ts} -> ${date}`)
-    // let storageTable = await DbHelper.findStorageTableByDate(nsName, nsShardId, date)
-    // this.log.debug(`found table ${storageTable}`)
-    // if (StrUtil.isEmpty(storageTable)) {
-    //   this.log.error('storage table not found')
-    //   const monthStart = date.startOf('month').toISODate().toString()
-    //   const monthEndExclusive = date.startOf('month').plus({ months: 1 }).toISODate().toString()
-    //   this.log.debug('creating new storage table')
-    //   const dateYYYYMM = DateUtil.formatYYYYMM(date)
-    //   const tableName = `storage_ns_${nsName}_d_${dateYYYYMM}`
-    //   const recordCreated = await DbHelper.createNewNodestorageRecord(
-    //     nsName,
-    //     nsShardId,
-    //     monthStart,
-    //     monthEndExclusive,
-    //     tableName
-    //   )
-    //   if (recordCreated) {
-    //     this.log.debug('record created: ', recordCreated)
-    //     // we've added a new record to node_storage_layout => we can safely try to create a table
-    //     // otherwise, if many connections attempt to create a table from multiple threads
-    //     // it leads to postgres deadlock sometimes
-    //     await DbHelper.createNewStorageTable(tableName)
-    //     this.log.debug('creating node storage layout mapping')
-    //     storageTable = tableName
-    //   }
-    // }
     const storageValue = await DbHelper.putValueInStorageTable(
       nsName,
       nsShardId,

@@ -12,12 +12,6 @@ type TransactionsInput = {
   order: 'ASC' | 'DESC'
 }
 
-type TransactionInput = {
-  namespace: string
-  key: string
-  namespaceId: string
-}
-
 @Service()
 export class Transactions {
   @Inject()
