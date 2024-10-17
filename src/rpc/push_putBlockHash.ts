@@ -18,7 +18,7 @@ export class PushPutBlockHash {
     return error
   }
 
-  public static async storageGetTransaction(params: PushPutBlockHashParams) {
+  public static async pushPutBlockHash(params: PushPutBlockHashParams) {
     const { hashes, signature } = params
     const validationRes = PushPutBlockHash.validateGetTransaction(params)
     if (!validationRes) {
@@ -38,7 +38,7 @@ export class PushPutBlockHash {
     }
   }
 
-  public static afterStorageGetTransaction = [
+  public static afterPushPutBlockHash = [
     (params, result, raw) => console.log('Block result:', result)
   ]
 }

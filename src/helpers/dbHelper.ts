@@ -20,7 +20,7 @@ import { WinstonUtil } from '../utilz/winstonUtil'
 // todo move everything into PgUtil including connection management
 // todo use PgUtil
 // todo use placeholders (?)
-
+// todo: move the query to specific service files
 const logger = WinstonUtil.newLog('pg')
 const options = {
   query: function (e) {
