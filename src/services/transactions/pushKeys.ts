@@ -18,10 +18,14 @@ export class PushKeys {
       const query = `
         INSERT INTO push_keys (masterpublickey, did, derivedkeyindex, derivedpublickey)
         VALUES ($1, $2, $3, $4)
-        ON CONFLICT DO NOTHING
+        ON CONFLICT (did) 
+        DO UPDATE SET 
+          masterpublickey = EXCLUDED.masterpublickey,
+          derivedkeyindex = EXCLUDED.derivedkeyindex,
+          derivedpublickey = EXCLUDED.derivedpublickey
       `
 
-      const res = await PgUtil.insert(
+      await PgUtil.insert(
         query,
         input.masterPublicKey,
         input.did,
@@ -31,20 +35,20 @@ export class PushKeys {
 
       return { success: true }
     } catch (error) {
-      console.error('Error inserting push keys:', error)
+      console.error('Error inserting or updating push keys:', error)
       return { success: false }
     }
   }
 
   static async getPushKeysViaMasterKey(masterPublicKey: string) {
-    const query = `SELECT * FROM push_keys WHERE master_public_key = $1`
+    const query = `SELECT * FROM push_keys WHERE masterpublickey = $1`
     const result = await PgUtil.queryOneRow(query, [masterPublicKey])
-    return { result: result }
+    return { result }
   }
 
   static async getPushKeysViaDerivedKey(derivedPublicKey: string) {
-    const query = `SELECT * FROM push_keys WHERE derived_public_key = $1`
+    const query = `SELECT * FROM push_keys WHERE derivedpublickey = $1`
     const result = await PgUtil.queryOneRow(query, [derivedPublicKey])
-    return { result: result }
+    return { result }
   }
 }
