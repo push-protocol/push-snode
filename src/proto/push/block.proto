@@ -66,16 +66,34 @@ message Block {
     repeated Signer signers = 3;
 }
 
-message AttestorReply {
-   // reply per transaction (same order as in block)
-   repeated TxAttestorData attestorData = 1;
-   // signature for the whole block
-   // assuming that on this node TxAttestorData is filled per every tx
-   Signer signer = 2;
+// INTERNAL NODE API
+
+// BLOCK ATTESTATION
+message AttestBlockResult {
+    // reply per transaction (same order as in block)
+    repeated TxAttestorData attestorData = 1;
+    // signature for the whole block
+    // assuming that on this node TxAttestorData is filled per every tx
+    Signer signer = 2;
 }
 
-message AttestorReplies {
-   repeated AttestorReply attestations = 1;
+// SIGNATURE ATTESTATION
+message AttestSignaturesRequest {
+    repeated AttestBlockResult attestations = 1;
+    bytes initialBlockHash = 2;
+    bytes finalBlockHash = 3;
+}
+
+message AttestSignaturesResponse {
+    repeated AttestorReport attestations = 1;
+}
+
+message AttestorReport {
+    string nodeId = 1 ;
+    string transactionHash = 2;
+    int32 vote = 3;
+    bytes dataForSc = 4;
+    bytes dataSigForSc = 5;
 }
 
 
@@ -99,15 +117,26 @@ message Transaction {
 // PAYLOADS ------------------------------------------------------------------------------------------------------------
 
 
+message EncryptedText {
+    string ciphertext = 1;
+    string salt = 2;
+    string nonce = 3;
+    string version = 4; 
+    string preKey = 5;
+  }
+
+message WalletToEncDerivedKey {
+    EncryptedText encDerivedPrivKey = 1;
+    // Helps Vnode to proof that encryptedData is indeed signed by account
+    bytes signature = 2;
+}
 // INIT_DID
+
 message InitDid {
-    string did = 1;
-    string masterPubKey = 2;
-    uint32 derivedKeyIndex = 3;
-    string derivedPubKey = 4;
-    // Map to store wallet address and corresponding encrypted derived key
-    // Note:- There will always be altest 1 mapping
-    map<string, string> walletToEncDerivedKey = 6;
+    string masterPubKey = 1;
+    uint32 derivedKeyIndex = 2;
+    string derivedPubKey = 3;
+    map<string, WalletToEncDerivedKey> walletToEncDerivedKey = 4;
 }
 
 enum KeyAction {

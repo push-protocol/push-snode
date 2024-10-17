@@ -1,5 +1,6 @@
 import dotenv from 'dotenv'
 
+import { NumUtil } from './numUtil'
 import StrUtil from './strUtil'
 
 export class EnvLoader {
@@ -37,5 +38,10 @@ export class EnvLoader {
       return def
     }
     return val
+  }
+
+  public static getPropertyAsNumber(propName: string, defaultValue: number): number {
+    const val = process.env[propName]
+    return NumUtil.parseInt(val, defaultValue)
   }
 }

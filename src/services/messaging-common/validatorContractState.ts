@@ -45,6 +45,14 @@ export class ValidatorContractState {
     return this.contractCli.vnodes
   }
 
+  public getValidatorNodesMap(): Map<string, NodeInfo> {
+    return this.contractCli.vnodes
+  }
+
+  public getStorageNodesMap(): Map<string, NodeInfo> {
+    return this.contractCli.snodes
+  }
+
   public getActiveValidatorsExceptSelf(): NodeInfo[] {
     const allNodes = Array.from(this.getAllNodesMap().values())
     const onlyGoodValidators = allNodes.filter(
@@ -231,6 +239,7 @@ export class ValidatorCtClient {
     )
   }
 
+  // todo work with corrupted url's: returning nulls as of now
   private fixNodeUrl(nodeUrl: string): string {
     if (nodeUrl.length > 100) {
       this.log.error('nodeUrl should be less than 100 chars')

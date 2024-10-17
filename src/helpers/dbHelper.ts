@@ -4,18 +4,24 @@ import pgPromise from 'pg-promise'
 import { IClient } from 'pg-promise/typescript/pg-subset'
 import { DateTime } from 'ts-luxon'
 
+import { InitDid, Transaction } from '../generated/push/block_pb'
 import log from '../loaders/logger'
+import { PushKeys } from '../services/transactions/pushKeys'
+import { PushWallets } from '../services/transactions/pushWallets'
+import { BitUtil } from '../utilz/bitUtil'
 import { EnvLoader } from '../utilz/envLoader'
 import { PgUtil } from '../utilz/pgUtil'
 import StrUtil from '../utilz/strUtil'
+import { arrayToMap } from '../utilz/typeConversionUtil'
 import { WinstonUtil } from '../utilz/winstonUtil'
+import { BlockUtil } from '../services/messaging-common/BlockUtil'
 
 // postgres
 // todo fix variable substitution, see #putValueInTable()
 // todo move everything into PgUtil including connection management
 // todo use PgUtil
 // todo use placeholders (?)
-
+// todo: move the query to specific service files
 const logger = WinstonUtil.newLog('pg')
 const options = {
   query: function (e) {
@@ -331,7 +337,6 @@ END $$ LANGUAGE plpgsql;
       skey,
       body
     }
-    console.log(sql, params)
     return pgPool
       .none(sql, params)
       .then((data) => {
@@ -350,31 +355,106 @@ END $$ LANGUAGE plpgsql;
     nsIndex: string,
     ts: string,
     skey: string,
-    body: string
+    body: Transaction
   ) {
+    const transactionObj = body.toObject()
     log.debug(`putValueInStorageTable() namespace=${ns}, namespaceShardId=${shardId}
-        , skey=${skey}, jsonValue=${body}`)
+        , skey=${skey}, jsonValue=${transactionObj}`)
     const sql = `INSERT INTO storage_node (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload)
-                     values (\${ns}, \${shardId}, \${nsIndex}, to_timestamp(\${ts}), \${skey}, 'v1', \${body})
-                     ON CONFLICT (namespace, namespace_shard_id, namespace_id, skey) DO UPDATE SET payload = \${body}`
+                     values (\${ns}, \${shardId}, \${nsIndex}, to_timestamp(\${ts}), \${skey}, 'v1', \${transactionObj})
+                     ON CONFLICT (namespace, namespace_shard_id, namespace_id, skey) DO UPDATE SET payload = \${transactionObj}`
     const params = {
       ns,
       shardId,
       nsIndex,
       ts,
       skey,
-      body
+      transactionObj
     }
     return pgPool
       .none(sql, params)
-      .then((data) => {
+      .then(async (data) => {
         log.debug(data)
+        await DbHelper.indexTransactionCategory(ns, body)
         return Promise.resolve()
       })
       .catch((err) => {
         log.debug(err)
         return Promise.reject(err)
       })
+  }
+
+  static async indexTransactionCategory(ns: string, body: Transaction) {
+    // parent function that calls functions to store and index trxs based on category
+    if (ns == 'INIT_DID') {
+      const deserializedData = InitDid.deserializeBinary(
+        BitUtil.base64ToBytes(body.getData_asB64())
+      )
+      const masterPubKey = deserializedData.getMasterpubkey()
+      const did = body.getSender()
+      const derivedKeyIndex = deserializedData.getDerivedkeyindex()
+      const derivedPublicKey = deserializedData.getDerivedpubkey()
+      // was not able to use inbuilt proto methods to get the data
+      const walletToEncodedDerivedKeyMap = arrayToMap(
+        deserializedData.toObject().wallettoencderivedkeyMap
+      )
+      await DbHelper.putInitDidTransaction({
+        masterPublicKey: masterPubKey,
+        did: did,
+        derivedKeyIndex: derivedKeyIndex,
+        derivedPublicKey: derivedPublicKey,
+        walletToEncodedDerivedKeyMap: walletToEncodedDerivedKeyMap
+      })
+    }
+    if (ns == 'INIT_SESSION_KEY') {
+    } else {
+      logger.info('No category found for ns: ', ns)
+    }
+  }
+
+  static async putInitDidTransaction({
+    masterPublicKey,
+    did,
+    derivedKeyIndex,
+    derivedPublicKey,
+    walletToEncodedDerivedKeyMap
+  }: {
+    masterPublicKey: string
+    did: string
+    derivedKeyIndex: number
+    derivedPublicKey: string
+    walletToEncodedDerivedKeyMap: Map<string, string>
+  }) {
+    // Adding initial PushKeys for the masterPublicKey
+    if (
+      masterPublicKey == null ||
+      did == null ||
+      derivedKeyIndex == null ||
+      derivedPublicKey == null
+    ) {
+      logger.info('Fields are missing, skipping for masterPublicKey: ', masterPublicKey)
+      return false
+    }
+    if (walletToEncodedDerivedKeyMap.size == 0) {
+      logger.info('No walletToEncodedDerivedKeyMap found for masterPublicKey: ', masterPublicKey)
+      return false
+    }
+    await PushKeys.addPushKeys({
+      masterPublicKey,
+      did,
+      derivedKeyIndex,
+      derivedPublicKey
+    })
+    walletToEncodedDerivedKeyMap.forEach(async (value, wallet) => {
+      await PushWallets.addPushWallets({
+        address: wallet,
+        did: did,
+        derivedKeyIndex: derivedKeyIndex.toString(),
+        encryptedDervivedPrivateKey: value['encderivedprivkey'],
+        signature: value['signature']
+      })
+    })
+    return true
   }
 
   static async listInbox(
@@ -575,6 +655,27 @@ END $$ LANGUAGE plpgsql;
       .catch((err) => {
         log.debug(err)
         return Promise.reject(err)
+      })
+  }
+
+  static async getAccountInfo(wallet: string) {
+    const sql = `SELECT pk.masterpublickey, pk.did, pk.derivedkeyindex, pk.derivedpublickey,
+       pw.address, pw.encrypteddervivedprivatekey, pw.signature
+FROM push_keys pk
+JOIN push_wallets pw
+  ON pk.did = pw.did
+WHERE pk.did = '${wallet}'
+  AND pk.derivedkeyindex = pw.derivedkeyindex;`
+    log.debug(sql)
+    return pgPool
+      .query(sql)
+      .then((data) => {
+        log.debug(data)
+        return Promise.resolve(data)
+      })
+      .catch((err) => {
+        log.debug(err)
+        return Promise.resolve([])
       })
   }
 }

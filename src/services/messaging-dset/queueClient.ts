@@ -1,7 +1,5 @@
 import { Logger } from 'winston'
 
-import { Block } from '../../generated/push/v1/block_pb'
-import { BitUtil } from '../../utilz/bitUtil'
 import { PgUtil } from '../../utilz/pgUtil' // Assuming pgutil is the PostgreSQL utility file
 import { WinstonUtil } from '../../utilz/winstonUtil'
 import { validatorRpc } from '../validatorRpc/validatorRpc'
@@ -93,16 +91,6 @@ export class QueueClient {
     }
   }
 
-  private getDeserialisedBlock(items: QItem[]) {
-    const blocks = []
-    for (const item of items) {
-      const itemBytes = BitUtil.base16ToBytes(item.object as string)
-      const deserilisedBlock = Block.deserializeBinary(itemBytes).toObject()
-      blocks.push({ ...item, object: deserilisedBlock, serialisedBlock: itemBytes })
-    }
-    return blocks
-  }
-
   public async readItems(
     queueName: string,
     baseUri: string,
@@ -116,7 +104,7 @@ export class QueueClient {
 
       // Create the object with response data
       const obj: { items: QItem[]; lastOffset: number } = {
-        items: this.getDeserialisedBlock(re.items), // Use the fetched items here
+        items: re.items, // Use the fetched items here
         lastOffset: re.lastOffset
       }
 
