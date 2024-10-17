@@ -302,11 +302,11 @@ export class MessageBlockUtil {
    * @param block
    * @param requestOffset search by an offset
    */
-  static calculateRecipients(block: Block.AsObject, requestOffset: number): string[] {
+  static calculateRecipients(block: Block, requestOffset: number): string[] {
     Check.isTrue(requestOffset >= 0, 'requestOffset not found')
     return [
-      ...block.txobjList[requestOffset].tx.recipientsList,
-      block.txobjList[requestOffset].tx.sender
+      ...block.getTxobjList()[requestOffset].getTx().getRecipientsList(),
+      block.getTxobjList()[requestOffset].getTx().getSender()
     ]
   }
 

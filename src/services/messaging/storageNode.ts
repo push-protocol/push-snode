@@ -99,7 +99,7 @@ export default class StorageNode implements Consumer<QItem>, StorageContractList
       return false
     }
     // send block
-    await this.indexStorage.unpackBlockToInboxes(blockObject, shardSet)
+    await this.indexStorage.unpackBlockToInboxes(parsedBlock, shardSet)
   }
 
   public async handleReshard(
@@ -138,7 +138,7 @@ export default class StorageNode implements Consumer<QItem>, StorageContractList
       pageSize,
       shardsToAdd,
       async (messageBlockJson, messageBlockHash, messageBlockShards) => {
-        const mb: Block.AsObject = JSON.parse(messageBlockJson)
+        const mb: Block = JSON.parse(messageBlockJson)
         const shardsToAddFromBlock = Coll.intersectSet(shardsToAdd, messageBlockShards)
         this.log.debug(
           'reindexing block %s, blockShards %s, shardsToAdd %s,, shardsToAddFromBlock',
