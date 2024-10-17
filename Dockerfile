@@ -1,31 +1,19 @@
-FROM node:20.9.0
-WORKDIR /app
-COPY . .
+FROM node:20.9.0 as builder
+COPY ./package.json ./yarn.lock ./
+# RUN yarn install --immutable --production
 RUN yarn install
+
+
+FROM node:20.9.0 as runner
+
+# Copy in all the dependencies we need, by avoiding
+# installing them in this stage, we prevent Yarn
+# from including additional cache files, which
+# yields a slimmer image.
+COPY                ./package.json  ./
+COPY --from=builder ./node_modules/ ./node_modules/
+COPY . .
 EXPOSE 3001
 EXPOSE 3002
 EXPOSE 3003
 CMD ["yarn", "start"]
-
-# todo find an error here ; probably a package json is not copied
-# todo discuss what is the best way to build the container
-#FROM node:20.9.0
-#
-#WORKDIR /app
-#
-## Copy package.json and yarn.lock first
-#COPY yarn.lock ./
-#
-## Install dependencies
-#RUN yarn install
-#
-## Copy the rest of the application files
-#COPY . .
-#
-## Expose ports
-#EXPOSE 3001
-#EXPOSE 3002
-#EXPOSE 3003
-#
-## Start the application
-#CMD ["yarn", "start"]

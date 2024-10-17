@@ -1,7 +1,7 @@
 import { Service } from 'typedi'
 import { Logger } from 'winston'
 
-import { Block } from '../../generated/push/v1/block_pb'
+import { Block } from '../../generated/push/block_pb'
 import { Check } from '../../utilz/check'
 import { Coll } from '../../utilz/coll'
 import { PgUtil } from '../../utilz/pgUtil' // Use PgUtil instead of MySqlUtil

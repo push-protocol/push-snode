@@ -4,7 +4,7 @@ import pgPromise from 'pg-promise'
 import { IClient } from 'pg-promise/typescript/pg-subset'
 import { DateTime } from 'ts-luxon'
 
-import { InitDid } from '../generated/push/v1/block_pb'
+import { InitDid } from '../generated/push/block_pb'
 import log from '../loaders/logger'
 import { PushKeys } from '../services/transactions/pushKeys'
 import { PushWallets } from '../services/transactions/pushWallets'

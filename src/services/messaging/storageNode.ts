@@ -1,7 +1,7 @@
 import { Inject, Service } from 'typedi'
 import { Logger } from 'winston'
 
-import { Block } from '../../generated/push/v1/block_pb'
+import { Block } from '../../generated/push/block_pb'
 import { BitUtil } from '../../utilz/bitUtil'
 import { Check } from '../../utilz/check'
 import { Coll } from '../../utilz/coll'

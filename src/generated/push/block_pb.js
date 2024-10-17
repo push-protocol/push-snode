@@ -1,4 +1,4 @@
-// source: push/v1/block.proto
+// source: push/block.proto
 /**
  * @fileoverview
  * @enhanceable

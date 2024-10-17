@@ -11,7 +11,7 @@
  */
 import { Logger } from 'winston'
 
-import { Block } from '../../generated/push/v1/block_pb'
+import { Block } from '../../generated/push/block_pb'
 import { Check } from '../../utilz/check'
 import { EthSig } from '../../utilz/ethSig'
 import { ObjectHasher } from '../../utilz/objectHasher'
