@@ -20,7 +20,7 @@ export class PushPutBlockHash {
 
   public static async pushPutBlockHash(params: PushPutBlockHashParams) {
     const { hashes, signature } = params
-    const validationRes = PushPutBlockHash.validateGetTransaction(params)
+    const validationRes = PushPutBlockHash.validatePushPutBlockHash(params)
     if (!validationRes) {
       return new Error('Invalid params')
     }
@@ -28,7 +28,7 @@ export class PushPutBlockHash {
     return res
   }
 
-  public static validateGetTransaction(params: PushPutBlockHashParams) {
+  public static validatePushPutBlockHash(params: PushPutBlockHashParams) {
     try {
       // TODO: add validation for signature
       return true
