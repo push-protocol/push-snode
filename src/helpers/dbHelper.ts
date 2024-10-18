@@ -4,7 +4,7 @@ import pgPromise from 'pg-promise'
 import { IClient } from 'pg-promise/typescript/pg-subset'
 import { DateTime } from 'ts-luxon'
 
-import { InitDid } from '../generated/push/block_pb'
+import { InitDid, Transaction } from '../generated/push/block_pb'
 import log from '../loaders/logger'
 import { PushKeys } from '../services/transactions/pushKeys'
 import { PushWallets } from '../services/transactions/pushWallets'
@@ -20,7 +20,7 @@ import { WinstonUtil } from '../utilz/winstonUtil'
 // todo move everything into PgUtil including connection management
 // todo use PgUtil
 // todo use placeholders (?)
-
+// todo: move the query to specific service files
 const logger = WinstonUtil.newLog('pg')
 const options = {
   query: function (e) {
@@ -354,20 +354,21 @@ END $$ LANGUAGE plpgsql;
     nsIndex: string,
     ts: string,
     skey: string,
-    body: string
+    body: Transaction
   ) {
+    const transactionObj = body.toObject()
     log.debug(`putValueInStorageTable() namespace=${ns}, namespaceShardId=${shardId}
-        , skey=${skey}, jsonValue=${body}`)
+        , skey=${skey}, jsonValue=${transactionObj}`)
     const sql = `INSERT INTO storage_node (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload)
-                     values (\${ns}, \${shardId}, \${nsIndex}, to_timestamp(\${ts}), \${skey}, 'v1', \${body})
-                     ON CONFLICT (namespace, namespace_shard_id, namespace_id, skey) DO UPDATE SET payload = \${body}`
+                     values (\${ns}, \${shardId}, \${nsIndex}, to_timestamp(\${ts}), \${skey}, 'v1', \${transactionObj})
+                     ON CONFLICT (namespace, namespace_shard_id, namespace_id, skey) DO UPDATE SET payload = \${transactionObj}`
     const params = {
       ns,
       shardId,
       nsIndex,
       ts,
       skey,
-      body
+      transactionObj
     }
     return pgPool
       .none(sql, params)
@@ -382,18 +383,20 @@ END $$ LANGUAGE plpgsql;
       })
   }
 
-  static async indexTransactionCategory(ns: string, body: string) {
-    const parsedBody = typeof body == 'string' ? JSON.parse(body) : body
+  static async indexTransactionCategory(ns: string, body: Transaction) {
     // parent function that calls functions to store and index trxs based on category
     if (ns == 'INIT_DID') {
       const deserializedData = InitDid.deserializeBinary(
-        BitUtil.base64ToBytes(parsedBody.data)
-      ).toObject()
-      const masterPubKey = deserializedData.masterpubkey
-      const did = parsedBody['sender']
-      const derivedKeyIndex = deserializedData.derivedkeyindex
-      const derivedPublicKey = deserializedData.derivedpubkey
-      const walletToEncodedDerivedKeyMap = arrayToMap(deserializedData.wallettoencderivedkeyMap)
+        BitUtil.base64ToBytes(body.getData_asB64())
+      )
+      const masterPubKey = deserializedData.getMasterpubkey()
+      const did = body.getSender()
+      const derivedKeyIndex = deserializedData.getDerivedkeyindex()
+      const derivedPublicKey = deserializedData.getDerivedpubkey()
+      // was not able to use inbuilt proto methods to get the data
+      const walletToEncodedDerivedKeyMap = arrayToMap(
+        deserializedData.toObject().wallettoencderivedkeyMap
+      )
       await DbHelper.putInitDidTransaction({
         masterPublicKey: masterPubKey,
         did: did,

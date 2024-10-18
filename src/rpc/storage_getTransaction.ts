@@ -23,7 +23,7 @@ type StorageGetTransactionsParams = z.infer<typeof StorageGetTransactionsParamsS
 
 export class StorageGetTransaction {
   constructor() {}
-
+  // TODO: Make it a util function or part of base class
   public static contructErrorMessage(errorMessage: string) {
     const error = new Error(errorMessage) as any
     error.data = { error: errorMessage }
