@@ -357,6 +357,9 @@ END $$ LANGUAGE plpgsql;
     body: Transaction
   ) {
     const transactionObj = body.toObject()
+    if (ns == 'INIT_DID') {
+      shardId = -1
+    }
     log.debug(`putValueInStorageTable() namespace=${ns}, namespaceShardId=${shardId}
         , skey=${skey}, jsonValue=${transactionObj}`)
     const sql = `INSERT INTO storage_node (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload)

@@ -72,7 +72,6 @@ export default class StorageNode implements Consumer<QItem>, StorageContractList
 
     // check for validation
     const parsedBlock = BlockUtil.parseBlock(mb)
-    const blockObject = parsedBlock.toObject()
     const validatorSet = new Set(this.valContractState.getAllNodesMap().keys())
     const checkResult = await BlockUtil.checkBlockFinalized(
       parsedBlock,
@@ -99,7 +98,7 @@ export default class StorageNode implements Consumer<QItem>, StorageContractList
       return false
     }
     // send block
-    await this.indexStorage.unpackBlockToInboxes(parsedBlock, shardSet)
+    await this.indexStorage.unpackBlockToTransactions(parsedBlock, shardSet)
   }
 
   public async handleReshard(
@@ -147,7 +146,7 @@ export default class StorageNode implements Consumer<QItem>, StorageContractList
           Coll.setToArray(shardsToAdd),
           Coll.setToArray(shardsToAddFromBlock)
         )
-        await this.indexStorage.unpackBlockToInboxes(mb, shardsToAddFromBlock)
+        await this.indexStorage.unpackBlockToTransactions(mb, shardsToAddFromBlock)
       }
     )
     await this.blockStorage.saveNodeShards(newShards)

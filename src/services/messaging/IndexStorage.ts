@@ -33,13 +33,13 @@ export class IndexStorage {
 
    This is POSTGRES
   */
-  public async unpackBlockToInboxes(mb: Block, shardSet: Set<number>) {
+  public async unpackBlockToTransactions(mb: Block, shardSet: Set<number>) {
     // this is the list of shards that we support on this node
     const nodeShards = this.storageContractState.getNodeShards()
     this.log.debug('storage node supports %s shards: %o', nodeShards.size, nodeShards)
     const shardsToProcess = Coll.intersectSet(shardSet, nodeShards)
-    this.log.debug('block %s has %d inboxes to unpack', mb.getTs(), shardsToProcess)
-    if (shardsToProcess.size == 0) {
+    this.log.debug('block %s has %d transactions to unpack', mb.getTs(), shardsToProcess)
+    if (shardsToProcess.size == 0 && !shardSet.has(-1)) {
       this.log.debug('finished')
       return
     }
@@ -51,26 +51,24 @@ export class IndexStorage {
     }
     const currentNodeId = this.valContractState.nodeId
     for (let i = 0; i < mb.getTxobjList().length; i++) {
-      const feedItem = mb.getTxobjList()[i]
+      const transaction = mb.getTxobjList()[i]
       const targetWallets: string[] = MessageBlockUtil.calculateRecipients(mb, i)
       for (let i1 = 0; i1 < targetWallets.length; i1++) {
         const targetAddr = targetWallets[i1]
-        const targetShard = BlockUtil.calculateAffectedShard(
-          targetAddr,
-          this.storageContractState.shardCount
-        )
-        if (!shardsToProcess.has(targetShard)) {
+        const targetShard =
+          transaction.getTx().getCategory() == 'INIT_DID'
+            ? -1
+            : BlockUtil.calculateAffectedShard(targetAddr, this.storageContractState.shardCount)
+        if (!shardsToProcess.has(targetShard) && transaction.getTx().getCategory() !== 'INIT_DID') {
           continue
         }
-        // const trx = feedItem.getTx()
-        // console.log(trx.toObject())
         await this.putPayloadToInbox(
-          feedItem.getTx().getCategory(),
+          transaction.getTx().getCategory(),
           targetShard,
           targetAddr,
           tsString,
           currentNodeId,
-          feedItem.getTx()
+          transaction.getTx()
         )
       }
     }
