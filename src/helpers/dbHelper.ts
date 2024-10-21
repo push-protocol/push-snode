@@ -14,7 +14,6 @@ import { PgUtil } from '../utilz/pgUtil'
 import StrUtil from '../utilz/strUtil'
 import { arrayToMap } from '../utilz/typeConversionUtil'
 import { WinstonUtil } from '../utilz/winstonUtil'
-import { BlockUtil } from '../services/messaging-common/BlockUtil'
 
 // postgres
 // todo fix variable substitution, see #putValueInTable()

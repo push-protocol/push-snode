@@ -11,7 +11,6 @@ import { BlockUtil } from '../messaging-common/BlockUtil'
 import { MessageBlockUtil } from '../messaging-common/messageBlock'
 import { StorageContractState } from '../messaging-common/storageContractState'
 import { ValidatorContractState } from '../messaging-common/validatorContractState'
-import { BitUtil } from '../../utilz/bitUtil'
 
 // stores everything in Postgres (!)
 @Service()

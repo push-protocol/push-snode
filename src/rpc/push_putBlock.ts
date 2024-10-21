@@ -1,8 +1,8 @@
+import Container from 'typedi'
 import { z } from 'zod'
 
 import LoggerInstance from '../loaders/logger'
 import StorageNode from '../services/messaging/storageNode'
-import Container from 'typedi'
 
 const BlockItem = z.object({
   id: z.number().optional(),
