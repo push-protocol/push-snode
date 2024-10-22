@@ -160,21 +160,13 @@ export class BlockUtil {
   static calculateAffectedShards(block: Block, shardCount: number): Set<number> {
     const shards = new Set<number>()
     for (const txObj of block.getTxobjList()) {
-      const category = txObj.getTx().getCategory()
-      if (category === 'INIT_DID') {
-        shards.add(-1)
-      } else {
-        const senderAndRecipients = [
-          txObj.getTx().getSender(),
-          ...txObj.getTx().getRecipientsList()
-        ]
-        for (const wallet of senderAndRecipients) {
-          const shardId = this.calculateAffectedShard(wallet, shardCount)
-          if (shardId == null) {
-            continue
-          }
-          shards.add(shardId)
+      const senderAndRecipients = [txObj.getTx().getSender(), ...txObj.getTx().getRecipientsList()]
+      for (const wallet of senderAndRecipients) {
+        const shardId = this.calculateAffectedShard(wallet, shardCount)
+        if (shardId == null) {
+          continue
         }
+        shards.add(shardId)
       }
     }
     return shards
