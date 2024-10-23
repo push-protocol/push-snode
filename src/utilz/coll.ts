@@ -96,4 +96,23 @@ export class Coll {
       })
     )
   }
+
+  /**
+   * Computes a value and associates it with the specified key in the map if the key is not already present.
+   * If the key is already associated with a value, returns the existing value.
+   *
+   * @param  map - The map in which to compute and store the value.
+   * @param  key - The key with which the computed value is to be associated.
+   * @param createFun - A function that computes the value for the given key if it is absent.
+   *
+   * @return The current (existing or computed) value associated with the specified key.
+   */
+  public static computeIfAbsent<K, V>(map: Map<K, V>, key: K, createFun: (key: K) => V): V {
+    let value = map.get(key);
+    if (value === undefined) {
+      value = createFun(key);
+      map.set(key, value);
+    }
+    return value;
+  }
 }

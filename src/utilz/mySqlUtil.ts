@@ -1,8 +1,7 @@
-import { OkPacket, Pool } from 'mysql'
 import { Logger } from 'winston'
-
-import { EnvLoader } from './envLoader'
+import { OkPacket, Pool } from 'mysql'
 import { WinstonUtil } from './winstonUtil'
+import { EnvLoader } from './envLoader'
 
 /*
  A sync replacement of db.query callback-y code
@@ -53,6 +52,10 @@ export class MySqlUtil {
   static pool: Pool
 
   public static init(pool: Pool) {
+    if (MySqlUtil.pool != null) {
+      // only 1st call is valid
+      return
+    }
     MySqlUtil.pool = pool
     if (!MySqlUtil.logSql && EnvLoader.getPropertyAsBool('LOG_SQL_STATEMENTS')) {
       pool.on('connection', function (connection) {

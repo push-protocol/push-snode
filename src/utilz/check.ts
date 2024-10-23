@@ -1,4 +1,4 @@
-import StrUtil from './strUtil'
+import {StrUtil} from './strUtil'
 
 export class Check {
   public static isTrue(condition: any, err?: string) {
@@ -30,9 +30,5 @@ export class Check {
     if (value == null || value.size == 0) {
       throw new Error(StrUtil.isEmpty(err) ? 'Set empty check failed' : err)
     }
-  }
-
-  public static isEqual<T>(a: T, b: T, err?: string) {
-    return a === b
   }
 }

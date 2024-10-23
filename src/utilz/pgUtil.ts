@@ -3,7 +3,7 @@ import pg from 'pg-promise/typescript/pg-subset'
 import { Logger } from 'winston'
 
 import { EnvLoader } from './envLoader'
-import StrUtil from './strUtil'
+import { StrUtil } from './strUtil'
 import { WinstonUtil } from './winstonUtil'
 
 // PG PROMISE https://github.com/vitaly-t/pg-promise
