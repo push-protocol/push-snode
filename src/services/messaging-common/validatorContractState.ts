@@ -7,7 +7,7 @@ import { URL } from 'url'
 import { Logger } from 'winston'
 
 import { EnvLoader } from '../../utilz/envLoader'
-import StrUtil from '../../utilz/strUtil'
+import { StrUtil } from '../../utilz/strUtil'
 import { WinstonUtil } from '../../utilz/winstonUtil'
 
 /*

@@ -10,7 +10,7 @@ import {
 } from '../src/generated/push/block_pb'
 import { BlockUtil } from '../src/services/messaging-common/BlockUtil'
 import { BitUtil } from '../src/utilz/bitUtil'
-import StrUtil from '../src/utilz/strUtil'
+import { StrUtil } from '../src/utilz/strUtil'
 
 type WalletInfo = {
   address: string

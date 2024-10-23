@@ -11,7 +11,7 @@ import { PushWallets } from '../services/transactions/pushWallets'
 import { BitUtil } from '../utilz/bitUtil'
 import { EnvLoader } from '../utilz/envLoader'
 import { PgUtil } from '../utilz/pgUtil'
-import StrUtil from '../utilz/strUtil'
+import { StrUtil } from '../utilz/strUtil'
 import { arrayToMap } from '../utilz/typeConversionUtil'
 import { WinstonUtil } from '../utilz/winstonUtil'
 
