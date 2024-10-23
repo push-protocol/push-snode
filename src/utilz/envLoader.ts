@@ -1,9 +1,9 @@
 import dotenv from 'dotenv'
-
-import { NumUtil } from './numUtil'
-import StrUtil from './strUtil'
+import {StrUtil} from './strUtil'
+import {NumUtil} from "./numUtil";
 
 export class EnvLoader {
+
   public static loadEnvOrFail() {
     // loads all .env variables into process.env.* variables
     // Optional support for CONFIG_DIR variable
@@ -32,16 +32,16 @@ export class EnvLoader {
     return val != null && val.toLowerCase() === 'true'
   }
 
-  public static getPropertyOrDefault(propName: string, def: string): string {
+  public static getPropertyOrDefault(propName: string, def:string): string {
     const val = process.env[propName]
     if (StrUtil.isEmpty(val)) {
-      return def
+      return def;
     }
     return val
   }
 
-  public static getPropertyAsNumber(propName: string, defaultValue: number): number {
+  public static getPropertyAsNumber(propName: string, defaultValue:number): number {
     const val = process.env[propName]
-    return NumUtil.parseInt(val, defaultValue)
+    return NumUtil.parseInt(val, defaultValue);
   }
 }

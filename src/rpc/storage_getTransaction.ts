@@ -1,9 +1,8 @@
-import { ethers } from 'ethers'
 import Container from 'typedi'
 import z from 'zod'
 
 import { Transactions } from '../services/transactions/transactions'
-import { Check } from '../utilz/check'
+import { ChainUtil } from '../utilz/chainUtil'
 
 enum Category {
   INBOX = 'INBOX',
@@ -43,14 +42,10 @@ export class StorageGetTransaction {
 
   public static validateGetTransaction(params: StorageGetTransactionsParams) {
     // check if the wallet is in caip10 format
-    const walletComponents = params.wallet.split(':')
-    if (!Check.isEqual<number>(walletComponents.length, 3)) {
-      const error = this.contructErrorMessage('Invalid caip format')
-      throw error
-    }
-    if (!ethers.utils.isAddress(walletComponents[2])) {
-      const error = this.contructErrorMessage('Invalid wallet address')
-      throw error
+    const wallet = params.wallet
+    const [caip, err] = ChainUtil.parseCaipAddress(wallet)
+    if (err != null) {
+      throw new Error('invalid caip address:' + err)
     }
   }
 

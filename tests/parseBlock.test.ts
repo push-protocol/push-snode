@@ -1,16 +1,10 @@
 import { expect } from 'chai'
 import { Wallet } from 'ethers'
 
-import {
-  Block,
-  EncryptedText,
-  InitDid,
-  Transaction,
-  WalletToEncDerivedKey
-} from '../src/generated/push/block_pb'
+import { Block, Transaction } from '../src/generated/push/block_pb'
 import { BlockUtil } from '../src/services/messaging-common/BlockUtil'
 import { BitUtil } from '../src/utilz/bitUtil'
-import StrUtil from '../src/utilz/strUtil'
+import { StrUtil } from '../src/utilz/strUtil'
 
 type WalletInfo = {
   address: string
@@ -41,38 +35,23 @@ function getUserWallet(index: number): Wallet {
   return new Wallet(USER_KEYS[index].privateKey)
 }
 
-async function buildSampleTranaction1() {
-  const data = new InitDid()
-  data.setMasterpubkey('0xBB')
-  data.setDerivedkeyindex(1)
-  data.setDerivedpubkey('0xCC')
-
-  const et = new EncryptedText()
-  et.setSalt('qaz')
-  et.setNonce('')
-  et.setVersion('push:v5')
-  et.setPrekey('')
-  et.setCiphertext('qwe')
-  const wa = new WalletToEncDerivedKey()
-  wa.setEncderivedprivkey(et)
-  wa.setSignature(BitUtil.base16ToBytes('112233'))
-  data.getWallettoencderivedkeyMap().set('0xAA', wa)
+async function buildCustomTx1() {
+  const data = BitUtil.base16ToBytes('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
 
   const t = new Transaction()
   t.setType(0)
-  t.setCategory('INIT_DID')
+  t.setCategory('CUSTOM:EMAIL')
   t.setSender('eip155:1:' + getUserWallet(0).address)
   t.setRecipientsList([
     'eip155:1:' + getUserWallet(1).address,
     'eip155:1:' + getUserWallet(2).address
   ])
-  t.setData(data.serializeBinary())
+  t.setData(data)
   t.setSalt(BitUtil.base64ToBytes('cdYO7MAPTMisiYeEp+65jw=='))
   const apiToken =
     'VT1eyJub2RlcyI6W3sibm9kZUlkIjoiMHhmREFFYWY3YWZDRmJiNGU0ZDE2REM2NmJEMjAzOWZkNjAwNENGY2U4IiwidHNNaWxsaXMiOjE3Mjg2NzEyODAwMjMsInJhbmRvbUhleCI6ImFjM2YzNjg5ZGIyMDllYjhmNDViZWEzNDU5MjRkN2ZlYTZjMTlhNmMiLCJwaW5nUmVzdWx0cyI6W3sibm9kZUlkIjoiMHg4ZTEyZEUxMkMzNWVBQmYzNWI1NmIwNEU1M0M0RTQ2OGU0NjcyN0U4IiwidHNNaWxsaXMiOjE3Mjg2NzEyNTAwMjEsInN0YXR1cyI6MX0seyJub2RlSWQiOiIweDk4RjlEOTEwQWVmOUIzQjlBNDUxMzdhZjFDQTc2NzVlRDkwYTUzNTUiLCJ0c01pbGxpcyI6MTcyODY3MTI1MDAyMSwic3RhdHVzIjoxfV0sInNpZ25hdHVyZSI6IjB4MTA0ZmIwNTEzNTJiYTcxYjM4Zjk5M2ZhNDZiY2U2NGM2ZDMyYzBhZDRlZWYxZTgxODVjZjViMDRmYmVjOGM4YTRmMDhmYzg3MzBjZGI4NDcyMmZkYTIxMDU3MzRkOWU5MGNjMzlmZGE0ZjVkMTYxZjljOWFiNGEyMzIxM2RlZGExYyJ9LHsibm9kZUlkIjoiMHg5OEY5RDkxMEFlZjlCM0I5QTQ1MTM3YWYxQ0E3Njc1ZUQ5MGE1MzU1IiwidHNNaWxsaXMiOjE3Mjg2NzEyODAwMjAsInJhbmRvbUhleCI6Ijk5NTAyYmM4MWQyNWE2NjdlODlmYTZkNmY3ZDBjZmUxNzdmODkyZjMiLCJwaW5nUmVzdWx0cyI6W3sibm9kZUlkIjoiMHg4ZTEyZEUxMkMzNWVBQmYzNWI1NmIwNEU1M0M0RTQ2OGU0NjcyN0U4IiwidHNNaWxsaXMiOjE3Mjg2NzEyNTAwMjIsInN0YXR1cyI6MX0seyJub2RlSWQiOiIweGZEQUVhZjdhZkNGYmI0ZTRkMTZEQzY2YkQyMDM5ZmQ2MDA0Q0ZjZTgiLCJ0c01pbGxpcyI6MTcyODY3MTI1MDAyMSwic3RhdHVzIjoxfV0sInNpZ25hdHVyZSI6IjB4MmRiNjY4MTI5NGY0NGVhMzVmYWUxZGRhODhhMTIyZjk1NTBlNjg4MzIwZGY1MzU1MDJmNjQ1N2U2YmYyNmEwYzIzOGVjNDlkNTFhNGM3MTlmODhhYzEzMWFmOGIyZTcxOTdhOWY4MGQzMDAyYThkOTQ4YzM5YTU4NDgzNTYwYzQxYiJ9LHsibm9kZUlkIjoiMHg4ZTEyZEUxMkMzNWVBQmYzNWI1NmIwNEU1M0M0RTQ2OGU0NjcyN0U4IiwidHNNaWxsaXMiOjE3Mjg2NzEyODAwMjQsInJhbmRvbUhleCI6IjYzYWIxYWU4ZDk0MDNkY2I1NzM4NGZiNzE0NDQyYmIyMmI0NjYxN2UiLCJwaW5nUmVzdWx0cyI6W3sibm9kZUlkIjoiMHhmREFFYWY3YWZDRmJiNGU0ZDE2REM2NmJEMjAzOWZkNjAwNENGY2U4IiwidHNNaWxsaXMiOjE3Mjg2NzEyNTAwMjIsInN0YXR1cyI6MX0seyJub2RlSWQiOiIweDk4RjlEOTEwQWVmOUIzQjlBNDUxMzdhZjFDQTc2NzVlRDkwYTUzNTUiLCJ0c01pbGxpcyI6MTcyODY3MTI1MDAyMiwic3RhdHVzIjoxfV0sInNpZ25hdHVyZSI6IjB4M2Q3ZDAxMzdiNGE0MWNlNDczZTljZjBkNDkzZWE4OTM0YWFhZWIxYThiZGFlNzFlMWYyNTM1MDYxZDc2MjAxMTIyMDY5ZTYzOGU3ZTBkMmNiY2U1MmFiN2I3YzZlMTkwYzJlNWEzM2U1YTVkZjg0ZTJmY2ViZjllZDgwODlkMjgxYyJ9XX0='
   t.setApitoken(BitUtil.stringToBytesUtf(apiToken)) // fake token
-  t.setFee('0') // tbd
-  // todo fake signature ; grab real eth wallet here
+  t.setFee('0')
   await BlockUtil.signTxEVM(t, getUserWallet(0))
   return t
 }
@@ -99,7 +78,7 @@ describe('parsing tests', async function () {
 
 describe('normal tests', async function () {
   it.only('generate a transaction', async function () {
-    const tx = await buildSampleTranaction1()
+    const tx = await buildCustomTx1()
     console.log('signed tx %s bytes', BitUtil.bytesToBase16(tx.serializeBinary()))
     console.log('signed tx %o', tx.toObject())
     console.log('signed tx %s (compact print)', StrUtil.fmtProtoObj(tx))
