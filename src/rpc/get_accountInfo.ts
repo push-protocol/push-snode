@@ -1,9 +1,8 @@
-import { ethers } from 'ethers'
 import Container from 'typedi'
 import z from 'zod'
 
 import { Accounts } from '../services/account/accounts'
-import { Check } from '../utilz/check'
+import { ChainUtil } from '../utilz/chainUtil'
 
 const GetAccountInfoParamsSchema = z.string()
 type GetAccountInfoParams = z.infer<typeof GetAccountInfoParamsSchema>
@@ -24,14 +23,9 @@ export class GetAccountInfo {
 
   public static validateGetTransaction(wallet: GetAccountInfoParams) {
     // check if the wallet is in caip10 format
-    const walletComponents = wallet.split(':')
-    if (!Check.isEqual<number>(walletComponents.length, 3)) {
-      const error = this.contructErrorMessage('Invalid caip format')
-      throw error
-    }
-    if (!ethers.utils.isAddress(walletComponents[2])) {
-      const error = this.contructErrorMessage('Invalid wallet address')
-      throw error
+    const [caip, err] = ChainUtil.parseCaipAddress(wallet)
+    if (err != null) {
+      throw new Error('invalid caip address:' + err)
     }
   }
 
