@@ -20,6 +20,7 @@ import { EnvLoader } from '../../utilz/envLoader'
 import { EthUtil } from '../../utilz/ethUtil'
 import { HashUtil } from '../../utilz/hashUtil'
 import { NumUtil } from '../../utilz/numUtil'
+import { PushSdkUtil } from '../../utilz/pushSdkUtil'
 import { SolUtil } from '../../utilz/solUtil'
 import { StarkNetUtil } from '../../utilz/starkNetUtil'
 import StrUtil from '../../utilz/strUtil'
@@ -120,12 +121,6 @@ export class BlockUtil {
     return BitUtil.bytesToBase16(tx.serializeBinary())
   }
 
-  // 1) try to get first byte from caip address
-  // eip155:5:0xD8634C39BBFd4033c0d3289C4515275102423681 -> d8 -> 216
-  // and use it as shard
-  // 2) take sha256(addr) ->
-  // shard count is a smart contract constant; normally it should never change
-  // lets read this value from a contract
   public static calculateAffectedShard(walletInCaip: string, shardCount: number): number | null {
     if (StrUtil.isEmpty(walletInCaip)) {
       return null
@@ -147,11 +142,31 @@ export class BlockUtil {
     return shardId % shardCount
   }
 
+  static calculateAffectedShardsTx(
+    tx: Transaction,
+    shardCount: number,
+    shards = new Set<number>()
+  ): Set<number> {
+    const category = tx.getCategory()
+    if (category === 'INIT_DID') {
+      return shards
+    }
+    const senderAndRecipients = [tx.getSender(), ...tx.getRecipientsList()]
+    for (const wallet of senderAndRecipients) {
+      const shardId = this.calculateAffectedShard(wallet, shardCount)
+      if (shardId == null) {
+        continue
+      }
+      shards.add(shardId)
+    }
+    return shards
+  }
+
   /**
    * Evaluates all messageBlock target recipients (normally these are addresses)
    * for every included packet
    *
-   * And for every recipient finds which shard will host this address
+   * And for every tx finds which shard will host this address
    *
    * @param block
    * @param shardCount total amount of shards; see smart contract for this value
@@ -160,14 +175,8 @@ export class BlockUtil {
   static calculateAffectedShards(block: Block, shardCount: number): Set<number> {
     const shards = new Set<number>()
     for (const txObj of block.getTxobjList()) {
-      const senderAndRecipients = [txObj.getTx().getSender(), ...txObj.getTx().getRecipientsList()]
-      for (const wallet of senderAndRecipients) {
-        const shardId = this.calculateAffectedShard(wallet, shardCount)
-        if (shardId == null) {
-          continue
-        }
-        shards.add(shardId)
-      }
+      const tx = txObj.getTx()
+      this.calculateAffectedShardsTx(tx, shardCount, shards)
     }
     return shards
   }
@@ -192,32 +201,54 @@ export class BlockUtil {
     return CheckR.ok()
   }
 
+  // for tests
+  // signs InitDid(has masterPublicKey field) with the same private key
+  public static async signInitDid(tx: Transaction, evmWallet: Wallet) {
+    Check.isTrue(
+      ArrayUtil.isEmpty(tx.getSignature_asU8()),
+      ' clear the signature field first, signature is:' + tx.getSignature()
+    )
+    Check.isTrue(tx.getCategory() == 'INIT_DID', 'not an INIT_DID transaction')
+    const initDid = InitDid.deserializeBinary(tx.getData_asU8())
+    Check.isTrue(
+      initDid.getMasterpubkey() == evmWallet.publicKey,
+      `masterPublicKey ${initDid.getMasterpubkey()}
+       does not match evmWallet publicKey ${evmWallet.publicKey}`
+    )
+    const tmpBytes = PushSdkUtil.messageBytesToHashBytes(tx.serializeBinary())
+    const sig = await EthUtil.signBytes(evmWallet, tmpBytes)
+    tx.setSignature(sig)
+  }
+
+  // for tests
   public static async signTxEVM(tx: Transaction, evmWallet: Wallet) {
     Check.isTrue(
       ArrayUtil.isEmpty(tx.getSignature_asU8()),
       ' clear the signature field first, signature is:' + tx.getSignature()
     )
-    const tmpBytes = tx.serializeBinary()
+    const tmpBytes = PushSdkUtil.messageBytesToHashBytes(tx.serializeBinary())
     const sig = await EthUtil.signBytes(evmWallet, tmpBytes)
     tx.setSignature(sig)
   }
 
+  // for tests
   public static async signTxSolana(tx: Transaction, solanaPrivateKey: Uint8Array) {
     Check.isTrue(
       ArrayUtil.isEmpty(tx.getSignature_asU8()),
       ' clear the signature field first, signature is:' + tx.getSignature()
     )
-    const tmpBytes = tx.serializeBinary()
+    const tmpBytes = PushSdkUtil.messageBytesToHashBytes(tx.serializeBinary())
     const sig = SolUtil.signBytes(solanaPrivateKey, tmpBytes)
     tx.setSignature(sig)
   }
 
+  // for tests
   public static async signTxStarkNet(tx: Transaction, starkNetPrivateKey: Uint8Array) {
     Check.isTrue(
       ArrayUtil.isEmpty(tx.getSignature_asU8()),
       ' clear the signature field first, signature is:' + tx.getSignature()
     )
-    const tmpBytes = tx.serializeBinary()
+    const tmpBytes = PushSdkUtil.messageBytesToHashBytes(tx.serializeBinary())
     const sig = StarkNetUtil.signBytes(starkNetPrivateKey, tmpBytes)
     tx.setSignature(sig)
   }
@@ -231,41 +262,39 @@ export class BlockUtil {
       return CheckR.failWithText('signature should have at least 4 bytes size')
     }
     this.log.debug('checking signature `%s`', StrUtil.fmt(tx.getSignature_asU8()))
-    // todo if(tx.getCategory() === 'INIT_DID') or === startsWith("CUSTOM:") or ANY OTHER ?
+    if (tx.getCategory() === 'INIT_DID') {
+      const sig = tx.getSignature_asU8()
+      const tmp = Transaction.deserializeBinary(tx.serializeBinary())
+      tmp.setSignature(null)
+      const tmpBytes = tmp.serializeBinary()
+
+      const initDid = InitDid.deserializeBinary(tx.getData_asU8())
+      const masterPublicKeyBytesUncompressed = BitUtil.hex0xToBytes(initDid.getMasterpubkey())
+
+      const sigCheck = await PushSdkUtil.checkPushInitDidSignature(
+        masterPublicKeyBytesUncompressed,
+        tmpBytes,
+        sig
+      )
+      if (!sigCheck.success) {
+        return CheckR.failWithText(sigCheck.err)
+      }
+      return CheckR.ok()
+    }
     const sig = tx.getSignature_asU8()
     const tmp = Transaction.deserializeBinary(tx.serializeBinary())
     tmp.setSignature(null)
     const tmpBytes = tmp.serializeBinary()
-    if (caip.namespace === 'eip155') {
-      // EVM SIGNATURES
-      const recoveredAddr = EthUtil.recoverAddressFromMsg(tmpBytes, sig)
-      const valid = recoveredAddr === caip.addr
-      this.log.debug('recoveredAddr %s; valid: %s', StrUtil.fmt(recoveredAddr), valid)
-      if (!valid) {
-        return CheckR.failWithText(`sender address${tx.getSender()} does not match recovered address ${recoveredAddr} 
-        signature was: ${StrUtil.fmt(`${tx.getSignature()}`)}`)
-      }
-    } else if (caip.namespace === 'solana') {
-      // EVM SIGNATURES
-      const expectedPubKey = SolUtil.convertAddrToPubKey(caip.addr)
-      const valid = SolUtil.checkSignature(expectedPubKey, tmpBytes, sig)
-      this.log.debug('expectedPubKey %s; valid: %s', StrUtil.fmt(expectedPubKey), valid)
-      if (!valid) {
-        return CheckR.failWithText(`sender address ${tx.getSender()} does not match  
-        signature: ${StrUtil.fmt(`${tx.getSignature()}`)}`)
-      }
-    } else if (caip.namespace === 'starknet') {
-      return CheckR.failWithText('not suported')
-      // STARKNET SIGNATURES
-      // const expectedPubKey = StarkNetUtil.convertAddrToPubKey(caip.addr);
-      // const valid = StarkNetUtil.checkSignature(expectedPubKey, tmpBytes, sig);
-      // this.log.debug('expectedPubKey %s; valid: %s', StrUtil.fmt(expectedPubKey), valid);
-      // if (!valid) {
-      //   return CheckR.failWithText(`sender address ${tx.getSender()} does not match
-      //   signature: ${StrUtil.fmt(`${tx.getSignature()}`)}`);
-      // }
-    } else {
-      return CheckR.failWithText(`unsupported chain id: ${tx.getSender()}`)
+
+    const sigCheck = await PushSdkUtil.checkPushNetworkSignature(
+      caip.namespace,
+      caip.chainId,
+      caip.addr,
+      tmpBytes,
+      sig
+    )
+    if (!sigCheck.success) {
+      return CheckR.failWithText(sigCheck.err)
     }
     return CheckR.ok()
   }
@@ -297,10 +326,13 @@ export class BlockUtil {
         `salt field requires >=4 bytes ; ` + StrUtil.fmt(tx.getSalt_asU8())
       )
     }
-
+    const payloadCheck = await BlockUtil.checkTxPayload(tx)
+    if (!payloadCheck.success) {
+      return payloadCheck
+    }
     const validSignature = await BlockUtil.checkTxSignature(tx)
     if (!validSignature.success) {
-      return CheckR.failWithText(`signature field is invalid`)
+      return CheckR.failWithText(validSignature.err)
     }
     return CheckR.ok()
   }
@@ -493,10 +525,6 @@ export class BlockUtil {
       const check1 = await BlockUtil.checkTx(tx)
       if (!check1.success) {
         return check1
-      }
-      const check2 = await BlockUtil.checkTxPayload(tx)
-      if (!check2.success) {
-        return check2
       }
     }
     if (totalTxBytes > BlockUtil.MAX_TOTAL_TRANSACTION_SIZE_BYTES) {
