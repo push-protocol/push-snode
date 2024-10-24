@@ -1,7 +1,7 @@
 import { Inject, Service } from 'typedi'
 
 import DbHelper from '../../helpers/dbHelper'
-import DateUtil from '../../utilz/dateUtil'
+import { DateUtil } from '../../utilz/dateUtil'
 // import { PgUtil } from '../../utilz/pgUtil'
 import { StorageContractState } from '../messaging-common/storageContractState'
 

@@ -6,7 +6,7 @@ import { Logger } from 'winston'
 
 import { ObjectHasher } from '../../utilz/objectHasher'
 import { PgUtil } from '../../utilz/pgUtil'
-import StrUtil from '../../utilz/strUtil'
+import { StrUtil } from '../../utilz/strUtil'
 import { WinstonUtil } from '../../utilz/winstonUtil'
 import { Consumer, DCmd, QItem } from './queueTypes'
 

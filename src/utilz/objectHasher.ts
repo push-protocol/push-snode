@@ -1,10 +1,10 @@
-import hash, { NormalOption } from 'object-hash'
+const hash = require('object-hash')
 
 /**
  * Allows to build a consistent hash out of a json object
  */
 export class ObjectHasher {
-  private static options: NormalOption = {
+  private static options = {
     algorithm: 'sha256',
     encoding: 'hex',
     respectFunctionProperties: false, // skip functions

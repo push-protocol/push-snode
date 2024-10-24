@@ -3,7 +3,7 @@ import { DateTime } from 'ts-luxon'
 import winston from 'winston'
 
 import { EnvLoader } from './envLoader'
-import StrUtil from './strUtil'
+import {StrUtil} from './strUtil'
 
 /*
 Example usage:

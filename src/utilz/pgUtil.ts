@@ -3,7 +3,7 @@ import pg from 'pg-promise/typescript/pg-subset'
 import { Logger } from 'winston'
 
 import { EnvLoader } from './envLoader'
-import StrUtil from './strUtil'
+import { StrUtil } from './strUtil'
 import { WinstonUtil } from './winstonUtil'
 
 // PG PROMISE https://github.com/vitaly-t/pg-promise
@@ -61,43 +61,35 @@ export class PgUtil {
   }
 
   public static async update(query: string, ...sqlArgs: any[]): Promise<number> {
-    query = StrUtil.replaceAllMySqlToPostre(query)
+    query = this.replaceAllMySqlToPostre(query)
     this.log.debug(query, '     ---> args ', sqlArgs)
     const result = await this.pool.result(query, sqlArgs, (r) => r.rowCount)
     return result
   }
 
   public static async insert(query: string, ...sqlArgs: any[]): Promise<number> {
-    query = StrUtil.replaceAllMySqlToPostre(query)
+    query = this.replaceAllMySqlToPostre(query)
     this.log.debug(query, '     ---> args ', sqlArgs)
     const result = await this.pool.result(query, sqlArgs, (r) => r.rowCount)
     return result
   }
 
   public static async queryArr<R>(query: string, ...sqlArgs: any[]): Promise<R[]> {
-    query = StrUtil.replaceAllMySqlToPostre(query)
+    query = this.replaceAllMySqlToPostre(query)
     this.log.debug(query, '     ---> args ', sqlArgs)
     const result = await this.pool.query<R[]>(query, sqlArgs)
     return result
   }
-}
 
-/*
-function (err, connection) {
-        if (err) {
-          PgUtil.log.error(err)
-          reject(err)
-          return
-        }
-        connection.query(query, sqlArgs, function (err, results) {
-          connection.release() // always put connection back in pool after last query
-          if (err) {
-            PgUtil.log.error(err)
-            reject(err)
-            return
-          }
-          resolve(results)
-          return
-        })
-      }
-*/
+  /**
+   * replaces MySql placeholders ? with Postre placehoslers $1 $2 $3
+   * example:
+   * aaaa?bbbb?cccc? => aaaa$1bbbb$2cccc$3
+   */
+  public static replaceAllMySqlToPostre(s: string): string {
+    let cnt = 1
+    return s.replace(/\?/g, function () {
+      return `$${cnt++}`
+    })
+  }
+}

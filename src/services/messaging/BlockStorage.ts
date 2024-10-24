@@ -5,7 +5,7 @@ import { Block } from '../../generated/push/block_pb'
 import { Check } from '../../utilz/check'
 import { Coll } from '../../utilz/coll'
 import { PgUtil } from '../../utilz/pgUtil' // Use PgUtil instead of MySqlUtil
-import StrUtil from '../../utilz/strUtil'
+import { StrUtil } from '../../utilz/strUtil'
 import { WinstonUtil } from '../../utilz/winstonUtil'
 import { BlockUtil } from '../messaging-common/BlockUtil'
 

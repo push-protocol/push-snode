@@ -1,8 +1,7 @@
-import { JsonRpcProvider } from '@ethersproject/providers/src.ts/json-rpc-provider'
-import { Contract, ethers, Wallet } from 'ethers'
-import fs from 'fs'
 import path from 'path'
-
+import fs from 'fs'
+import { Contract, ethers, Wallet } from 'ethers'
+import { JsonRpcProvider } from '@ethersproject/providers/src.ts/json-rpc-provider'
 import { WinstonUtil } from './winstonUtil'
 
 export class EthersUtil {

@@ -3,12 +3,12 @@ import { Logger } from 'winston'
 
 import { Block, Transaction } from '../../generated/push/block_pb'
 import DbHelper from '../../helpers/dbHelper'
+import { Check } from '../../utilz/check'
 import { Coll } from '../../utilz/coll'
-import DateUtil from '../../utilz/dateUtil'
+import { DateUtil } from '../../utilz/dateUtil'
 import { PgUtil } from '../../utilz/pgUtil'
 import { WinstonUtil } from '../../utilz/winstonUtil'
 import { BlockUtil } from '../messaging-common/BlockUtil'
-import { MessageBlockUtil } from '../messaging-common/messageBlock'
 import { StorageContractState } from '../messaging-common/storageContractState'
 import { ValidatorContractState } from '../messaging-common/validatorContractState'
 
@@ -52,7 +52,7 @@ export class IndexStorage {
     const currentNodeId = this.valContractState.nodeId
     for (let i = 0; i < mb.getTxobjList().length; i++) {
       const feedItem = mb.getTxobjList()[i]
-      const targetWallets: string[] = MessageBlockUtil.calculateRecipients(mb, i)
+      const targetWallets: string[] = IndexStorage.calculateRecipients(mb, i)
       for (let i1 = 0; i1 < targetWallets.length; i1++) {
         const targetAddr = targetWallets[i1]
         const targetShard = BlockUtil.calculateAffectedShard(
@@ -74,6 +74,14 @@ export class IndexStorage {
         )
       }
     }
+  }
+
+  static calculateRecipients(block: Block, requestOffset: number): string[] {
+    Check.isTrue(requestOffset >= 0, 'requestOffset not found')
+    return [
+      ...block.getTxobjList()[requestOffset].getTx().getRecipientsList(),
+      block.getTxobjList()[requestOffset].getTx().getSender()
+    ]
   }
 
   /**
