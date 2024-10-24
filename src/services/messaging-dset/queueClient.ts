@@ -1,6 +1,7 @@
 import { Logger } from 'winston'
 
 import { PgUtil } from '../../utilz/pgUtil' // Assuming pgutil is the PostgreSQL utility file
+import { UrlUtil } from '../../utilz/urlUtil'
 import { WinstonUtil } from '../../utilz/winstonUtil'
 import { validatorRpc } from '../validatorRpc/validatorRpc'
 import { Consumer, QItem } from './queueTypes'
@@ -96,7 +97,7 @@ export class QueueClient {
     baseUri: string,
     firstOffset: number = 0
   ): Promise<{ items: QItem[]; lastOffset: number } | null> {
-    const url = `${baseUri}/api/v1/rpc/`
+    const url = UrlUtil.append(baseUri, '/api/v1/rpc/')
     try {
       const re = await validatorRpc.callPushReadBlockQueue(url, [firstOffset.toString()])
 
@@ -116,7 +117,7 @@ export class QueueClient {
   }
 
   public async readLastOffset({ queueName, baseUri }: { queueName?: string; baseUri: string }) {
-    const url = `${baseUri}/api/v1/rpc/`
+    const url = UrlUtil.append(baseUri, '/api/v1/rpc/')
     return await validatorRpc.callPushReadBlockQueueSizeRpc(url)
   }
 }
