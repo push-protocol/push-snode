@@ -8,7 +8,7 @@ import { Coll } from '../../utilz/coll'
 import { DateUtil } from '../../utilz/dateUtil'
 import { PgUtil } from '../../utilz/pgUtil'
 import { WinstonUtil } from '../../utilz/winstonUtil'
-import { BlockUtil } from '../messaging-common/BlockUtil'
+import { BlockUtil } from '../messaging-common/blockUtil'
 import { StorageContractState } from '../messaging-common/storageContractState'
 import { ValidatorContractState } from '../messaging-common/validatorContractState'
 

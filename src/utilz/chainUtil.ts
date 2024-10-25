@@ -1,5 +1,6 @@
 import {StrUtil} from './strUtil'
 import {Check} from "./check";
+import {BitUtil} from "./bitUtil";
 
 export class ChainUtil {
 
@@ -189,6 +190,19 @@ export class ChainUtil {
     return `0.0.${accountNum}`;
   }
 
+  // suports null values
+  // ignores case
+  public static isEqualEvmAddress(addr1: string, addr2: string): boolean {
+    if (addr1 === addr2) {
+      return true;
+    }
+    if (addr1 != null && addr2 == null || addr1 == null && addr2 != null) {
+      return false;
+    }
+    let addr1Fix = addr1 == null ? '' : BitUtil.hex0xRemove(addr1).toUpperCase();
+    let addr2Fix = addr2 == null ? '' : BitUtil.hex0xRemove(addr2).toUpperCase();
+    return addr1Fix === addr2Fix;
+  }
 
 }
 

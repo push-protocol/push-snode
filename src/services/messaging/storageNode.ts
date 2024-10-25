@@ -6,7 +6,7 @@ import { BitUtil } from '../../utilz/bitUtil'
 import { Check } from '../../utilz/check'
 import { Coll } from '../../utilz/coll'
 import { WinstonUtil } from '../../utilz/winstonUtil'
-import { BlockUtil } from '../messaging-common/BlockUtil'
+import { BlockUtil } from '../messaging-common/blockUtil'
 import {
   StorageContractListener,
   StorageContractState
@@ -74,7 +74,7 @@ export default class StorageNode implements Consumer<QItem>, StorageContractList
     const parsedBlock = BlockUtil.parseBlock(mb)
     const blockObject = parsedBlock.toObject()
     const validatorSet = new Set(this.valContractState.getAllNodesMap().keys())
-    const checkResult = await BlockUtil.checkBlockFinalized(
+    const checkResult = await BlockUtil.checkBlockAsSNode(
       parsedBlock,
       validatorSet,
       this.valContractState.contractCli.valPerBlock
