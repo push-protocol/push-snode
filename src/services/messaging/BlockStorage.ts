@@ -7,7 +7,7 @@ import { Coll } from '../../utilz/coll'
 import { PgUtil } from '../../utilz/pgUtil' // Use PgUtil instead of MySqlUtil
 import { StrUtil } from '../../utilz/strUtil'
 import { WinstonUtil } from '../../utilz/winstonUtil'
-import { BlockUtil } from '../messaging-common/BlockUtil'
+import { BlockUtil } from '../messaging-common/blockUtil'
 
 // stores everything in postgres
 @Service()

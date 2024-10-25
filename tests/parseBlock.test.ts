@@ -2,7 +2,7 @@ import { expect } from 'chai'
 import { Wallet } from 'ethers'
 
 import { Block, Transaction } from '../src/generated/push/block_pb'
-import { BlockUtil } from '../src/services/messaging-common/BlockUtil'
+import { BlockUtil } from '../src/services/messaging-common/blockUtil'
 import { BitUtil } from '../src/utilz/bitUtil'
 import { StrUtil } from '../src/utilz/strUtil'
 

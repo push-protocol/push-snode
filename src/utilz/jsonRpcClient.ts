@@ -1,7 +1,6 @@
 import axios, {AxiosError} from "axios";
 import {Logger} from "winston";
 import {WinstonUtil} from "./winstonUtil";
-import {NumUtil} from "./numUtil";
 
 
 export class JsonRpcClient {
@@ -28,9 +27,14 @@ export class JsonRpcClient {
           headers: {"Content-Type": "application/json"}
         });
       const resp = axiosResp.data;
+      const errorCode = resp?.error?.code;
+      const errorMessage = resp?.error?.message;
       JsonRpcClient.log.debug(`<< RPC Reply POST ${url} (req${requestId}) code: ${axiosResp.status} with body: %o`, resp);
       if (axiosResp.status !== 200) {
-        return [null, new RpcError(resp?.error?.code ?? axiosResp.status, resp?.error?.message ?? 'Call error')];
+        return [null, new RpcError(errorCode ?? axiosResp.status, errorMessage ?? 'Call error')];
+      }
+      if (resp?.error != null) {
+        return [null, new RpcError(errorCode ?? -3, 'remote rpc error: ' + errorMessage)];
       }
       if (resp?.id !== requestId) {
         return [null, new RpcError(-2, 'Call error: Request id does not match reply id')];
