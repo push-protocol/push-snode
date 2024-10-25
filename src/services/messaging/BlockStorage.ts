@@ -66,21 +66,52 @@ export class BlockStorage {
   `)
 
     await PgUtil.update(`
-    CREATE TABLE IF NOT EXISTS storage_node
-    (
-        namespace VARCHAR(20) NOT NULL,
-        namespace_shard_id VARCHAR(64) NOT NULL,
-        namespace_id VARCHAR(64) NOT NULL,
-        ts TIMESTAMP NOT NULL default NOW(),
-        skey VARCHAR(64) NOT NULL,
-        dataSchema VARCHAR(20) NOT NULL,
-        payload JSONB,
-        PRIMARY KEY(namespace,namespace_shard_id,namespace_id,skey)
-    );`)
+    DROP TABLE IF EXISTS transactions;
+CREATE TABLE IF NOT EXISTS transactions
+(
+    id             serial primary key,
+    category_val   VARCHAR(128) NOT NULL,
+    ts             TIMESTAMP    NOT NULL,
+    sender         VARCHAR(128) NOT NULL,
+    shard_id       BIGINT  NOT NULL,
+    data_parsed    JSONB,
+    data_id        BIGINT,
+    data_raw       bytea,
+    hash_val       VARCHAR(64)  NOT NULL,
+    tx_raw         bytea
+);
+create index transactions_idx_cat_and_ts on transactions (category_val, ts);
+create index sender_idx on transactions (category_val, sender);
+ALTER TABLE transactions ADD CONSTRAINT transactions_uniq_hash UNIQUE (hash_val);
+comment on column transactions.id is 'transaction id; should be uniq';
+comment on column transactions.sender is ' the wallet which sent the transaction ';
+comment on column transactions.data_id is ' this can be a FK to another table with transactions which depends on type: INIT_DID, INIT_SESSION_KEY, NOTIFICATION, etc  (for some type of tx this will be applicable, when json is not enough)';
+comment on column transactions.shard_id is ' shard id affected by this transaction ; we need this to delete shard data on re-shard';
+comment on column transactions.hash_val is ' uniq transaction hash; calculation is set by the protocol logic in the same way for every node';
+comment on column transactions.tx_raw is ' bytes of the tx; non-parsed ';
+comment on column transactions.data_raw is ' bytes of the data; non-parsed; for future use';
+comment on column transactions.data_parsed is ' data stored as indexable json (for some type of tx this will be applicable)';`)
 
-    await PgUtil.update(`CREATE INDEX IF NOT EXISTS 
-    storage_node_idx ON storage_node
-    USING btree (namespace ASC, namespace_id ASC, ts ASC);`)
+    await PgUtil.update(`
+  DROP TABLE IF EXISTS inboxes;
+CREATE TABLE IF NOT EXISTS inboxes
+(
+    wallet         VARCHAR(128) NOT NULL,
+    category_val   VARCHAR(128) NOT NULL,
+    ts             TIMESTAMP    NOT NULL,
+    shard_id       BIGINT  NOT NULL,
+    sender_type    SMALLINT     not null,
+    transaction_id bigint      not null,
+    PRIMARY KEY (wallet, transaction_id)
+);
+create index inboxes_idx1 on inboxes (wallet, category_val, ts, sender_type);
+comment on table inboxes is
+'Virtual Inbox table: every user has a virtual inbox; when a transaction (t1) comes, usually it has a sender A and recipients B,C,D;
+ so 4 refs to the transaction id should land into this table: A->t1,B->t1,C->t1,D->t1';
+comment on column inboxes.wallet is 'wallet which sees a transaction';
+comment on column inboxes.transaction_id is 'tx associated with this wallet';
+comment on column inboxes.sender_type is ' 1 = sender, 2 = recipient ';
+  `)
 
     // create push_keys table
     await PgUtil.update(`
@@ -160,7 +191,7 @@ export class BlockStorage {
       calculatedHash,
       shardSetAsJson
     )
-    const requiresProcessing = res === 1
+    const requiresProcessing = res.length === 1
     if (!requiresProcessing) {
       return false
     }

@@ -1,7 +1,7 @@
 import { Inject, Service } from 'typedi'
 import { Logger } from 'winston'
 
-import { Block, Transaction } from '../../generated/push/block_pb'
+import { Block } from '../../generated/push/block_pb'
 import DbHelper from '../../helpers/dbHelper'
 import { Check } from '../../utilz/check'
 import { Coll } from '../../utilz/coll'
@@ -53,25 +53,41 @@ export class IndexStorage {
     for (let i = 0; i < mb.getTxobjList().length; i++) {
       const feedItem = mb.getTxobjList()[i]
       const targetWallets: string[] = IndexStorage.calculateRecipients(mb, i)
-      for (let i1 = 0; i1 < targetWallets.length; i1++) {
-        const targetAddr = targetWallets[i1]
-        const targetShard = BlockUtil.calculateAffectedShard(
-          targetAddr,
-          this.storageContractState.shardCount
-        )
-        if (!shardsToProcess.has(targetShard)) {
-          continue
+      const sender = feedItem.getTx().getSender()
+      const senderShardId = BlockUtil.calculateAffectedShard(
+        sender,
+        this.storageContractState.shardCount
+      )
+      if (!shardsToProcess.has(senderShardId)) {
+        continue
+      }
+      const res = await DbHelper.storeTransaction(
+        feedItem.getTx().getCategory(),
+        senderShardId,
+        sender,
+        tsString,
+        feedItem.getTx().getSalt_asB64(),
+        feedItem.getTx()
+      )
+      if (res && res.length > 0) {
+        for (let i1 = 0; i1 < targetWallets.length; i1++) {
+          const targetAddr = targetWallets[i1]
+          const targetShard = BlockUtil.calculateAffectedShard(
+            targetAddr,
+            this.storageContractState.shardCount
+          )
+          if (!shardsToProcess.has(targetShard)) {
+            continue
+          }
+          await this.putPayloadToInbox(
+            feedItem.getTx().getCategory(),
+            targetShard,
+            targetAddr,
+            tsString,
+            currentNodeId,
+            res[0]['id']
+          )
         }
-        // const trx = feedItem.getTx()
-        // console.log(trx.toObject())
-        await this.putPayloadToInbox(
-          feedItem.getTx().getCategory(),
-          targetShard,
-          targetAddr,
-          tsString,
-          currentNodeId,
-          feedItem.getTx()
-        )
       }
     }
   }
@@ -98,22 +114,25 @@ export class IndexStorage {
    * todo pass ts as number
    */
   public async putPayloadToInbox(
-    nsName: string,
-    nsShardId: number,
-    nsId: string,
+    category: string,
+    shardId: number,
+    wallet: string,
     ts: string,
     nodeId: string,
-    payload: Transaction
+    transactionId: string
   ) {
-    const storageValue = await DbHelper.putValueInStorageTable(
-      nsName,
-      nsShardId,
-      nsId,
-      ts,
-      payload.getSalt_asB64(),
-      payload
+    PgUtil.insert(
+      `INSERT INTO inboxes (wallet, shard_id, category_val, ts, sender_type, transaction_id) VALUES ($1, $2, $3, $4, $5, $6)`,
+      [category, shardId, wallet, ts, nodeId, transactionId]
     )
-    this.log.debug(`found value: ${storageValue}`)
+      .then(async (res) => {
+        console.log(res)
+        return Promise.resolve()
+      })
+      .catch((error) => {
+        console.log(error)
+        return Promise.reject(error)
+      })
   }
 
   // todo remove shard entries from node_storage_layout also?

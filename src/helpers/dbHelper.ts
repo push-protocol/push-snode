@@ -348,34 +348,34 @@ END $$ LANGUAGE plpgsql;
       })
   }
 
-  static async putValueInStorageTable(
-    ns: string,
+  //putValueInStorageTable
+  static async storeTransaction(
+    category: string,
     shardId: number,
-    nsIndex: string,
+    sender: string,
     ts: string,
-    skey: string,
-    body: Transaction
+    transactionHash: string,
+    transactionBody: Transaction
   ) {
-    const transactionObj = body.toObject()
-    log.debug(`putValueInStorageTable() namespace=${ns}, namespaceShardId=${shardId}
-        , skey=${skey}, jsonValue=${transactionObj}`)
-    const sql = `INSERT INTO storage_node (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload)
-                     values (\${ns}, \${shardId}, \${nsIndex}, to_timestamp(\${ts}), \${skey}, 'v1', \${transactionObj})
-                     ON CONFLICT (namespace, namespace_shard_id, namespace_id, skey) DO UPDATE SET payload = \${transactionObj}`
+    const transactionObj = transactionBody.toObject()
+    log.debug(`storeTransaction() category_val=${category}, shard_id =${shardId}
+        , hash_val=${transactionHash}, data_parsed=${transactionObj}`)
+    const sql = `INSERT INTO transactions (category, shard_id, sender, ts, hash_val, data_parsed)
+                     values (\${category}, \${shardId}, \${sender}, to_timestamp(\${ts}), \${hash_val}, \${transactionObj})
+                     ON CONFLICT (category, shard_id, sender, hash_val) DO UPDATE SET data_parsed = \${transactionObj}`
     const params = {
-      ns,
+      category,
       shardId,
-      nsIndex,
+      sender,
       ts,
-      skey,
+      transactionHash,
       transactionObj
     }
-    return pgPool
-      .none(sql, params)
+    return PgUtil.insert(sql, params)
       .then(async (data) => {
         log.debug(data)
-        await DbHelper.indexTransactionCategory(ns, body)
-        return Promise.resolve()
+        await DbHelper.indexTransactionCategory(category, transactionBody)
+        return Promise.resolve(data)
       })
       .catch((err) => {
         log.debug(err)
