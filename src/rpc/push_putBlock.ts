@@ -3,6 +3,8 @@ import { z } from 'zod'
 
 import LoggerInstance from '../loaders/logger'
 import StorageNode from '../services/messaging/storageNode'
+import { BlockUtil } from '../services/messaging-common/blockUtil'
+import { BitUtil } from '../utilz/bitUtil'
 
 const BlockItem = z.object({
   id: z.number().optional(),
@@ -10,7 +12,7 @@ const BlockItem = z.object({
   object: z.string()
 })
 const PushPutBlockParamsSchema = z.object({
-  blocks: z.array(BlockItem),
+  blocks: z.array(z.string()),
   signature: z.string()
 })
 
@@ -37,10 +39,12 @@ export class PushPutBlock {
     const result = await Promise.all(
       blocks.map(async (block) => {
         try {
-          if (!block.object) {
+          if (!block) {
             throw new Error('Block object is missing')
           }
-          await st.accept(block as BlockItemType)
+          const mb = BitUtil.base16ToBytes(block as string)
+          const parsedBlock = BlockUtil.parseBlock(mb)
+          await st.handleBlock(parsedBlock, mb)
           return 'SUCCESS'
         } catch (error) {
           return { block, status: 'FAIL', error: error.message }

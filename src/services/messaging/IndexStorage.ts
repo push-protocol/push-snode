@@ -39,10 +39,10 @@ export class IndexStorage {
     this.log.debug('storage node supports %s shards: %o', nodeShards.size, nodeShards)
     const shardsToProcess = Coll.intersectSet(shardSet, nodeShards)
     this.log.debug('block %s has %d inboxes to unpack', mb.getTs(), shardsToProcess)
-    if (shardsToProcess.size == 0) {
-      this.log.debug('finished')
-      return
-    }
+    // if (shardsToProcess.size == 0) {
+    //   this.log.debug('finished')
+    //   return
+    // }
 
     // ex: 1661214142.123456
     let tsString = (mb.getTs() / 1000.0).toString()
@@ -59,7 +59,7 @@ export class IndexStorage {
           targetAddr,
           this.storageContractState.shardCount
         )
-        if (!shardsToProcess.has(targetShard)) {
+        if (shardsToProcess.size != 0 && !shardsToProcess.has(targetShard)) {
           continue
         }
         // const trx = feedItem.getTx()

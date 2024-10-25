@@ -85,10 +85,10 @@ export class BlockStorage {
     // create push_keys table
     await PgUtil.update(`
       CREATE TABLE IF NOT EXISTS push_keys(
-      masterpublickey VARCHAR(64) PRIMARY KEY,
+      masterpublickey VARCHAR(150) PRIMARY KEY,
       did VARCHAR(64) UNIQUE NOT NULL,
-      derivedkeyindex INT NOT NULL,
-      derivedpublickey VARCHAR(64) UNIQUE NOT NULL
+      derivedkeyindex INT8 NOT NULL,
+      derivedpublickey VARCHAR(150) UNIQUE NOT NULL
     );
       `)
     // create indexes
@@ -99,9 +99,9 @@ export class BlockStorage {
     // create push_wallets key
     await PgUtil.update(`
         CREATE TABLE IF NOT EXISTS push_wallets(
-        address VARCHAR(64) NOT NULL,
-        did VARCHAR(64) UNIQUE NOT NULL,
-        derivedkeyindex INT NOT NULL,
+        address VARCHAR(150) NOT NULL,
+        did VARCHAR(150) UNIQUE NOT NULL,
+        derivedkeyindex INT8 NOT NULL,
         encrypteddervivedprivatekey TEXT UNIQUE NOT NULL,
         signature TEXT UNIQUE NOT NULL,
         PRIMARY KEY(address, did),
@@ -165,18 +165,18 @@ export class BlockStorage {
       return false
     }
     // insert block to shard mapping
-    let valuesStr = ''
-    const valuesArr: any[] = []
-    for (const shardId of shardSet) {
-      valuesArr.push(calculatedHash, shardId)
-      valuesStr += valuesStr.length == 0 ? '($1, $2)' : ',($1, $2)'
-    }
-    await PgUtil.insert(
-      `INSERT INTO dset_queue_mblock(object_hash, object_shard)
-       VALUES ${valuesStr}
-       ON CONFLICT DO NOTHING`,
-      ...valuesArr
-    )
+    // let valuesStr = ''
+    // const valuesArr: any[] = []
+    // for (const shardId of shardSet) {
+    //   valuesArr.push(calculatedHash, shardId)
+    //   valuesStr += valuesStr.length == 0 ? '($1, $2)' : ',($1, $2)'
+    // }
+    // await PgUtil.insert(
+    //   `INSERT INTO dset_queue_mblock(object_hash, object_shard)
+    //    VALUES ${valuesStr}
+    //    ON CONFLICT DO NOTHING`,
+    //   ...valuesArr
+    // )
     return true
   }
 
