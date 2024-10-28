@@ -5,6 +5,7 @@ import LoggerInstance from '../loaders/logger'
 import StorageNode from '../services/messaging/storageNode'
 import { BlockUtil } from '../services/messaging-common/blockUtil'
 import { BitUtil } from '../utilz/bitUtil'
+import { StrUtil } from '../utilz/strUtil'
 
 const BlockItem = z.object({
   id: z.number().optional(),
@@ -18,6 +19,8 @@ const PushPutBlockParamsSchema = z.object({
 
 type PushPutBlockParams = z.infer<typeof PushPutBlockParamsSchema>
 type BlockItemType = { id?: number; object_hash?: string; object: string }
+type BlockResult = { status: 'ACCEPTED' | 'REJECTED'; reason?: string }
+
 export class PushPutBlock {
   constructor() {}
 
@@ -35,22 +38,27 @@ export class PushPutBlock {
     if (!validationRes) {
       return new Error('Invalid params')
     }
-    const st: StorageNode = await Container.get(StorageNode)
-    const result = await Promise.all(
-      blocks.map(async (block) => {
-        try {
-          if (!block) {
-            throw new Error('Block object is missing')
-          }
-          const mb = BitUtil.base16ToBytes(block as string)
-          const parsedBlock = BlockUtil.parseBlock(mb)
-          await st.handleBlock(parsedBlock, mb)
-          return 'SUCCESS'
-        } catch (error) {
-          return { block, status: 'FAIL', error: error.message }
+    const st: StorageNode = await Container.get(StorageNode) // todo @Inject via container
+    const result: BlockResult[] = []
+    for (let i = 0; i < blocks.length; i++) {
+      if (StrUtil.isEmpty(blocks[i])) {
+        result[i] = { status: 'REJECTED', reason: 'empty block data' }
+        continue
+      }
+      let blockBase16 = BitUtil.hex0xRemove(blocks[i]).toLowerCase()
+      try {
+        const blockBytes = BitUtil.base16ToBytes(blockBase16)
+        const block = BlockUtil.parseBlock(blockBytes)
+        let res = await st.handleBlock(block, blockBytes)
+        if (res == true) {
+          result[i] = { status: 'ACCEPTED' }
+        } else {
+          result[i] = { status: 'REJECTED', reason: 'duplicate' }
         }
-      })
-    )
+      } catch (error) {
+        result[i] = { status: 'REJECTED', reason: error.message }
+      }
+    }
     return result
   }
 

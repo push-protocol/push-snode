@@ -7,7 +7,7 @@ import { WinstonUtil } from '../../utilz/winstonUtil'
 // noinspection UnnecessaryLocalVariableJS
 @Service()
 export class Block {
-  private log = WinstonUtil.newLog(Block)
+  private static log = WinstonUtil.newLog(Block)
 
   static async getBlockByHash(blockHash: string) {
     const query = `SELECT * FROM blocks WHERE block_hash = $1`
@@ -23,9 +23,10 @@ export class Block {
    *
    * replies ['DO_NOT_SEND', 'SEND']
    * SEND = A VNode is forced to submit data
-   * DO_NOT_SENT = THNX, we already have this block
+   * DO_NOT_SENT = thanks, but we already have this block, don't submit the data
    */
   static async getBulkBlocksByHash(blockHashes: string[]): Promise<String[]> {
+    Block.log.debug('getBulkBlocksByHash() call: %s', blockHashes)
     for (let i = 0; i < blockHashes.length; i++) {
       blockHashes[i] = BitUtil.hex0xRemove(blockHashes[i]).toLowerCase()
     }
@@ -37,6 +38,7 @@ export class Block {
     const foundHashes = new Set<string>(result.map((row) => row.object_hash))
 
     const statusArray = blockHashes.map((hash) => (foundHashes.has(hash) ? 'DO_NOT_SEND' : 'SEND'))
+    Block.log.debug('getBulkBlocksByHash() result: %s', statusArray)
     return statusArray
   }
 }
