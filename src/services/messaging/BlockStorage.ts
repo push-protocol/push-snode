@@ -7,7 +7,7 @@ import { Coll } from '../../utilz/coll'
 import { PgUtil } from '../../utilz/pgUtil' // Use PgUtil instead of MySqlUtil
 import { StrUtil } from '../../utilz/strUtil'
 import { WinstonUtil } from '../../utilz/winstonUtil'
-import { BlockUtil } from '../messaging-common/BlockUtil'
+import { BlockUtil } from '../messaging-common/blockUtil'
 
 // stores everything in postgres
 @Service()
@@ -116,10 +116,10 @@ comment on column inboxes.sender_type is ' 1 = sender, 2 = recipient ';
     // create push_keys table
     await PgUtil.update(`
       CREATE TABLE IF NOT EXISTS push_keys(
-      masterpublickey VARCHAR(64) PRIMARY KEY,
+      masterpublickey VARCHAR(150) PRIMARY KEY,
       did VARCHAR(64) UNIQUE NOT NULL,
-      derivedkeyindex INT NOT NULL,
-      derivedpublickey VARCHAR(64) UNIQUE NOT NULL
+      derivedkeyindex INT8 NOT NULL,
+      derivedpublickey VARCHAR(150) UNIQUE NOT NULL
     );
       `)
     // create indexes
@@ -130,9 +130,9 @@ comment on column inboxes.sender_type is ' 1 = sender, 2 = recipient ';
     // create push_wallets key
     await PgUtil.update(`
         CREATE TABLE IF NOT EXISTS push_wallets(
-        address VARCHAR(64) NOT NULL,
-        did VARCHAR(64) UNIQUE NOT NULL,
-        derivedkeyindex INT NOT NULL,
+        address VARCHAR(150) NOT NULL,
+        did VARCHAR(150) UNIQUE NOT NULL,
+        derivedkeyindex INT8 NOT NULL,
         encrypteddervivedprivatekey TEXT UNIQUE NOT NULL,
         signature TEXT UNIQUE NOT NULL,
         PRIMARY KEY(address, did),
@@ -191,23 +191,23 @@ comment on column inboxes.sender_type is ' 1 = sender, 2 = recipient ';
       calculatedHash,
       shardSetAsJson
     )
-    const requiresProcessing = res.length === 1
-    if (!requiresProcessing) {
-      return false
-    }
+    // const requiresProcessing = res.length === 1
+    // if (!requiresProcessing) {
+    //   return false
+    // }
     // insert block to shard mapping
-    let valuesStr = ''
-    const valuesArr: any[] = []
-    for (const shardId of shardSet) {
-      valuesArr.push(calculatedHash, shardId)
-      valuesStr += valuesStr.length == 0 ? '($1, $2)' : ',($1, $2)'
-    }
-    await PgUtil.insert(
-      `INSERT INTO dset_queue_mblock(object_hash, object_shard)
-       VALUES ${valuesStr}
-       ON CONFLICT DO NOTHING`,
-      ...valuesArr
-    )
+    // let valuesStr = ''
+    // const valuesArr: any[] = []
+    // for (const shardId of shardSet) {
+    //   valuesArr.push(calculatedHash, shardId)
+    //   valuesStr += valuesStr.length == 0 ? '($1, $2)' : ',($1, $2)'
+    // }
+    // await PgUtil.insert(
+    //   `INSERT INTO dset_queue_mblock(object_hash, object_shard)
+    //    VALUES ${valuesStr}
+    //    ON CONFLICT DO NOTHING`,
+    //   ...valuesArr
+    // )
     return true
   }
 

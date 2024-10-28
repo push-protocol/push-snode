@@ -356,36 +356,53 @@ END $$ LANGUAGE plpgsql;
     ts: string,
     transactionHash: string,
     transactionBody: Transaction
-  ) {
-    const transactionObj = transactionBody.toObject()
-    log.debug(`storeTransaction() category_val=${category}, shard_id =${shardId}
-        , hash_val=${transactionHash}, data_parsed=${transactionObj}`)
-    const sql = `INSERT INTO transactions (category, shard_id, sender, ts, hash_val, data_parsed)
-                     values (\${category}, \${shardId}, \${sender}, to_timestamp(\${ts}), \${hash_val}, \${transactionObj})
-                     ON CONFLICT (category, shard_id, sender, hash_val) DO UPDATE SET data_parsed = \${transactionObj}`
-    const params = {
-      category,
-      shardId,
-      sender,
-      ts,
-      transactionHash,
-      transactionObj
+  ): Promise<number> {
+    try {
+      const transactionObj = transactionBody.toObject()
+
+      log.debug('Storing transaction:', {
+        category,
+        shardId,
+        hash_val: transactionHash,
+        data_parsed: transactionObj
+      })
+
+      const sql = `
+        INSERT INTO transactions (
+          category_val, 
+          shard_id, 
+          sender, 
+          ts, 
+          hash_val, 
+          data_parsed
+        )
+        VALUES (?, ?, ?, to_timestamp(?), ?, ?)
+        ON CONFLICT DO NOTHING
+      `
+
+      // Order matters here - must match the ? placeholders in the SQL
+      const params = [category, shardId, sender, ts, transactionHash, transactionObj]
+
+      const result = await PgUtil.insert(sql, ...params)
+
+      log.debug('Transaction stored successfully', result)
+
+      await DbHelper.indexTransactionCategory(category, transactionBody)
+
+      return result
+    } catch (error) {
+      log.error('Failed to store transaction', {
+        error,
+        category,
+        hash_val: transactionHash
+      })
+      throw error
     }
-    return PgUtil.insert(sql, params)
-      .then(async (data) => {
-        log.debug(data)
-        await DbHelper.indexTransactionCategory(category, transactionBody)
-        return Promise.resolve(data)
-      })
-      .catch((err) => {
-        log.debug(err)
-        return Promise.reject(err)
-      })
   }
 
   static async indexTransactionCategory(ns: string, body: Transaction) {
     // parent function that calls functions to store and index trxs based on category
-    if (ns == 'INIT_DID') {
+    if (ns === 'INIT_DID') {
       const deserializedData = InitDid.deserializeBinary(
         BitUtil.base64ToBytes(body.getData_asB64())
       )
@@ -404,8 +421,7 @@ END $$ LANGUAGE plpgsql;
         derivedPublicKey: derivedPublicKey,
         walletToEncodedDerivedKeyMap: walletToEncodedDerivedKeyMap
       })
-    }
-    if (ns == 'INIT_SESSION_KEY') {
+    } else if (ns == 'INIT_SESSION_KEY') {
     } else {
       logger.info('No category found for ns: ', ns)
     }
@@ -424,7 +440,6 @@ END $$ LANGUAGE plpgsql;
     derivedPublicKey: string
     walletToEncodedDerivedKeyMap: Map<string, string>
   }) {
-    // Adding initial PushKeys for the masterPublicKey
     if (
       masterPublicKey == null ||
       did == null ||
@@ -434,25 +449,31 @@ END $$ LANGUAGE plpgsql;
       logger.info('Fields are missing, skipping for masterPublicKey: ', masterPublicKey)
       return false
     }
-    if (walletToEncodedDerivedKeyMap.size == 0) {
+
+    if (walletToEncodedDerivedKeyMap.size === 0) {
       logger.info('No walletToEncodedDerivedKeyMap found for masterPublicKey: ', masterPublicKey)
       return false
     }
+
     await PushKeys.addPushKeys({
       masterPublicKey,
       did,
       derivedKeyIndex,
       derivedPublicKey
     })
-    walletToEncodedDerivedKeyMap.forEach(async (value, wallet) => {
-      await PushWallets.addPushWallets({
-        address: wallet,
-        did: did,
-        derivedKeyIndex: derivedKeyIndex.toString(),
-        encryptedDervivedPrivateKey: value['encderivedprivkey'],
-        signature: value['signature']
-      })
-    })
+
+    await Promise.all(
+      Array.from(walletToEncodedDerivedKeyMap.entries()).map(([wallet, value]) =>
+        PushWallets.addPushWallets({
+          address: wallet,
+          did: did,
+          derivedKeyIndex: derivedKeyIndex.toString(),
+          encryptedDervivedPrivateKey: value['encderivedprivkey'],
+          signature: value['signature']
+        })
+      )
+    )
+
     return true
   }
 

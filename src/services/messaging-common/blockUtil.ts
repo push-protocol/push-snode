@@ -6,7 +6,7 @@ import {
   Transaction,
   TxAttestorData,
   TxValidatorData,
-  Vote
+  Vote, WalletToEncDerivedKey
 } from "../../generated/push/block_pb";
 import {EnvLoader} from "../../utilz/envLoader";
 import {HashUtil} from "../../utilz/hashUtil";
@@ -18,12 +18,12 @@ import {NumUtil} from "../../utilz/numUtil";
 import {EthUtil} from "../../utilz/ethUtil";
 import {Logger} from "winston";
 import {WinstonUtil} from "../../utilz/winstonUtil";
-import {DateUtil} from  "../../utilz/dateUtil";
+import {DateUtil} from "../../utilz/dateUtil";
 import {Wallet} from "ethers";
 import {ArrayUtil} from "../../utilz/arrayUtil";
 import {SolUtil} from "../../utilz/solUtil";
 import {StarkNetUtil} from "../../utilz/starkNetUtil";
-import {PushSdkUtil} from "./pushSdkUtil";
+import {PushSdkUtil, SigCheck} from "./pushSdkUtil";
 
 
 export class BlockUtil {
@@ -239,18 +239,42 @@ export class BlockUtil {
       let initDid = InitDid.deserializeBinary(tx.getData_asU8());
       const masterPublicKeyBytesUncompressed = BitUtil.hex0xToBytes(initDid.getMasterpubkey());
 
+      this.log.debug('checkPushInitDidSignature masterPublicKeyBytesUncompressed=%s, tmpBytes=%s, sig=%s',
+        StrUtil.fmt(masterPublicKeyBytesUncompressed), StrUtil.fmt(tmpBytes), StrUtil.fmt(sig));
       const sigCheck = await PushSdkUtil.checkPushInitDidSignature(masterPublicKeyBytesUncompressed, tmpBytes, sig);
       if (!sigCheck.success) {
         return CheckR.failWithText(sigCheck.err);
       }
+      const sigCheck2 = await PushSdkUtil.checkPushInitDidSender(caip.namespace, caip.chainId, caip.addr, masterPublicKeyBytesUncompressed);
+      if (!sigCheck2.success) {
+        return CheckR.failWithText(sigCheck2.err);
+      }
+
+
+      let map = new Map<string, WalletToEncDerivedKey>();
+      initDid.getWallettoencderivedkeyMap().forEach((value: WalletToEncDerivedKey, key: string) => {
+        map.set(key, value);
+      });
+      for (const [key, value] of map) {
+        const [caip, err] = ChainUtil.parseCaipAddress(key);
+        if (err != null) {
+          return CheckR.failWithText('failed to parse caip address: ' + err);
+        }
+        const check = await PushSdkUtil.checkPushInitDidWalletMapping(caip.namespace, caip.chainId, caip.addr,
+          masterPublicKeyBytesUncompressed, value.getSignature_asU8());
+        if (!check.success) {
+          return check;
+        }
+      }
+
       return CheckR.ok();
     }
     let sig = tx.getSignature_asU8();
     let tmp = Transaction.deserializeBinary(tx.serializeBinary());
     tmp.setSignature(null);
     let tmpBytes = tmp.serializeBinary();
-
-    const sigCheck = await PushSdkUtil.checkPushNetworkSignature(caip.namespace, caip.chainId, caip.addr, tmpBytes, sig);
+    let hashBytes = PushSdkUtil.messageBytesToHashBytes(tmpBytes);
+    const sigCheck = await PushSdkUtil.checkPushNetworkSignature(caip.namespace, caip.chainId, caip.addr, hashBytes, sig);
     if (!sigCheck.success) {
       return CheckR.failWithText(sigCheck.err);
     }
@@ -468,7 +492,9 @@ export class BlockUtil {
     const blockValidatorNodeId = await BlockUtil.recoverSignerAddress(blockSignedByV, 0);
     BlockUtil.log.debug('signature # %s by %s (validator) ', 0, blockValidatorNodeId);
     const allowed = validatorsFromContract.has(blockValidatorNodeId);
-    Check.isTrue(allowed, `unregistered validator: ${blockValidatorNodeId}`);
+    if(!allowed) {
+      return CheckR.failWithText(`unregistered validator_: ${blockValidatorNodeId}`);
+    }
     return CheckR.ok();
   }
 
@@ -517,7 +543,29 @@ export class BlockUtil {
       const attNodeId = await BlockUtil.recoverSignerAddress(blockSignedByVA, attIndex);
       BlockUtil.log.debug('signature # %s by %s ', attIndex - 1, attNodeId);
       const allowed = validatorsFromContract.has(attNodeId)
-      Check.isTrue(allowed, `unregistered validator_: ${attNodeId}`)
+      if (!allowed) {
+        return CheckR.failWithText(`unregistered validator_: ${attNodeId}`);
+      }
+    }
+    return CheckR.ok();
+  }
+
+  public static async checkBlockAsSNode(blockSignedByVA: Readonly<Block>,
+                                        validatorsFromContract: Set<string>,
+                                        valPerBlockFromContract: number): Promise<CheckR> {
+    const sigCount = blockSignedByVA.getSignersList().length;
+    if (sigCount != valPerBlockFromContract) {
+      return CheckR.failWithText(`block has only ${sigCount} signatures; expected ${valPerBlockFromContract} signatures `);
+    }
+    let tmpBlock = Block.deserializeBinary(blockSignedByVA.serializeBinary());
+    let onlyVSignature = [blockSignedByVA.getSignersList()[0]];
+    tmpBlock.setSignersList(onlyVSignature);
+    for (let attIndex = 0; attIndex < sigCount; attIndex++) {
+      const attNodeId = await BlockUtil.recoverSignerAddress(blockSignedByVA, attIndex);
+      const allowed = validatorsFromContract.has(attNodeId);
+      if (!allowed) {
+        return CheckR.failWithText(`unregistered validator_: ${attNodeId}`);
+      }
     }
     return CheckR.ok();
   }

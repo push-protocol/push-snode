@@ -8,7 +8,7 @@ import { Coll } from '../../utilz/coll'
 import { DateUtil } from '../../utilz/dateUtil'
 import { PgUtil } from '../../utilz/pgUtil'
 import { WinstonUtil } from '../../utilz/winstonUtil'
-import { BlockUtil } from '../messaging-common/BlockUtil'
+import { BlockUtil } from '../messaging-common/blockUtil'
 import { StorageContractState } from '../messaging-common/storageContractState'
 import { ValidatorContractState } from '../messaging-common/validatorContractState'
 
@@ -39,10 +39,10 @@ export class IndexStorage {
     this.log.debug('storage node supports %s shards: %o', nodeShards.size, nodeShards)
     const shardsToProcess = Coll.intersectSet(shardSet, nodeShards)
     this.log.debug('block %s has %d inboxes to unpack', mb.getTs(), shardsToProcess)
-    if (shardsToProcess.size == 0) {
-      this.log.debug('finished')
-      return
-    }
+    // if (shardsToProcess.size == 0) {
+    //   this.log.debug('finished')
+    //   return
+    // }
 
     // ex: 1661214142.123456
     let tsString = (mb.getTs() / 1000.0).toString()
@@ -58,7 +58,7 @@ export class IndexStorage {
         sender,
         this.storageContractState.shardCount
       )
-      if (!shardsToProcess.has(senderShardId)) {
+      if (shardsToProcess.size != 0 && !shardsToProcess.has(senderShardId)) {
         continue
       }
       const res = await DbHelper.storeTransaction(
@@ -69,23 +69,28 @@ export class IndexStorage {
         feedItem.getTx().getSalt_asB64(),
         feedItem.getTx()
       )
-      if (res && res.length > 0) {
+      const transactionId = await PgUtil.queryOneValue<string>(
+        'SELECT id FROM transactions WHERE hash_val = $1',
+        feedItem.getTx().getSalt_asB64()
+      )
+      if (res) {
         for (let i1 = 0; i1 < targetWallets.length; i1++) {
           const targetAddr = targetWallets[i1]
           const targetShard = BlockUtil.calculateAffectedShard(
             targetAddr,
             this.storageContractState.shardCount
           )
-          if (!shardsToProcess.has(targetShard)) {
-            continue
-          }
+          // if (!shardsToProcess.length !=0 && !shardsToProcess.has(targetShard)) {
+          //   continue
+          // }
           await this.putPayloadToInbox(
             feedItem.getTx().getCategory(),
             targetShard,
             targetAddr,
             tsString,
             currentNodeId,
-            res[0]['id']
+            sender == targetAddr,
+            transactionId
           )
         }
       }
@@ -113,26 +118,64 @@ export class IndexStorage {
    *
    * todo pass ts as number
    */
+  /**
+   * Puts a payload into the inbox table
+   * @param category Transaction category
+   * @param shardId Shard identifier
+   * @param wallet Wallet address
+   * @param ts Timestamp
+   * @param nodeId Node identifier
+   * @param isSender Whether the wallet is sender (true) or recipient (false)
+   * @param transactionId Transaction identifier
+   */
   public async putPayloadToInbox(
     category: string,
     shardId: number,
     wallet: string,
     ts: string,
     nodeId: string,
+    isSender: boolean,
     transactionId: string
-  ) {
-    PgUtil.insert(
-      `INSERT INTO inboxes (wallet, shard_id, category_val, ts, sender_type, transaction_id) VALUES ($1, $2, $3, $4, $5, $6)`,
-      [category, shardId, wallet, ts, nodeId, transactionId]
-    )
-      .then(async (res) => {
-        console.log(res)
-        return Promise.resolve()
+  ): Promise<unknown> {
+    try {
+      // Convert boolean to required integer (1 for sender, 2 for recipient)
+      const senderType = isSender ? 1 : 2
+
+      // Convert transactionId to bigint if it's not already
+      const txId = BigInt(transactionId)
+
+      const sql = `
+          INSERT INTO inboxes (
+              wallet,
+              shard_id,
+              category_val,
+              ts,
+              sender_type,
+              transaction_id
+          ) VALUES (?, ?, ?, to_timestamp(?), ?, ?)
+      `
+
+      const params = [wallet, shardId, category, ts, senderType, txId]
+
+      const result = await PgUtil.insert(sql, ...params)
+
+      console.debug('Payload inserted into inbox', {
+        wallet,
+        category,
+        transactionId: txId.toString(),
+        senderType
       })
-      .catch((error) => {
-        console.log(error)
-        return Promise.reject(error)
+
+      return result
+    } catch (error) {
+      console.error('Failed to insert payload into inbox', {
+        error,
+        wallet,
+        category,
+        transactionId
       })
+      throw error
+    }
   }
 
   // todo remove shard entries from node_storage_layout also?

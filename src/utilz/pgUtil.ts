@@ -67,10 +67,10 @@ export class PgUtil {
     return result
   }
 
-  public static async insert(query: string, ...sqlArgs: any[]): Promise<unknown[]> {
+  public static async insert(query: string, ...sqlArgs: any[]): Promise<number> {
     query = this.replaceAllMySqlToPostre(query)
     this.log.debug(query, '     ---> args ', sqlArgs)
-    const result = await this.pool.result(query, sqlArgs, (r) => r.rows)
+    const result = await this.pool.result(query, sqlArgs, (r) => r.rowCount)
     return result
   }
 
