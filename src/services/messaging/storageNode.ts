@@ -6,7 +6,7 @@ import { BitUtil } from '../../utilz/bitUtil'
 import { Check } from '../../utilz/check'
 import { Coll } from '../../utilz/coll'
 import { WinstonUtil } from '../../utilz/winstonUtil'
-import { BlockUtil } from '../messaging-common/BlockUtil'
+import { BlockUtil } from '../messaging-common/blockUtil'
 import {
   StorageContractListener,
   StorageContractState
@@ -69,12 +69,18 @@ export default class StorageNode implements Consumer<QItem>, StorageContractList
       )
       return false
     }
-
-    // check for validation
     const parsedBlock = BlockUtil.parseBlock(mb)
+    await this.handleBlock(parsedBlock, mb, item.object_hash)
+  }
+
+  async handleBlock(parsedBlock: Block, rawBlock: Uint8Array, hash?: string) {
+    // check for validation
+    if (!hash) {
+      hash = BlockUtil.hashBlockAsHex(rawBlock)
+    }
     const blockObject = parsedBlock.toObject()
     const validatorSet = new Set(this.valContractState.getAllNodesMap().keys())
-    const checkResult = await BlockUtil.checkBlockFinalized(
+    const checkResult = await BlockUtil.checkBlockAsSNode(
       parsedBlock,
       validatorSet,
       this.valContractState.contractCli.valPerBlock
@@ -88,14 +94,10 @@ export default class StorageNode implements Consumer<QItem>, StorageContractList
       parsedBlock,
       this.storageContractState.shardCount
     )
-    const isNew = await this.blockStorage.saveBlockWithShardData(
-      parsedBlock,
-      calculatedHash,
-      shardSet
-    )
+    const isNew = await this.blockStorage.saveBlockWithShardData(parsedBlock, hash, shardSet)
     if (!isNew) {
       // this is not an error, because we read duplicates from every validator
-      this.log.debug('block %s already exists ', item.id)
+      this.log.debug('block %s already exists ', hash)
       return false
     }
     // send block
