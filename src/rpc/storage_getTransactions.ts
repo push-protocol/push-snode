@@ -3,6 +3,8 @@ import z from 'zod'
 
 import { Transactions } from '../services/transactions/transactions'
 import { ChainUtil } from '../utilz/chainUtil'
+import { WinstonUtil } from '../utilz/winstonUtil'
+import { RpcBase } from './RpcBase'
 
 enum Category {
   'INIT_DID' = 'INIT_DID'
@@ -30,42 +32,47 @@ const StorageGetTransactionsParamsSchema = z.object({
 })
 type StorageGetTransactionsParams = z.infer<typeof StorageGetTransactionsParamsSchema>
 
-export class StorageGetTransactions {
-  constructor() {}
-
-  public static contructErrorMessage(errorMessage: string) {
-    const error = new Error(errorMessage) as any
-    error.data = { error: errorMessage }
-    return error
+export class StorageGetTransactions extends RpcBase {
+  private readonly transaction: Transactions
+  private readonly log = WinstonUtil.newLog(StorageGetTransactions)
+  constructor() {
+    super()
+    this.transaction = Container.get(Transactions)
+    this.execute = this.execute.bind(this)
+    this.validate = this.validate.bind(this)
   }
 
-  public static async storageGetTransactions(params: [string, string, string, string]) {
+  public async execute(params: [string, string, string, string]) {
     const [wallet, category, timestamp, order] = params
-    StorageGetTransactions.validateGetTransactions({
+    this.log.info('Executing get_transaction', { params })
+    this.validate({
       wallet,
       category: category as Category,
       timestamp: timestamp,
       order: order as Order
     })
-    const transaction = Container.get(Transactions)
-    return await transaction.getTransactions({
+    const transactions = await this.transaction.getTransactions({
       namespace: category,
       timestamp,
       namespaceId: wallet,
       order: order as Order
     })
+    this.log.info('Retrieved transaction successfully', { transactions })
+    return transactions
   }
 
-  public static validateGetTransactions(params: StorageGetTransactionsParams) {
-    // check if the wallet is in caip10 format
-    const wallet = params.wallet
-    const [caip, err] = ChainUtil.parseCaipAddress(wallet)
-    if (err != null) {
-      throw new Error('invalid caip address:' + err)
+  public validate(params: unknown): boolean {
+    try {
+      // check if the wallet is in caip10 format
+      const wallet = params['wallet']
+      const [caip, err] = ChainUtil.parseCaipAddress(wallet)
+      if (err != null) {
+        throw new Error('invalid caip address:' + err)
+      }
+      return true
+    } catch (error) {
+      this.log.error('Error validating get transaction:', error)
+      return false
     }
   }
-
-  public static afterStorageGetTransactions = [
-    (params, result, raw) => console.log('Transaction result:', result)
-  ]
 }
