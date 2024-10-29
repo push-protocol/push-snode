@@ -38,28 +38,33 @@ export class PushPutBlock {
     if (!validationRes) {
       return new Error('Invalid params')
     }
-    const st: StorageNode = await Container.get(StorageNode) // todo @Inject via container
+
     const result: BlockResult[] = []
     for (let i = 0; i < blocks.length; i++) {
-      if (StrUtil.isEmpty(blocks[i])) {
-        result[i] = { status: 'REJECTED', reason: 'empty block data' }
-        continue
-      }
-      let blockBase16 = BitUtil.hex0xRemove(blocks[i]).toLowerCase()
-      try {
-        const blockBytes = BitUtil.base16ToBytes(blockBase16)
-        const block = BlockUtil.parseBlock(blockBytes)
-        let res = await st.handleBlock(block, blockBytes)
-        if (res == true) {
-          result[i] = { status: 'ACCEPTED' }
-        } else {
-          result[i] = { status: 'REJECTED', reason: 'duplicate' }
-        }
-      } catch (error) {
-        result[i] = { status: 'REJECTED', reason: error.message }
-      }
+      let br = await PushPutBlock.handleOneBlock(blocks[i])
+      result.push(br)
     }
     return result
+  }
+
+  private static async handleOneBlock(blockBase16: string): Promise<BlockResult> {
+    if (StrUtil.isEmpty(blockBase16)) {
+      return { status: 'REJECTED', reason: 'empty block data' }
+    }
+    blockBase16 = BitUtil.hex0xRemove(blockBase16).toLowerCase()
+    try {
+      const blockBytes = BitUtil.base16ToBytes(blockBase16)
+      const block = BlockUtil.parseBlock(blockBytes)
+      const storageNode: StorageNode = Container.get(StorageNode) // todo @Inject via container
+      let res = await storageNode.handleBlock(block, blockBytes)
+      if (res == true) {
+        return { status: 'ACCEPTED' }
+      } else {
+        return { status: 'REJECTED', reason: 'duplicate' }
+      }
+    } catch (error) {
+      return { status: 'REJECTED', reason: error.message }
+    }
   }
 
   public static validatePushPutBlock(params: PushPutBlockParams) {

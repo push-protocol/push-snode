@@ -7,6 +7,7 @@ import { Check } from '../../utilz/check'
 import { Coll } from '../../utilz/coll'
 import { DateUtil } from '../../utilz/dateUtil'
 import { PgUtil } from '../../utilz/pgUtil'
+import { StrUtil } from '../../utilz/strUtil'
 import { WinstonUtil } from '../../utilz/winstonUtil'
 import { BlockUtil } from '../messaging-common/blockUtil'
 import { StorageContractState } from '../messaging-common/storageContractState'
@@ -36,7 +37,7 @@ export class IndexStorage {
   public async unpackBlockToInboxes(mb: Block, shardSet: Set<number>) {
     // this is the list of shards that we support on this node
     const nodeShards = this.storageContractState.getNodeShards()
-    this.log.debug('storage node supports %s shards: %o', nodeShards.size, nodeShards)
+    this.log.debug('storage node supports %s shards: %o', nodeShards.size, StrUtil.fmt(nodeShards))
     const shardsToProcess = Coll.intersectSet(shardSet, nodeShards)
     this.log.debug('block %s has %d inboxes to unpack', mb.getTs(), shardsToProcess)
     // if (shardsToProcess.size == 0) {
