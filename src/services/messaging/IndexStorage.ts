@@ -106,12 +106,13 @@ export class IndexStorage {
     nodeId: string,
     payload: Transaction
   ) {
+    let hash = BlockUtil.hashTxAsHex(payload.serializeBinary())
     const storageValue = await DbHelper.putValueInStorageTable(
       nsName,
       nsShardId,
       nsId,
       ts,
-      payload.getSalt_asB64(),
+      hash,
       payload
     )
     this.log.debug(`found value: ${storageValue}`)
