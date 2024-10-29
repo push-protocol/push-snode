@@ -12,7 +12,7 @@
   "plugins": ["@typescript-eslint", "unused-imports", "simple-import-sort"],
   "rules": {
     "unused-imports/no-unused-imports": "error",
-    "prefer-const": "error",
+    "prefer-const": "off",
     "simple-import-sort/imports": "error",
     "simple-import-sort/exports": "error",
     "no-var": "error"

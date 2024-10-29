@@ -70,7 +70,7 @@ export class BlockStorage {
     (
         namespace VARCHAR(20) NOT NULL,
         namespace_shard_id VARCHAR(64) NOT NULL,
-        namespace_id VARCHAR(64) NOT NULL,
+        namespace_id VARCHAR(150) NOT NULL,
         ts TIMESTAMP NOT NULL default NOW(),
         skey VARCHAR(64) NOT NULL,
         dataSchema VARCHAR(20) NOT NULL,

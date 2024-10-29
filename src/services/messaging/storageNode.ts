@@ -73,12 +73,19 @@ export default class StorageNode implements Consumer<QItem>, StorageContractList
     await this.handleBlock(parsedBlock, mb, item.object_hash)
   }
 
-  async handleBlock(parsedBlock: Block, rawBlock: Uint8Array, hash?: string) {
+  /**
+   * Storage node eats the block. Main method.
+   *
+   * @param parsedBlock
+   * @param rawBlock
+   * @param hash
+   * @return true, if block is new
+   */
+  async handleBlock(parsedBlock: Block, rawBlock: Uint8Array, hash?: string): Promise<boolean> {
     // check for validation
     if (!hash) {
       hash = BlockUtil.hashBlockAsHex(rawBlock)
     }
-    const blockObject = parsedBlock.toObject()
     const validatorSet = new Set(this.valContractState.getAllNodesMap().keys())
     const checkResult = await BlockUtil.checkBlockAsSNode(
       parsedBlock,
@@ -102,6 +109,7 @@ export default class StorageNode implements Consumer<QItem>, StorageContractList
     }
     // send block
     await this.indexStorage.unpackBlockToInboxes(parsedBlock, shardSet)
+    return true
   }
 
   public async handleReshard(

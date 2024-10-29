@@ -24,8 +24,8 @@ export class PushPutBlockHash {
     if (!validationRes) {
       return new Error('Invalid params')
     }
-    const res = Block.getBulkBlocksByHash(hashes)
-    return res
+    const statusArray = await Block.getBulkBlocksByHash(hashes)
+    return { result: statusArray }
   }
 
   public static validatePushPutBlockHash(params: PushPutBlockHashParams) {

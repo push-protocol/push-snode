@@ -5,6 +5,7 @@ import LoggerInstance from '../loaders/logger'
 import StorageNode from '../services/messaging/storageNode'
 import { BlockUtil } from '../services/messaging-common/blockUtil'
 import { BitUtil } from '../utilz/bitUtil'
+import { StrUtil } from '../utilz/strUtil'
 
 const BlockItem = z.object({
   id: z.number().optional(),
@@ -18,6 +19,8 @@ const PushPutBlockParamsSchema = z.object({
 
 type PushPutBlockParams = z.infer<typeof PushPutBlockParamsSchema>
 type BlockItemType = { id?: number; object_hash?: string; object: string }
+type BlockResult = { status: 'ACCEPTED' | 'REJECTED'; reason?: string }
+
 export class PushPutBlock {
   constructor() {}
 
@@ -35,23 +38,33 @@ export class PushPutBlock {
     if (!validationRes) {
       return new Error('Invalid params')
     }
-    const st: StorageNode = await Container.get(StorageNode)
-    const result = await Promise.all(
-      blocks.map(async (block) => {
-        try {
-          if (!block) {
-            throw new Error('Block object is missing')
-          }
-          const mb = BitUtil.base16ToBytes(block as string)
-          const parsedBlock = BlockUtil.parseBlock(mb)
-          await st.handleBlock(parsedBlock, mb)
-          return 'SUCCESS'
-        } catch (error) {
-          return { block, status: 'FAIL', error: error.message }
-        }
-      })
-    )
+
+    const result: BlockResult[] = []
+    for (let i = 0; i < blocks.length; i++) {
+      let br = await PushPutBlock.handleOneBlock(blocks[i])
+      result.push(br)
+    }
     return result
+  }
+
+  private static async handleOneBlock(blockBase16: string): Promise<BlockResult> {
+    if (StrUtil.isEmpty(blockBase16)) {
+      return { status: 'REJECTED', reason: 'empty block data' }
+    }
+    blockBase16 = BitUtil.hex0xRemove(blockBase16).toLowerCase()
+    try {
+      const blockBytes = BitUtil.base16ToBytes(blockBase16)
+      const block = BlockUtil.parseBlock(blockBytes)
+      const storageNode: StorageNode = Container.get(StorageNode) // todo @Inject via container
+      let res = await storageNode.handleBlock(block, blockBytes)
+      if (res == true) {
+        return { status: 'ACCEPTED' }
+      } else {
+        return { status: 'REJECTED', reason: 'duplicate' }
+      }
+    } catch (error) {
+      return { status: 'REJECTED', reason: error.message }
+    }
   }
 
   public static validatePushPutBlock(params: PushPutBlockParams) {
