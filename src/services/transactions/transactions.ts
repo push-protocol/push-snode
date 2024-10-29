@@ -30,7 +30,7 @@ export class Transactions {
     // get the shard id
     const shardId = this.storageContractState.shardCount
     // get all transaction that are there in the table
-    const inbox = await DbHelper.listInboxV2(input.namespace, shardId, input.namespaceId, '', 30)
+    const inbox = await DbHelper.listInbox(input.namespace, shardId, input.namespaceId, '', 30)
     return { transactions: inbox }
   }
 

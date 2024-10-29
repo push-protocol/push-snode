@@ -19,7 +19,12 @@ export class PushWallets {
     await PgUtil.insert(
       `INSERT INTO push_wallets (address, did, derivedkeyindex, encrypteddervivedprivatekey, signature) 
        VALUES ($1, $2, $3, $4, $5) 
-       ON CONFLICT DO NOTHING`,
+       ON CONFLICT (address) 
+       DO UPDATE SET
+       did = EXCLUDED.did,
+       derivedkeyindex = EXCLUDED.derivedkeyindex,
+       encrypteddervivedprivatekey = EXCLUDED.encrypteddervivedprivatekey,
+       signature = EXCLUDED.signature`,
       address,
       did,
       derivedKeyIndex,
