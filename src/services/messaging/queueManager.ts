@@ -1,10 +1,8 @@
-import schedule from 'node-schedule'
 import { Inject, Service } from 'typedi'
 import { Logger } from 'winston'
 
 import { EnvLoader } from '../../utilz/envLoader'
 import { WinstonUtil } from '../../utilz/winstonUtil'
-import { QueueClientHelper } from '../messaging-common/queueClientHelper'
 import { ValidatorContractState } from '../messaging-common/validatorContractState'
 import { QueueClient } from '../messaging-dset/queueClient'
 import { QueueServer } from '../messaging-dset/queueServer'
@@ -37,22 +35,6 @@ export class QueueManager {
   // client -> queue -?-> channelService -> table <------- client
   public async postConstruct() {
     this.log.debug('postConstruct')
-    this.mblockClient = new QueueClient(this.storageNode, QueueManager.QUEUE_MBLOCK)
-    await QueueClientHelper.initClientForEveryQueueForEveryValidator(this.contract, [
-      QueueManager.QUEUE_MBLOCK
-    ])
-    const qs = this
-    schedule.scheduleJob(this.CLIENT_READ_SCHEDULE, async function () {
-      const dbgPrefix = 'PollRemoteQueue'
-      try {
-        await qs.mblockClient.pollRemoteQueue(qs.CLIENT_REQUEST_PER_SCHEDULED_JOB)
-        qs.log.info(`CRON %s started`, dbgPrefix)
-      } catch (err) {
-        qs.log.error(`CRON %s failed %o`, dbgPrefix, err)
-      } finally {
-        qs.log.info(`CRON %s finished`, dbgPrefix)
-      }
-    })
   }
 
   public getQueue(queueName: string): QueueServer {
