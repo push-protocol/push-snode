@@ -2,6 +2,7 @@ import {Coll} from './coll';
 // @ts-ignore
 import bs58 from 'bs58';
 import {Check} from "./check";
+
 // bytes      (as hex numbers)            = 0x41 0x41 0x42 0x42
 // Uint8Array (as decimal numbers)        = 65 65 66 66
 //        string (as non printable chars) = ..

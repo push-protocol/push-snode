@@ -17,7 +17,7 @@ export class PushPutBlockHash extends RpcBase {
     this.execute = this.execute.bind(this)
     this.validate = this.validate.bind(this)
   }
-  private readonly log = WinstonUtil.newLog(PushPutBlockHash)
+  private readonly log = WinstonUtil.newLog(PushPutBlockHash.name)
 
   public async execute(params: PushPutBlockHashParams) {
     const { hashes, signature } = params
@@ -28,7 +28,7 @@ export class PushPutBlockHash extends RpcBase {
     }
     const statusArray = await Block.getBulkBlocksByHash(hashes)
     this.log.info('Retrieved block hashes successfully', { statusArray })
-    return { result: statusArray }
+    return statusArray
   }
 
   public validate(params: PushPutBlockHashParams): boolean {

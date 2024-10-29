@@ -6,6 +6,7 @@ import { DateTime } from 'ts-luxon'
 
 import { InitDid, Transaction } from '../generated/push/block_pb'
 import log from '../loaders/logger'
+import { BlockUtil } from '../services/messaging-common/blockUtil'
 import { PushKeys } from '../services/transactions/pushKeys'
 import { PushWallets } from '../services/transactions/pushWallets'
 import { BitUtil } from '../utilz/bitUtil'
@@ -355,33 +356,36 @@ END $$ LANGUAGE plpgsql;
     nsIndex: string,
     ts: string,
     skey: string,
-    body: Transaction
+    transaction: Transaction
   ) {
-    const transactionObj = body.toObject()
-    log.debug(`putValueInStorageTable() namespace=${ns}, namespaceShardId=${shardId}
-        , skey=${skey}, jsonValue=${transactionObj}`)
-    const sql = `INSERT INTO storage_node (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload)
-                     values (\${ns}, \${shardId}, \${nsIndex}, to_timestamp(\${ts}), \${skey}, 'v1', \${transactionObj})
-                     ON CONFLICT (namespace, namespace_shard_id, namespace_id, skey) DO UPDATE SET payload = \${transactionObj}`
-    const params = {
+    const tmp = transaction.toObject()
+    let txHashHex = BlockUtil.hashTxAsHex(transaction.serializeBinary())
+    let txSaltHex = BitUtil.bytesToBase16(transaction.getSalt_asU8())
+    let txDataHex = BitUtil.bytesToBase16(transaction.getData_asU8())
+    let transactionAsJson = {
+      type: tmp.type,
+      category: tmp.category,
+      sender: tmp.sender,
+      recipientsList: tmp.recipientsList,
+      data: txDataHex,
+      salt: txSaltHex,
+      hash: txHashHex
+    }
+    log.debug(
+      `putValueInStorageTable() namespace=${ns}, namespaceShardId=${shardId}, skey=${skey}, jsonValue=${transactionAsJson}`
+    )
+    await PgUtil.insert(
+      `INSERT INTO storage_node (namespace, namespace_shard_id, namespace_id, ts, skey, dataschema, payload)
+                     values ($1, $2, $3, to_timestamp($4), $5, 'v1', $6)
+                     ON CONFLICT (namespace, namespace_shard_id, namespace_id, skey) DO UPDATE SET payload = $6`,
       ns,
       shardId,
       nsIndex,
       ts,
       skey,
-      transactionObj
-    }
-    return pgPool
-      .none(sql, params)
-      .then(async (data) => {
-        log.debug(data)
-        await DbHelper.indexTransactionCategory(ns, body)
-        return Promise.resolve()
-      })
-      .catch((err) => {
-        log.debug(err)
-        return Promise.reject(err)
-      })
+      transactionAsJson
+    )
+    await DbHelper.indexTransactionCategory(ns, transaction)
   }
 
   static async indexTransactionCategory(ns: string, body: Transaction) {

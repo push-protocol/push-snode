@@ -22,12 +22,11 @@ export class PushPutBlock extends RpcBase {
     this.execute = this.execute.bind(this)
     this.validate = this.validate.bind(this)
   }
-  private readonly log = WinstonUtil.newLog(PushPutBlock)
+  private readonly log = WinstonUtil.newLog(PushPutBlock.name)
 
   async execute(params: PushPutBlockParams) {
     const { blocks, signature } = params
     // Validate the transaction parameters
-    console.log(this)
     const validationRes = this.validate(params)
     if (!validationRes) {
       return new Error('Invalid params')

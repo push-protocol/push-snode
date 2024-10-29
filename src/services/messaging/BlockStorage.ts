@@ -86,7 +86,7 @@ export class BlockStorage {
     await PgUtil.update(`
       CREATE TABLE IF NOT EXISTS push_keys(
       masterpublickey VARCHAR(150) PRIMARY KEY,
-      did VARCHAR(64) UNIQUE NOT NULL,
+      did VARCHAR(150) UNIQUE NOT NULL,
       derivedkeyindex INT8 NOT NULL,
       derivedpublickey VARCHAR(150) UNIQUE NOT NULL
     );
@@ -99,8 +99,8 @@ export class BlockStorage {
     // create push_wallets key
     await PgUtil.update(`
         CREATE TABLE IF NOT EXISTS push_wallets(
-        address VARCHAR(150) NOT NULL,
-        did VARCHAR(150) UNIQUE NOT NULL,
+        address VARCHAR(150) UNIQUE NOT NULL,
+        did VARCHAR(150) NOT NULL,
         derivedkeyindex INT8 NOT NULL,
         encrypteddervivedprivatekey TEXT UNIQUE NOT NULL,
         signature TEXT UNIQUE NOT NULL,
