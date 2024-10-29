@@ -1,7 +1,8 @@
 import { z } from 'zod'
 
-import LoggerInstance from '../loaders/logger'
 import { Block } from '../services/block/block'
+import { WinstonUtil } from '../utilz/winstonUtil'
+import { RpcBase } from './RpcBase'
 
 const PushPutBlockHashParamsSchema = z.object({
   hashes: z.array(z.string()),
@@ -9,36 +10,33 @@ const PushPutBlockHashParamsSchema = z.object({
 })
 
 type PushPutBlockHashParams = z.infer<typeof PushPutBlockHashParamsSchema>
-export class PushPutBlockHash {
-  constructor() {}
 
-  public static contructErrorMessage(errorMessage: string) {
-    const error = new Error(errorMessage) as any
-    error.data = { error: errorMessage }
-    return error
+export class PushPutBlockHash extends RpcBase {
+  constructor() {
+    super()
+    this.execute = this.execute.bind(this)
+    this.validate = this.validate.bind(this)
   }
+  private readonly log = WinstonUtil.newLog(PushPutBlockHash.name)
 
-  public static async pushPutBlockHash(params: PushPutBlockHashParams) {
+  public async execute(params: PushPutBlockHashParams) {
     const { hashes, signature } = params
-    const validationRes = PushPutBlockHash.validatePushPutBlockHash(params)
+    this.log.info('Executing push_putBlockHash', { params })
+    const validationRes = this.validate(params)
     if (!validationRes) {
-      return new Error('Invalid params')
+      return this.constructErrorMessage('Invalid params')
     }
     const statusArray = await Block.getBulkBlocksByHash(hashes)
+    this.log.info('Retrieved block hashes successfully', { statusArray })
     return statusArray
   }
 
-  public static validatePushPutBlockHash(params: PushPutBlockHashParams) {
+  public validate(params: PushPutBlockHashParams): boolean {
     try {
-      // TODO: add validation for signature
       return true
     } catch (e) {
-      LoggerInstance.error('Error validating get transaction:', e)
+      this.log.error('Error validating get transaction:', e)
       return false
     }
   }
-
-  public static afterPushPutBlockHash = [
-    (params, result, raw) => console.log('Block result:', result)
-  ]
 }

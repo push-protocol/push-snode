@@ -20,7 +20,6 @@ export class PushKeys {
         VALUES ($1, $2, $3, $4)
         ON CONFLICT (did) 
         DO UPDATE SET 
-          masterpublickey = EXCLUDED.masterpublickey,
           derivedkeyindex = EXCLUDED.derivedkeyindex,
           derivedpublickey = EXCLUDED.derivedpublickey
       `

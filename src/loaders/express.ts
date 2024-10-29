@@ -27,7 +27,6 @@ export default ({ app }: { app: express.Application }) => {
   app.use(
     jsonRouter({
       methods: rpcControllerConfigs.controllers,
-      afterMethods: rpcControllerConfigs.afterController,
       onError(err) {
         console.log(err)
       }
