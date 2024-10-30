@@ -40,7 +40,17 @@ export const pgPool = pg(
 )
 
 PgUtil.init(pgPool)
-
+type AccountInfoInterface = {
+  masterpublickey: string
+  did: string
+  derivedpublickey: string
+  encryptedderivedprivatekey?: string
+  derivedkeyindex: number
+  attachedAccounts?: {
+    address: string
+    derivedkeyindex: number
+  }[]
+}
 export default class DbHelper {
   public static async createStorageTablesIfNeeded() {
     await PgUtil.update(`
@@ -584,7 +594,7 @@ END $$ LANGUAGE plpgsql;
       })
   }
 
-  static async getAccountInfo(wallet: string) {
+  static async getAccountInfo(wallet: string): Promise<AccountInfoInterface> {
     log.debug('getAccountInfo() wallet: ', wallet)
     const isPushDid = ChainUtil.isPushDid(wallet)
     let query = ''
