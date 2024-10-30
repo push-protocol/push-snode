@@ -1,6 +1,8 @@
 import { Service } from 'typedi'
+import { Logger } from 'winston'
 
 import { PgUtil } from '../../utilz/pgUtil'
+import { WinstonUtil } from '../../utilz/winstonUtil'
 
 type PushKeysInput = {
   masterPublicKey: string
@@ -12,7 +14,7 @@ type PushKeysInput = {
 @Service()
 export class PushKeys {
   constructor() {}
-
+  public static log: Logger = WinstonUtil.newLog(PushKeys.name)
   static async addPushKeys(input: PushKeysInput): Promise<{ success: boolean }> {
     try {
       const query = `

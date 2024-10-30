@@ -112,20 +112,20 @@ export class BlockStorage {
         USING btree (did ASC, address ASC, derivedkeyindex ASC);`)
 
     // create table push_session_keys
-    await PgUtil.update(`
-    CREATE TABLE IF NOT EXISTS push_session_keys (
-    did CHAR(64) NOT NULL,
-    derivedkeyindex INT NOT NULL,
-    sessionkeypath VARCHAR(255) NOT NULL,  -- String to represent the session key path
-    sessionpubkey CHAR(64) UNIQUE NOT NULL,
-    PRIMARY KEY (did, sessionpubkey),
-    FOREIGN KEY (did) REFERENCES push_wallets(did) ON DELETE CASCADE
-);
-    `)
+    //     await PgUtil.update(`
+    //     CREATE TABLE IF NOT EXISTS push_session_keys (
+    //     did CHAR(64) NOT NULL,
+    //     derivedkeyindex INT NOT NULL,
+    //     sessionkeypath VARCHAR(255) NOT NULL,  -- String to represent the session key path
+    //     sessionpubkey CHAR(64) UNIQUE NOT NULL,
+    //     PRIMARY KEY (did, sessionpubkey),
+    //     FOREIGN KEY (did) REFERENCES push_wallets(did) ON DELETE CASCADE
+    // );
+    //     `)
 
-    await PgUtil.update(`CREATE INDEX IF NOT EXISTS
-    push_session_keys_idx ON push_session_keys
-    USING btree (did ASC, sessionpubkey ASC, derivedkeyindex ASC);`)
+    //     await PgUtil.update(`CREATE INDEX IF NOT EXISTS
+    //     push_session_keys_idx ON push_session_keys
+    //     USING btree (did ASC, sessionpubkey ASC, derivedkeyindex ASC);`)
   }
 
   async saveBlockWithShardData(
