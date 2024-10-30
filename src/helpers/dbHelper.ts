@@ -597,8 +597,7 @@ END $$ LANGUAGE plpgsql;
               COALESCE(json_agg(
                 json_build_object(
                   'address', pw.address,
-                  'derivedkeyindex', pw.derivedkeyindex,
-                  'encrypteddervivedprivatekey', pw.encrypteddervivedprivatekey
+                  'derivedkeyindex', pw.derivedkeyindex
                 )
               ) FILTER (WHERE pw.address IS NOT NULL), '[]') AS attachedAccounts
           FROM push_keys pk
@@ -607,28 +606,27 @@ END $$ LANGUAGE plpgsql;
           GROUP BY pk.masterpublickey, pk.did, pk.derivedpublickey;`
     } else {
       query = `
-                WITH did_lookup AS (
-                    SELECT did
-                    FROM push_wallets
-                    WHERE address = $1
-                )
-              SELECT 
-                  pk.masterpublickey,
-                  pk.did,
-                  pk.derivedkeyindex,
-                  pk.derivedpublickey,
-                  json_agg(
-                    json_build_object(
-                      'address', pw.address,
-                      'derivedkeyindex', pw.derivedkeyindex,
-                      'encrypteddervivedprivatekey', pw.encrypteddervivedprivatekey
-                    )
-                  ) AS attachedAccounts
-              FROM push_keys pk
-              JOIN push_wallets pw ON pk.did = pw.did
-              WHERE pk.did = (SELECT did FROM did_lookup)
-              GROUP BY pk.masterpublickey, pk.did, pk.derivedkeyindex, pk.derivedpublickey;
-
+               WITH did_lookup AS (
+                SELECT did, encrypteddervivedprivatekey
+                FROM push_wallets
+                WHERE address = $1
+            )
+            SELECT 
+                pk.masterpublickey,
+                pk.did,
+                pk.derivedkeyindex,
+                pk.derivedpublickey,
+                (SELECT encrypteddervivedprivatekey FROM did_lookup) AS encryptedDerivedPrivateKey,
+                json_agg(
+                  json_build_object(
+                    'address', pw.address,
+                    'derivedkeyindex', pw.derivedkeyindex
+                  )
+                ) AS attachedAccounts
+            FROM push_keys pk
+            JOIN push_wallets pw ON pk.did = pw.did
+            WHERE pk.did = (SELECT did FROM did_lookup)
+            GROUP BY pk.masterpublickey, pk.did, pk.derivedkeyindex, pk.derivedpublickey;
 
 `
     }
