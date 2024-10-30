@@ -111,6 +111,7 @@ export class BlockStorage {
         push_wallets_idx ON push_wallets
         USING btree (did ASC, address ASC, derivedkeyindex ASC);`)
 
+    // TODO: Uucomment after fixing table schema
     // create table push_session_keys
     //     await PgUtil.update(`
     //     CREATE TABLE IF NOT EXISTS push_session_keys (
