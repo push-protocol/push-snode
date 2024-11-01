@@ -204,6 +204,10 @@ export class ChainUtil {
     return addr1Fix === addr2Fix;
   }
 
+  public static isPushDid(did: string): boolean {
+    const [caipDetails, error] = ChainUtil.parseCaipAddress(did);
+    return error == null && caipDetails !== null && caipDetails.namespace === "PUSH_DID"
+  }
 }
 
 // ex: eip155:5:0xD8634C39BBFd4033c0d3289C4515275102423681

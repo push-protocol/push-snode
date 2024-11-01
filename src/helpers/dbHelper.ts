@@ -10,6 +10,7 @@ import { BlockUtil } from '../services/messaging-common/blockUtil'
 import { PushKeys } from '../services/transactions/pushKeys'
 import { PushWallets } from '../services/transactions/pushWallets'
 import { BitUtil } from '../utilz/bitUtil'
+import { ChainUtil } from '../utilz/chainUtil'
 import { EnvLoader } from '../utilz/envLoader'
 import { PushDidFromMasterPublicKey } from '../utilz/keysUtils'
 import { PgUtil } from '../utilz/pgUtil'
@@ -39,7 +40,17 @@ export const pgPool = pg(
 )
 
 PgUtil.init(pgPool)
-
+type AccountInfoInterface = {
+  masterpublickey: string
+  did: string
+  derivedpublickey: string
+  encryptedderivedprivatekey?: string
+  derivedkeyindex: number
+  attachedAccounts?: {
+    address: string
+    derivedkeyindex: number
+  }[]
+}
 export default class DbHelper {
   public static async createStorageTablesIfNeeded() {
     await PgUtil.update(`
@@ -583,25 +594,62 @@ END $$ LANGUAGE plpgsql;
       })
   }
 
-  static async getAccountInfo(wallet: string) {
-    const sql = `SELECT pk.masterpublickey, pk.did, pk.derivedkeyindex, pk.derivedpublickey,
-       pw.address, pw.encrypteddervivedprivatekey, pw.signature
-FROM push_keys pk
-JOIN push_wallets pw
-  ON pk.did = pw.did
-WHERE pk.did = '${wallet}'
-  AND pk.derivedkeyindex = pw.derivedkeyindex;`
-    log.debug(sql)
-    return pgPool
-      .query(sql)
-      .then((data) => {
-        log.debug(data)
-        return Promise.resolve(data)
-      })
-      .catch((err) => {
-        log.debug(err)
-        return Promise.resolve([])
-      })
+  static async getAccountInfo(wallet: string): Promise<AccountInfoInterface> {
+    log.debug('getAccountInfo() wallet: ', wallet)
+    const isPushDid = ChainUtil.isPushDid(wallet)
+    let query = ''
+    if (isPushDid) {
+      query = `SELECT 
+              pk.masterpublickey,
+              pk.did,
+              pk.derivedpublickey,
+              pk.derivedkeyindex,
+              COALESCE(json_agg(
+                json_build_object(
+                  'address', pw.address,
+                  'derivedkeyindex', pw.derivedkeyindex
+                ) ORDER BY pw.derivedkeyindex ASC
+              ) FILTER (WHERE pw.address IS NOT NULL), '[]') AS attachedAccounts
+          FROM push_keys pk
+          LEFT JOIN push_wallets pw ON pk.did = pw.did
+          WHERE pk.did = $1
+          GROUP BY pk.masterpublickey, pk.did, pk.derivedpublickey;`
+    } else {
+      query = `
+               WITH did_lookup AS (
+                SELECT did, encrypteddervivedprivatekey
+                FROM push_wallets
+                WHERE address = $1
+            )
+            SELECT 
+                pk.masterpublickey,
+                pk.did,
+                pk.derivedkeyindex,
+                pk.derivedpublickey,
+                (SELECT encrypteddervivedprivatekey FROM did_lookup) AS encryptedDerivedPrivateKey,
+                json_agg(
+                  json_build_object(
+                    'address', pw.address,
+                    'derivedkeyindex', pw.derivedkeyindex
+                  ) ORDER BY pw.derivedkeyindex ASC
+                ) AS attachedAccounts
+            FROM push_keys pk
+            JOIN push_wallets pw ON pk.did = pw.did
+            WHERE pk.did = (SELECT did FROM did_lookup)
+            GROUP BY pk.masterpublickey, pk.did, pk.derivedkeyindex, pk.derivedpublickey;
+
+`
+    }
+
+    log.debug(query)
+    try {
+      const res = await PgUtil.queryOneRow(query, wallet)
+      log.debug('getAccountInfo() res: ', res)
+      return res
+    } catch (error) {
+      log.error(error)
+      return []
+    }
   }
 }
 
