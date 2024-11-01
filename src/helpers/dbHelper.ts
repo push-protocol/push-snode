@@ -608,7 +608,7 @@ END $$ LANGUAGE plpgsql;
                 json_build_object(
                   'address', pw.address,
                   'derivedkeyindex', pw.derivedkeyindex
-                )
+                ) ORDER BY pw.derivedkeyindex ASC
               ) FILTER (WHERE pw.address IS NOT NULL), '[]') AS attachedAccounts
           FROM push_keys pk
           LEFT JOIN push_wallets pw ON pk.did = pw.did
@@ -631,7 +631,7 @@ END $$ LANGUAGE plpgsql;
                   json_build_object(
                     'address', pw.address,
                     'derivedkeyindex', pw.derivedkeyindex
-                  )
+                  ) ORDER BY pw.derivedkeyindex ASC
                 ) AS attachedAccounts
             FROM push_keys pk
             JOIN push_wallets pw ON pk.did = pw.did
