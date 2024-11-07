@@ -5,6 +5,7 @@ import { Block } from '../../generated/push/block_pb'
 import { BitUtil } from '../../utilz/bitUtil'
 import { Check } from '../../utilz/check'
 import { Coll } from '../../utilz/coll'
+import { DateUtil } from '../../utilz/dateUtil'
 import { WinstonUtil } from '../../utilz/winstonUtil'
 import { BlockUtil } from '../messaging-common/blockUtil'
 import {
@@ -112,10 +113,27 @@ export default class StorageNode implements Consumer<QItem>, StorageContractList
     return true
   }
 
+  public getShardStatus(
+    oldShards: Set<number>,
+    newShards: Set<number>
+  ): {
+    shardsToAdd: Set<number>
+    shardsToDelete: Set<number>
+    commonShards: Set<number>
+  } {
+    const shardsToAdd = Coll.substractSet(newShards, oldShards)
+    const shardsToDelete = Coll.substractSet(oldShards, newShards)
+    const commonShards = Coll.intersectSet(oldShards, newShards)
+    return { shardsToAdd, shardsToDelete, commonShards }
+  }
+
   public async handleReshard(
     currentNodeShards: Set<number> | null,
     allNodeShards?: Map<string, Set<number>>
   ) {
+    this.log.debug('handleReshard()')
+    this.log.debug('currentNodeShards: %j', Coll.setToArray(currentNodeShards))
+    this.log.debug('allNodeShards: %j', allNodeShards)
     const newShards = currentNodeShards ?? new Set()
     const oldShards = await this.blockStorage.loadNodeShards()
     this.log.debug(
@@ -127,17 +145,17 @@ export default class StorageNode implements Consumer<QItem>, StorageContractList
       this.log.debug('handleReshard(): no reshard is needed')
       return
     }
-    const shardsToAdd = Coll.substractSet(newShards, oldShards)
-    const shardsToDelete = Coll.substractSet(oldShards, newShards)
-    const commonShards = Coll.intersectSet(oldShards, newShards)
+    const { shardsToAdd, shardsToDelete, commonShards } = this.getShardStatus(oldShards, newShards)
     this.log.debug(
       'shardsToAdd %j shardsToDelete %j shardsRemaining %j',
       Coll.setToArray(shardsToAdd),
       Coll.setToArray(shardsToDelete),
       Coll.setToArray(commonShards)
     )
-
-    await this.indexStorage.deleteShardsFromInboxes(shardsToDelete)
+    if (shardsToDelete.size != 0) {
+      const expiryTime = new Date(Math.floor(Date.now()) + DateUtil.ONE_DAY_IN_MILLISECONDS)
+      await this.indexStorage.setExpiryTime(shardsToDelete, expiryTime)
+    }
 
     // add to index
     // reprocess every block from blocks table (only once per each block)

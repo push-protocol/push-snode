@@ -75,6 +75,7 @@ export class BlockStorage {
         skey VARCHAR(64) NOT NULL,
         dataSchema VARCHAR(20) NOT NULL,
         payload JSONB,
+        expiration_ts TIMESTAMP ,
         PRIMARY KEY(namespace,namespace_shard_id,namespace_id,skey)
     );`)
 
@@ -199,6 +200,8 @@ export class BlockStorage {
     ) {
       const arr = JSON.parse(shardsAssigned)
       result = new Set(arr)
+    } else if (Array.isArray(shardsAssigned)) {
+      result = new Set(shardsAssigned)
     } else {
       result = new Set<number>()
     }
