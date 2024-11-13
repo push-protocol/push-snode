@@ -155,6 +155,12 @@ export default class StorageNode implements Consumer<QItem>, StorageContractList
     if (shardsToDelete.size != 0) {
       const expiryTime = new Date(Math.floor(Date.now()) + DateUtil.ONE_DAY_IN_MILLISECONDS)
       await this.indexStorage.setExpiryTime(shardsToDelete, expiryTime)
+    } else if (shardsToAdd.size != 0) {
+      // from the allNodeShards, extract the node info whose shards are in shardsToAdd
+      // if shardsToAdd is not empty, we need to reindex all blocks
+      // for the missing shards, query all the snodes for the block_hashes
+      // if majority of the nodes have the block_hash, query the block details from one of the snode.
+      // call the function to accept the block.
     }
 
     // add to index
