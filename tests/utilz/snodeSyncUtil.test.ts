@@ -11,7 +11,7 @@ describe.only('SnodeSyncUtil', () => {
       const snodeSyncUtil = Container.get(SNodeSyncUtil)
       await snodeSyncUtil.postConstruct(new Set([1, 2, 3, 4]))
 
-      console.log(snodeSyncUtil.nodeInfos)
+      console.log(snodeSyncUtil.mapNodeInfoToShards)
       console.log(snodeSyncUtil.nodeIds)
     })
   })

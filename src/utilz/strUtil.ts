@@ -169,4 +169,19 @@ export class StrUtil {
     }
     return '?';
   }
+
+  public static concateSet<T>(set: Set<T>, sep: string): string {
+    let result = "";
+    set.forEach((value: T) => {
+      if (result.length != 0) {
+        result += sep;
+      }
+      result += value.toString();
+    })
+    return result;
+  }
+
+  public static stringifySet<T>(set: Set<T>): string {
+    return `[${Array.from(set).toString()}]`
+  }
 }

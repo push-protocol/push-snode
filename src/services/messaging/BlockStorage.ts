@@ -112,6 +112,18 @@ export class BlockStorage {
         push_wallets_idx ON push_wallets
         USING btree (did ASC, address ASC, derivedkeyindex ASC);`)
 
+    await PgUtil.update(`
+          CREATE TABLE IF NOT EXISTS storage_sync_info(
+            view_name VARCHAR(255) NOT NULL,
+            created_at TIMESTAMP NOT NULL default NOW(),
+            flow_type VARCHAR(255) NOT NULL,
+            last_synced_page_number NUMERIC DEFAULT 0,
+            PRIMARY KEY (view_name)
+            );`)
+    await PgUtil.update(
+      `CREATE INDEX IF NOT EXISTS storage_sync_info_index ON storage_sync_info USING btree (view_name ASC, created_at  ASC, last_synced_page_number ASC);`
+    )
+
     // TODO: Uucomment after fixing table schema
     // create table push_session_keys
     //     await PgUtil.update(`

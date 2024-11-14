@@ -13,14 +13,13 @@ export class SNodeSyncUtil {
     private validatorContractState: ValidatorContractState
 
     shards: Set<number>
-    nodeInfos: Map<string, NodeInfo>
-    nodeIds: Map<number, Set<string>>
-    mapNodeInfoToShards: Map<NodeInfo, Set<string>>
+    nodeIds: Map<string, Set<number>>
+    mapNodeInfoToShards: Map<NodeInfo, Set<number>>
 
     async postConstruct(_shard: Set<number>){
         this.shards = _shard
-        this.nodeInfos = new Map<string, NodeInfo>();
-        this.nodeIds = new Map<number, Set<string>>();
+        this.nodeIds = new Map<string, Set<number>>();
+        this.mapNodeInfoToShards = new Map<NodeInfo, Set<number>>();
         await this.getNodeIdFromShardId();
         await this.getNodeInfoFromNodeId();
     }
@@ -30,19 +29,23 @@ export class SNodeSyncUtil {
             const nodes = this.storageContractState.getStorageNodesForShard(shardId);
             this.log.info(`Nodes for shard ${shardId} are ${nodes}`);
             if(nodes !== null && nodes !== undefined && nodes.size >0){
-               this.nodeIds.set(shardId, nodes);
+                for(const node of nodes){
+                    if(this.nodeIds.has(node)){
+                        this.nodeIds.get(node)?.add(shardId);
+                    }else{
+                        this.nodeIds.set(node, new Set([shardId]));
+                    }
+                }
             }
         }
     }
 
     async getNodeInfoFromNodeId(){
-        for(const [shardId, nodes] of this.nodeIds){
-            for(const node of nodes){
-                const nodeInfo = await this.validatorContractState.getStorageNodesMap().get(node);
-                this.log.info(`Node info for node ${node} is ${nodeInfo}`);
-                if(nodeInfo !== null && nodeInfo !== undefined){
-                    this.nodeInfos.set(node, nodeInfo);
-                }
+        for( const [nodeId, shards] of this.nodeIds){
+            const nodeInfo = await this.validatorContractState.getStorageNodesMap().get(nodeId);
+            this.log.info(`Node info for node ${nodeId} is ${nodeInfo}`);
+            if(nodeInfo !== null && nodeInfo !== undefined){
+                this.mapNodeInfoToShards.set(nodeInfo, shards);
             }
         }
     }
