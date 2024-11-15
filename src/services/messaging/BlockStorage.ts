@@ -118,6 +118,7 @@ export class BlockStorage {
             created_at TIMESTAMP NOT NULL default NOW(),
             flow_type VARCHAR(255) NOT NULL,
             last_synced_page_number NUMERIC DEFAULT 0,
+            total_count NUMERIC NOT NULL,
             PRIMARY KEY (view_name)
             );`)
     await PgUtil.update(

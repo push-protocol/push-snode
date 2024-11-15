@@ -57,10 +57,14 @@ export class Block {
     }
   }
 
-  static async createRecordInStorageSyncTable(viewTableName: string, flowType: 'IN' | 'OUT') {
-    const query = `INSERT INTO storage_sync_info (view_name, flow_type) VALUES ($1, $2);`
+  static async createRecordInStorageSyncTable(
+    viewTableName: string,
+    flowType: 'IN' | 'OUT',
+    totalCount: number
+  ) {
+    const query = `INSERT INTO storage_sync_info (view_name, flow_type, total_count) VALUES ($1, $2, $3);`
     try {
-      await PgUtil.update(query, viewTableName, flowType)
+      await PgUtil.update(query, viewTableName, flowType, totalCount)
       this.log.info(`Successfully created record in storage_sync_info for view ${viewTableName}`)
     } catch (error) {
       this.log.error(
@@ -71,9 +75,15 @@ export class Block {
   }
 
   static async getSyncInfo(viewTableName: string) {
-    const query = `SELECT * FROM storage_sync_info WHERE view_name = $1;`
+    const query = `SELECT view_name, flow_type, created_at, last_synced_page_number, total_count FROM storage_sync_info WHERE view_name = $1;`
     try {
-      const result = await PgUtil.queryOneRow(query, viewTableName)
+      const result = await PgUtil.queryOneRow<{
+        view_name: string
+        flow_type: string
+        created_at: any
+        last_synced_page_number: string
+        total_count: string
+      }>(query, viewTableName)
       this.log.info(`Successfully fetched record from storage_sync_info for view ${viewTableName}`)
       return result
     } catch (error) {
@@ -105,14 +115,17 @@ export class Block {
     const query = `SELECT object_hash FROM ${viewTableName} ORDER BY object_hash LIMIT $1 OFFSET $2;`
     const offset = (pageNumber - 1) * pageSize
     try {
-      const result = await PgUtil.queryArr(query, [pageSize, offset])
+      const result = await PgUtil.queryArr<{ object_hash: string }>(query, pageSize, offset)
       this.log.info(`Successfully fetched paginated blocks from view ${viewTableName}`)
-      if (result && result.length > 0) {
+
+      if (result?.length) {
         this.log.info(`Fetched ${result.length} blocks from view ${viewTableName}`)
-        // if the data fetching is successful, update the lastSyncedPageNumber in storage_sync_info for that view,
+        // if the data fetching is successful, update the lastSyncedPageNumber in storage_sync_info for that view
         await this.updateInfoInStorageSyncTable(viewTableName, pageNumber, 'IN')
       }
-      return result
+      const totalCount = (await Block.getSyncInfo(viewTableName)).total_count
+      const response = result.map((row) => row.object_hash)
+      return { blockHash: response, total: totalCount }
     } catch (error) {
       this.log.error(`Error fetching paginated blocks from view ${viewTableName}: ${error}`)
       throw error
@@ -131,6 +144,8 @@ export class Block {
     }
   }
 
+  // "IN" is pointing to views that are being synced to the storage node
+  // "OUT" is pointing to views that are being synced from the storage node
   static async updateInfoInStorageSyncTable(
     viewTableName: string,
     lastSyncedPageNumber: number,
@@ -185,6 +200,9 @@ export class Block {
         await PgUtil.update(createViewQuery)
         await new Promise((resolve) => setTimeout(resolve, 2000))
         this.log.info('Query executed successfully')
+        const countQuery = `SELECT COUNT(*) FROM ${viewTableName};`
+        const count = await PgUtil.queryOneValue<number>(countQuery)
+        await this.createRecordInStorageSyncTable(viewTableName, 'OUT', count)
       } catch (queryError) {
         this.log.error(`Error executing CREATE VIEW query: ${queryError}`)
         throw queryError
