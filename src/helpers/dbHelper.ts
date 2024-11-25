@@ -15,6 +15,7 @@ import { Check } from '../utilz/check'
 import { DateUtil } from '../utilz/dateUtil'
 import { EnvLoader } from '../utilz/envLoader'
 import { PushDidFromMasterPublicKey } from '../utilz/keysUtils'
+import { NumUtil } from '../utilz/numUtil'
 import { PgUtil } from '../utilz/pgUtil'
 import { StrUtil } from '../utilz/strUtil'
 import { arrayToMap } from '../utilz/typeConversionUtil'
@@ -502,7 +503,7 @@ END $$ LANGUAGE plpgsql;
     category: string,
     firstTs: string | null,
     sort: string | null
-  ): Promise<object> {
+  ): Promise<PushGetTransactionsResult> {
     // the value should be the same for SNODE/ANODE
     // DON'T EDIT THIS UNLESS YOU NEED TO
     let pageSize = 30
@@ -535,7 +536,7 @@ END $$ LANGUAGE plpgsql;
       return {
         ns: category,
         skey: row.skey,
-        ts: row.ts,
+        ts: NumUtil.toString(row.ts),
         payload: {
           data: p.data,
           hash: p.hash,
@@ -543,14 +544,14 @@ END $$ LANGUAGE plpgsql;
           sender: p.sender,
           category: p.category,
           recipientsList: p.recipientsList
-        }
-      }
+        } as Payload
+      } as Item
     })
     let lastTs = itemsArr.length == 0 ? null : itemsArr[itemsArr.length - 1].ts
     return {
       items: itemsArr,
       lastTs: lastTs
-    }
+    } as PushGetTransactionsResult
   }
 
   private static convertRowToItem(rowObj: any, namespace: string) {
@@ -654,4 +655,25 @@ export class StorageRecord {
     this.ts = ts
     this.payload = payload
   }
+}
+
+type Payload = {
+  data: string
+  hash: string
+  type: number
+  sender: string
+  category: string
+  recipientsList: string
+}
+
+type Item = {
+  ns: string
+  skey: string
+  ts: string
+  payload: Payload
+}
+
+type PushGetTransactionsResult = {
+  items: Item[]
+  lastTs: string | null
 }
