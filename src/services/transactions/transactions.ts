@@ -7,10 +7,6 @@ import { StorageContractState } from '../messaging-common/storageContractState'
 
 @Service()
 export class Transactions {
-  // the value should be the same for SNODE/ANODE
-  // DON'T EDIT THIS UNLESS YOU NEED TO
-  public static readonly PAGE_SIZE_FOR_ALL_NODES = 30
-
   @Inject()
   private storageContractState: StorageContractState
 
@@ -24,14 +20,8 @@ export class Transactions {
   }
 
   async getTransactions(walletInCaip: string, category: string, firstTs: string, sort) {
-    const inbox = await DbHelper.getTransactions(
-      walletInCaip,
-      category,
-      firstTs,
-      sort,
-      Transactions.PAGE_SIZE_FOR_ALL_NODES
-    )
-    return { transactions: inbox }
+    const result = await DbHelper.getTransactions(walletInCaip, category, firstTs, sort)
+    return result
   }
 
   async getTransaction(namespace: string, namespaceId: string, key: string) {

@@ -381,7 +381,7 @@ END $$ LANGUAGE plpgsql;
       sender: tmp.sender,
       recipientsList: tmp.recipientsList,
       data: txDataHex,
-      salt: txSaltHex,
+      // salt: txSaltHex,
       hash: txHashHex
     }
     log.debug(
@@ -500,10 +500,18 @@ END $$ LANGUAGE plpgsql;
   static async getTransactions(
     walletInCaip: string,
     category: string,
-    firstTs: string,
-    sort: string,
-    pageSize: number
+    firstTs: string | null,
+    sort: string | null
   ): Promise<object> {
+    // the value should be the same for SNODE/ANODE
+    // DON'T EDIT THIS UNLESS YOU NEED TO
+    let pageSize = 30
+    if (StrUtil.isEmpty(firstTs)) {
+      firstTs = '' + DateUtil.currentTimeSeconds()
+    }
+    if (StrUtil.isEmpty(sort)) {
+      sort = 'DESC'
+    }
     Check.isTrue(sort === 'ASC' || sort === 'DESC', 'invalid sort')
     Check.isTrue(pageSize > 0 && pageSize <= 1000, 'invalid pageSize')
     const isFirstQuery = StrUtil.isEmpty(firstTs)
@@ -522,12 +530,22 @@ END $$ LANGUAGE plpgsql;
       walletInCaip,
       firstTs
     )
-    const itemsArr = data1.map((row) => ({
-      ns: category,
-      skey: row.skey,
-      ts: row.ts,
-      payload: row.payload
-    }))
+    const itemsArr = data1.map((row) => {
+      let p: any = row.payload
+      return {
+        ns: category,
+        skey: row.skey,
+        ts: row.ts,
+        payload: {
+          data: p.data,
+          hash: p.hash,
+          type: p.type,
+          sender: p.sender,
+          category: p.category,
+          recipientsList: p.recipientsList
+        }
+      }
+    })
     let lastTs = itemsArr.length == 0 ? null : itemsArr[itemsArr.length - 1].ts
     return {
       items: itemsArr,
@@ -617,16 +635,10 @@ END $$ LANGUAGE plpgsql;
 
 `
     }
-
     log.debug(query)
-    try {
-      const res = await PgUtil.queryOneRow(query, wallet)
-      log.debug('getAccountInfo() res: ', res)
-      return res
-    } catch (error) {
-      log.error(error)
-      return []
-    }
+    const res = await PgUtil.queryOneRow<AccountInfoInterface>(query, wallet)
+    log.debug('getAccountInfo() res: ', res)
+    return res
   }
 }
 
