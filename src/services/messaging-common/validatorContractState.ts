@@ -54,6 +54,10 @@ export class ValidatorContractState {
     return this.contractCli.snodes
   }
 
+  public getArchivalNodesMap(): Map<string, NodeInfo> {
+    return this.contractCli.anodes
+  }
+
   public getActiveValidatorsExceptSelf(): NodeInfo[] {
     const allNodes = Array.from(this.getAllNodesMap().values())
     const onlyGoodValidators = allNodes.filter(
@@ -133,10 +137,12 @@ class ContractClientFactory {
   private pushTokenAddr: string
   private validatorRpcEndpoint: string
   private validatorRpcNetwork: number
+  private abiDir: string
   private configDir: string
   nodeWallet: Wallet
   // private nodeWallet: Signer;
-  private validatorPrivateKeyFile: string
+  private validatorEthKeyPath: string; // new
+  private validatorPrivateKeyFileName: string; // old
   private validatorPrivateKeyPass: string
   private nodeAddress: string
 
@@ -149,8 +155,9 @@ class ContractClientFactory {
       this.validatorRpcEndpoint,
       this.validatorRpcNetwork
     )
-    this.configDir = EnvLoader.getPropertyOrFail('CONFIG_DIR')
-    this.abi = ContractClientFactory.loadValidatorContractAbi(this.configDir, './abi/ValidatorV1.json')
+    this.configDir = EnvLoader.getPropertyOrFail('CONFIG_DIR');
+    this.abiDir = EnvLoader.getPropertyOrDefault('ABI_DIR', this.configDir + "/abi");
+    this.abi = ContractClientFactory.loadValidatorContractAbi(this.abiDir, './ValidatorV1.json')
   }
 
   private static loadValidatorContractAbi(configDir: string, fileNameInConfigDir: string): string {
@@ -170,11 +177,12 @@ class ContractClientFactory {
 
   // creates a client, using an encrypted private key from disk, so that we could write to the blockchain
   public async buildRWClient(log: Logger): Promise<ValidatorCtClient> {
-    this.validatorPrivateKeyFile = EnvLoader.getPropertyOrFail('VALIDATOR_PRIVATE_KEY_FILE')
+    this.validatorPrivateKeyFileName = EnvLoader.getPropertyOrFail('VALIDATOR_PRIVATE_KEY_FILE')
     this.validatorPrivateKeyPass = EnvLoader.getPropertyOrFail('VALIDATOR_PRIVATE_KEY_PASS')
 
-    const jsonFile = readFileSync(this.configDir + '/' + this.validatorPrivateKeyFile,
-      {encoding: 'utf8', flag: 'r'})
+    // this is a new variable, which fallbacks to old
+    this.validatorEthKeyPath = EnvLoader.getPropertyOrDefault('ETH_KEY_PATH', this.configDir + '/' + this.validatorPrivateKeyFileName);
+    const jsonFile = readFileSync(this.validatorEthKeyPath, {encoding: 'utf8', flag: 'r'})
     this.nodeWallet = await Wallet.fromEncryptedJson(jsonFile, this.validatorPrivateKeyPass)
     this.nodeAddress = await this.nodeWallet.getAddress()
 
