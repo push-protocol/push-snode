@@ -5,15 +5,12 @@ import { DateUtil } from '../../utilz/dateUtil'
 // import { PgUtil } from '../../utilz/pgUtil'
 import { StorageContractState } from '../messaging-common/storageContractState'
 
-type TransactionsInput = {
-  namespace: string
-  timestamp: string
-  namespaceId: string
-  order: 'ASC' | 'DESC'
-}
-
 @Service()
 export class Transactions {
+  // the value should be the same for SNODE/ANODE
+  // DON'T EDIT THIS UNLESS YOU NEED TO
+  public static readonly PAGE_SIZE_FOR_ALL_NODES = 30
+
   @Inject()
   private storageContractState: StorageContractState
 
@@ -26,11 +23,14 @@ export class Transactions {
     return storageTable
   }
 
-  async getTransactions(input: TransactionsInput) {
-    // get the shard id
-    const shardId = this.storageContractState.shardCount
-    // get all transaction that are there in the table
-    const inbox = await DbHelper.listInbox(input.namespace, shardId, input.namespaceId, '', 30)
+  async getTransactions(walletInCaip: string, category: string, firstTs: string, sort) {
+    const inbox = await DbHelper.getTransactions(
+      walletInCaip,
+      category,
+      firstTs,
+      sort,
+      Transactions.PAGE_SIZE_FOR_ALL_NODES
+    )
     return { transactions: inbox }
   }
 
