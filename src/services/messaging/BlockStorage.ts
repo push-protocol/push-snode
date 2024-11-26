@@ -25,6 +25,7 @@ export class BlockStorage {
             object_hash   VARCHAR(255) NOT NULL, -- optional: a uniq field to fight duplicates
             object        TEXT         NOT NULL,
             object_shards JSONB        NOT NULL, -- message block shards
+            object_raw    TEXT      NOT NULL, -- raw message block
             PRIMARY KEY (object_hash)
         );
     `)
@@ -117,9 +118,13 @@ export class BlockStorage {
             view_name VARCHAR(255) NOT NULL,
             created_at TIMESTAMP NOT NULL default NOW(),
             flow_type VARCHAR(255) NOT NULL,
-            last_synced_page_number NUMERIC DEFAULT 0,
+            last_synced_page_number NUMERIC DEFAULT 1,
             total_count NUMERIC NOT NULL,
-            PRIMARY KEY (view_name)
+            snode_url VARCHAR(255) DEFAULT NULL,
+            shard_ids JSONB NOT NULL,
+            current_syncing_shard_id  VARCHAR(255) NOT NULL, -- current shard id being synced
+            sync_status VARCHAR(255) DEFAULT 'SYNCING',
+            already_synced_shards JSONB DEFAULT '[]'
             );`)
     await PgUtil.update(
       `CREATE INDEX IF NOT EXISTS storage_sync_info_index ON storage_sync_info USING btree (view_name ASC, created_at  ASC, last_synced_page_number ASC);`
@@ -146,7 +151,8 @@ export class BlockStorage {
   async saveBlockWithShardData(
     mb: Block,
     calculatedHash: string,
-    shardSet: Set<number>
+    shardSet: Set<number>,
+    mbRaw: string
   ): Promise<boolean> {
     // NOTE: the code already atomically updates the db,
     // so let's drop select because it's excessive)
@@ -168,12 +174,13 @@ export class BlockStorage {
     const objectAsJson = JSON.stringify(BlockUtil.blockToJson(mb))
     const shardSetAsJson = JSON.stringify(Coll.setToArray(shardSet))
     const res = await PgUtil.insert(
-      `INSERT INTO blocks(object, object_hash, object_shards)
-       VALUES ($1, $2, $3)
+      `INSERT INTO blocks(object, object_hash, object_shards, object_raw)
+       VALUES ($1, $2, $3, $4)
        ON CONFLICT DO NOTHING`,
       objectAsJson,
       calculatedHash,
-      shardSetAsJson
+      shardSetAsJson,
+      mbRaw
     )
     const requiresProcessing = res === 1
     if (!requiresProcessing) {

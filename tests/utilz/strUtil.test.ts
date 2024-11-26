@@ -2,7 +2,7 @@ import { expect } from 'chai'
 
 import { StrUtil } from '../../src/utilz/strUtil'
 
-describe.only('StrUtil', () => {
+describe('StrUtil', () => {
   describe('concateSet testcase', () => {
     it('Should return the concated string from set', () => {
       const set = new Set([1, 2, 3, 4])

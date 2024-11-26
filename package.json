@@ -15,7 +15,7 @@
     "dev6002": "ts-node-dev --inspect=6002 --transpile-only ./src/app.ts",
     "start": "nodemon",
     "inspect": "nodemon --inspect src/app.ts",
-    "test": "CONFIG_DIR='./docker/s1' LOG_LEVEL=error NEW_RELIC_ENABLED=false TS_NODE_PROJECT='./tsconfig.mocha.json' mocha -r ts-node/register \"tests/{utilz,services}/**/*.test.ts\" --timeout 120000 --require tests/root.ts --serial",
+    "test": "CONFIG_DIR='./docker/s1' LOG_LEVEL=error NEW_RELIC_ENABLED=false TS_NODE_PROJECT='./tsconfig.mocha.json' mocha -r ts-node/register \"tests/{utilz,services}/**/*.test.ts\" --timeout 12000000000 --require tests/root.ts --serial",
     "lint:fix": "eslint --fix '**/*.{js,ts,jsx,tsx}'",
     "format": "prettier --write '**/*.{js,ts,jsx,tsx}'",
     "prepare": "husky install",

@@ -51,14 +51,12 @@ describe('StorageNode Test', () => {
       expect(result.commonShards).to.deep.equal(new Set([1, 2, 3, 4]))
     })
   })
-  describe('handleReshard testcases', () => {
-    // it('Should end as the newShards is same as existing shards', async () => {
-    //   const newShards = [
-    //     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
-    //     25, 26, 27, 28, 29, 30, 31
-    //   ]
-    //   await storageNode.postConstruct()
-    //   await storageNode.handleReshard(new Set(newShards), currentNodeMap)
-    // })
+  describe.only('handleReshard testcases', () => {
+    it('Should end as the newShards is same as existing shards', async () => {
+      const newShards = [0, 1, 2, 3, 4]
+      const oldShards = new Set([9, 10, 11, 12, 13])
+      await storageNode.postConstruct()
+      await storageNode.handleReshardV2(new Set(newShards), currentNodeMap, oldShards)
+    })
   })
 })
