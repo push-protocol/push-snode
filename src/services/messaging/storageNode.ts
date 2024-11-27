@@ -140,7 +140,7 @@ export default class StorageNode implements Consumer<QItem>, StorageContractList
     return { shardsToAdd, shardsToDelete, commonShards }
   }
 
-  public async handleReshard(
+  public async handleReshardOld(
     currentNodeShards: Set<number> | null,
     allNodeShards?: Map<string, Set<number>>
   ) {
@@ -200,7 +200,7 @@ export default class StorageNode implements Consumer<QItem>, StorageContractList
     await this.blockStorage.saveNodeShards(newShards)
   }
 
-  public async handleReshardV2(
+  public async handleReshard(
     currentNodeShards: Set<number> | null,
     allNodeShards?: Map<string, Set<number>>,
     oldShardsTest?: Set<number>
@@ -227,8 +227,8 @@ export default class StorageNode implements Consumer<QItem>, StorageContractList
       Coll.setToArray(commonShards)
     )
     if (shardsToDelete.size != 0) {
-      // const expiryTime = new Date(Math.floor(Date.now()) + DateUtil.ONE_DAY_IN_MILLISECONDS)
-      // await this.indexStorage.setExpiryTime(shardsToDelete, expiryTime)
+      const expiryTime = new Date(Math.floor(Date.now()) + DateUtil.ONE_DAY_IN_MILLISECONDS)
+      await this.indexStorage.setExpiryTime(shardsToDelete, expiryTime)
     }
     if (shardsToAdd.size != 0) {
       this.log.debug('Syncing new shards')
@@ -267,13 +267,11 @@ export default class StorageNode implements Consumer<QItem>, StorageContractList
         }
       }
     }
-
+    await this.blockStorage.saveNodeShards(newShards)
     await this.snodePooling.initiatePooling()
 
     // add to index
     // reprocess every block from blocks table (only once per each block)
     // if the block has shardsToAdd -> add anything which is in shardsToAdd
-
-    // await this.blockStorage.saveNodeShards(newShards)
   }
 }

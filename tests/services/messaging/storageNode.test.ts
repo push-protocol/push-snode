@@ -56,7 +56,7 @@ describe('StorageNode Test', () => {
       const newShards = [0, 1, 2, 3, 4]
       const oldShards = new Set([9, 10, 11, 12, 13])
       await storageNode.postConstruct()
-      await storageNode.handleReshardV2(new Set(newShards), currentNodeMap, oldShards)
+      await storageNode.handleReshard(new Set(newShards), currentNodeMap, oldShards)
     })
   })
 })

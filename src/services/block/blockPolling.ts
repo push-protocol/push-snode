@@ -269,12 +269,11 @@ export class BlockPooling {
         const res = await Container.get(StorageNode).handleBlock(parsedBlock, blockBytes)
         if (res) {
           this.log.info('Block successfully validated')
-          // update the page number in the storage_sync_info table
-          // TODO: update the page number in the storage_sync_info table for all the table in the clients
           return true
         } else {
           this.log.error('Block validation failed')
-          return false
+          this.log.error('Block:', block)
+          continue
         }
       }
       for (let client of clients) {
