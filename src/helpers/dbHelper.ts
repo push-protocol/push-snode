@@ -520,7 +520,7 @@ END $$ LANGUAGE plpgsql;
     const comparator = sort === 'ASC' ? '>' : '<'
     const data1 = await PgUtil.queryArr<{ skey: string; ts: number; payload: string }>(
       `select skey as skey,
-       extract(epoch from ts) as ts,
+       round(extract(epoch from ts)*1000) as ts,
        payload as payload
        from storage_node 
        where namespace=$1 and namespace_id=$2 
