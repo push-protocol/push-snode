@@ -5,13 +5,6 @@ import { DateUtil } from '../../utilz/dateUtil'
 // import { PgUtil } from '../../utilz/pgUtil'
 import { StorageContractState } from '../messaging-common/storageContractState'
 
-type TransactionsInput = {
-  namespace: string
-  timestamp: string
-  namespaceId: string
-  order: 'ASC' | 'DESC'
-}
-
 @Service()
 export class Transactions {
   @Inject()
@@ -26,12 +19,9 @@ export class Transactions {
     return storageTable
   }
 
-  async getTransactions(input: TransactionsInput) {
-    // get the shard id
-    const shardId = this.storageContractState.shardCount
-    // get all transaction that are there in the table
-    const inbox = await DbHelper.listInbox(input.namespace, shardId, input.namespaceId, '', 30)
-    return { transactions: inbox }
+  async getTransactions(walletInCaip: string, category: string, firstTs: string, sort) {
+    const result = await DbHelper.getTransactions(walletInCaip, category, firstTs, sort)
+    return result
   }
 
   async getTransaction(namespace: string, namespaceId: string, key: string) {

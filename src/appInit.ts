@@ -34,12 +34,27 @@ async function startServer(logLevel = null) {
 
   await Container.get(StorageNode).postConstruct()
 
+  let artwork = `    
+ ____            _       ____  _                             
+|  _ \\ _   _ ___| |__   / ___|| |_ ___  _ __ __ _  __ _  ___ 
+| |_) | | | / __| '_ \\  \\___ \\| __/ _ \\| '__/ _\` |/ _\` |/ _ \\
+|  __/| |_| \\__ \\ | | |  ___) | || (_) | | | (_| | (_| |  __/
+|_|  _ \\__,_|___/_| |_| |____/ \\__\\___/|_|  \\__,_|\\__, |\\___|
+| \\ | | ___   __| | ___                           |___/      
+|  \\| |/ _ \\ / _\` |/ _ \\                                     
+| |\\  | (_) | (_| |  __/                                     
+|_| \\_|\\___/ \\__,_|\\___|                                                                                   
+`
+
   server.listen(config.port, (err) => {
     if (err) {
       Logger.error(err)
       process.exit(1)
     }
     Logger.info(`
+    
+    ${artwork}
+    
       ################################################
       STARTED
       🛡️  Server listening on port: ${config.port} 🛡️

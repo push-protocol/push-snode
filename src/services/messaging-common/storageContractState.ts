@@ -1,14 +1,13 @@
-import { JsonRpcProvider } from '@ethersproject/providers/src.ts/json-rpc-provider'
-import { Contract, ethers, Wallet } from 'ethers'
 import { Service } from 'typedi'
 import { Logger } from 'winston'
-
-import { BitUtil } from '../../utilz/bitUtil'
-import { Check } from '../../utilz/check'
-import { Coll } from '../../utilz/coll'
-import { EnvLoader } from '../../utilz/envLoader'
-import { EthersUtil } from '../../utilz/ethersUtil'
 import { WinstonUtil } from '../../utilz/winstonUtil'
+import { EnvLoader } from '../../utilz/envLoader'
+import { Contract, ethers, Wallet } from 'ethers'
+import { JsonRpcProvider } from '@ethersproject/providers/src.ts/json-rpc-provider'
+import { BitUtil } from '../../utilz/bitUtil'
+import { EthersUtil } from '../../utilz/ethersUtil'
+import { Coll } from '../../utilz/coll'
+import { Check } from '../../utilz/check'
 
 @Service()
 export class StorageContractState {
@@ -32,6 +31,8 @@ export class StorageContractState {
   // VARS
   // shard0 -> node0xA, node0xB
   public shardToNodesMap: Map<number, Set<string>> = new Map()
+  private configDir: string;
+  private abiDir: string;
 
   public async postConstruct(useSigner: boolean, listener: StorageContractListener) {
     this.log.info('postConstruct()')
@@ -40,13 +41,16 @@ export class StorageContractState {
     this.rpcEndpoint = EnvLoader.getPropertyOrFail('VALIDATOR_RPC_ENDPOINT')
     this.rpcNetwork = Number.parseInt(EnvLoader.getPropertyOrFail('VALIDATOR_RPC_NETWORK'))
     this.provider = new ethers.providers.JsonRpcProvider(this.rpcEndpoint, this.rpcNetwork)
-    this.useSigner = useSigner
+    this.useSigner = useSigner;
+    this.configDir = EnvLoader.getPropertyOrFail('CONFIG_DIR');
+    this.abiDir = EnvLoader.getPropertyOrDefault('ABI_DIR', this.configDir + "/abi");
     if (useSigner) {
       const connect = await EthersUtil.connectWithKey(
-        EnvLoader.getPropertyOrFail('CONFIG_DIR'),
+        this.configDir,
         EnvLoader.getPropertyOrFail('VALIDATOR_PRIVATE_KEY_FILE'),
         EnvLoader.getPropertyOrFail('VALIDATOR_PRIVATE_KEY_PASS'),
-        'StorageV1.json',
+        this.abiDir,
+        './StorageV1.json',
         EnvLoader.getPropertyOrFail('STORAGE_CONTRACT_ADDRESS'),
         this.provider
       )
@@ -56,8 +60,8 @@ export class StorageContractState {
     } else {
       this.storageCt = <StorageContract>(
         await EthersUtil.connectWithoutKey(
-          EnvLoader.getPropertyOrFail('CONFIG_DIR'),
-          'StorageV1.json',
+          this.abiDir,
+          './StorageV1.json',
           EnvLoader.getPropertyOrFail('STORAGE_CONTRACT_ADDRESS'),
           this.provider
         )
@@ -156,6 +160,6 @@ export interface StorageContractAPI {
 export interface StorageContractListener {
   handleReshard(
     currentNodeShards: Set<number> | null,
-    allNodeShards?: Map<string, Set<number>>
+    allNodeShards: Map<string, Set<number>>
   ): Promise<void>
 }
