@@ -16,18 +16,27 @@ export class EthersUtil {
     return abi
   }
 
+  public static loadAbiEx(filePath: string): string {
+    const file = fs.readFileSync(filePath, 'utf8')
+    const json = JSON.parse(file)
+    const abi = json.abi
+    console.log(`abi size:`, abi.length)
+    return abi
+  }
+
   // creates a client, using an encrypted private key from disk, so that we could sign/write to the blockchain
   public static async connectWithKey(
-    configDir: string,
-    privateKeyFileName: string,
-    privateKeyPass: string,
+    privKeyDir: string,
+    privKeyFileName: string,
+    privKeyPass: string,
+    contractAbiDir: string,
     contractAbiFileName: string,
     contractAddr: string,
     provider: JsonRpcProvider
   ): Promise<ContractWithMeta> {
-    const abi = EthersUtil.loadAbi(configDir, contractAbiFileName)
-    const jsonFile = fs.readFileSync(configDir + '/' + privateKeyFileName, 'utf-8')
-    const nodeWallet = await Wallet.fromEncryptedJson(jsonFile, privateKeyPass)
+    const abi = EthersUtil.loadAbi(contractAbiDir, contractAbiFileName)
+    const jsonFile = fs.readFileSync(privKeyDir + '/' + privKeyFileName, 'utf-8')
+    const nodeWallet = await Wallet.fromEncryptedJson(jsonFile, privKeyPass)
     const nodeAddress = await nodeWallet.getAddress()
     const signer = nodeWallet.connect(provider)
     const contract = new ethers.Contract(contractAddr, abi, signer)
@@ -35,8 +44,8 @@ export class EthersUtil {
       'connecting contract %s using signer %s (keydir: %s, keyfile: %s, abi: %s) ',
       contractAddr,
       signer.address,
-      configDir,
-      privateKeyFileName,
+      privKeyDir,
+      privKeyFileName,
       contractAbiFileName
     )
     return {
@@ -48,12 +57,12 @@ export class EthersUtil {
 
   // creates a client which can only read blockchain state
   public static async connectWithoutKey(
-    configDir: string,
+    contractAbiDir: string,
     contractAbiFileName: string,
     contractAddr: string,
     provider: JsonRpcProvider
   ): Promise<Contract> {
-    const abi = EthersUtil.loadAbi(configDir, contractAbiFileName)
+    const abi = EthersUtil.loadAbi(contractAbiDir, contractAbiFileName)
     const contract = new ethers.Contract(contractAddr, abi, provider)
     this.log.debug('connecting contract %s (no key, abi: %s) ', contractAddr, contractAbiFileName)
     return contract

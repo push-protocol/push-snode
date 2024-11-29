@@ -11,8 +11,11 @@ import { PushKeys } from '../services/transactions/pushKeys'
 import { PushWallets } from '../services/transactions/pushWallets'
 import { BitUtil } from '../utilz/bitUtil'
 import { ChainUtil } from '../utilz/chainUtil'
+import { Check } from '../utilz/check'
+import { DateUtil } from '../utilz/dateUtil'
 import { EnvLoader } from '../utilz/envLoader'
 import { PushDidFromMasterPublicKey } from '../utilz/keysUtils'
+import { NumUtil } from '../utilz/numUtil'
 import { PgUtil } from '../utilz/pgUtil'
 import { StrUtil } from '../utilz/strUtil'
 import { arrayToMap } from '../utilz/typeConversionUtil'
@@ -36,7 +39,7 @@ const options = {
 logger.info(`PG_USER is ${EnvLoader.getPropertyOrFail('PG_USER')}`)
 const pg: pgPromise.IMain<{}, IClient> = pgPromise(options)
 export const pgPool = pg(
-  `postgres://${EnvLoader.getPropertyOrFail('PG_USER')}:${EnvLoader.getPropertyOrFail('PG_PASS')}@${EnvLoader.getPropertyOrFail('PG_HOST')}:5432/${EnvLoader.getPropertyOrFail('DB_NAME')}`
+  `postgres://${EnvLoader.getPropertyOrFail('PG_USER')}:${EnvLoader.getPropertyOrFail('PG_PASS')}@${EnvLoader.getPropertyOrFail('PG_HOST')}:${EnvLoader.getPropertyOrDefault('PG_PORT', '5432')}/${EnvLoader.getPropertyOrFail('DB_NAME')}`
 )
 
 PgUtil.init(pgPool)
@@ -379,7 +382,7 @@ END $$ LANGUAGE plpgsql;
       sender: tmp.sender,
       recipientsList: tmp.recipientsList,
       data: txDataHex,
-      salt: txSaltHex,
+      // salt: txSaltHex,
       hash: txHashHex
     }
     log.debug(
@@ -476,86 +479,79 @@ END $$ LANGUAGE plpgsql;
     return true
   }
 
-  static async listInbox(
-    namespace: string,
-    namespaceShardId: number,
-    nsIndex: string,
-    firstTsExcluded: string,
-    pageSize: number,
-    order?: 'ASC' | 'DESC'
-  ): Promise<object> {
-    order = order || 'ASC'
-    const pageLookAhead = 3
-    const pageSizeForSameTimestamp = pageSize * 20
-    const isFirstQuery = StrUtil.isEmpty(firstTsExcluded)
-    const sql = `select skey as skey,
-                     extract(epoch from ts) as ts,
-                     payload as payload
-                     from storage_node 
-                     where namespace='${namespace}'
-                           and namespace_id='${nsIndex}' 
-                           ${isFirstQuery ? '' : `and ts > to_timestamp(${firstTsExcluded})`}
-                     order by ts ${order}
-                     limit ${pageSize + pageLookAhead}`
-    log.debug(sql)
-    const data1 = await pgPool.any(sql)
-    const items = new Map<string, any>()
-    let lastTs: number = 0
-    for (let i = 0; i < Math.min(data1.length, pageSize); i++) {
-      const item = DbHelper.convertRowToItem(data1[i], namespace)
-      items.set(item.skey, item)
-      lastTs = data1[i].ts
+  /**
+   * Queries inbox table,
+   * finds all tx for a specific wallet X category
+   * paginated by time
+   * FEAT: extends the pageSize with all duplicated timestamps (at the end of the page) (this requires PG 14+ syntax!)
+   *
+   * first page:
+   * listTransactions('CAT1','0xAA', '', 10)
+   *
+   * 2+ page:
+   * listTransactions('CAT1','0xAA', '1731866069.905', 10)
+   * where 1731866069 is the last ts (unix time) from the prev page
+   *
+   * @param walletInCaip user wallet
+   * @param category transaction category
+   * @param firstTs first timestamp (excluded)
+   * @param sort
+   * @param pageSize
+   */
+  static async getTransactions(
+    walletInCaip: string,
+    category: string,
+    firstTs: string | null,
+    sort: string | null
+  ): Promise<PushGetTransactionsResult> {
+    // the value should be the same for SNODE/ANODE
+    // DON'T EDIT THIS UNLESS YOU NEED TO
+    let pageSize = 30
+    if (StrUtil.isEmpty(firstTs)) {
+      firstTs = '' + DateUtil.currentTimeSeconds()
     }
-    log.debug(`added ${items.size} items; lastTs=${lastTs}`)
-    // [0...{pagesize-1 (lastTs)}...{data1.length-1 (lastTsRowId)}....]
-    // we always request pageSize+3 rows; so if we have these additional rows we can verify that their ts != last row ts,
-    // otherwise we should add these additional rows to the output (works only for 2..3 rows)
-    // otherwise we should execute and additional page request
-    let lastTsRowId = pageSize - 1
-    if (data1.length > pageSize) {
-      // add extra rows for ts = lastTs
-      for (let i = pageSize; i < data1.length; i++) {
-        if (data1[i].ts == lastTs) {
-          lastTsRowId = i
-        } else {
-          break
-        }
-      }
-      if (lastTsRowId == data1.length - 1) {
-        // we have more rows with same timestamp, they won't fit in pageSize+pageLookAhead rows
-        // let's peform additional select for ts = lastTs
-        const sql2 = `select skey as skey,
-                     extract(epoch from ts) as ts,
-                     payload as payload
-                     from storage_node
-                     where namespace='${namespace}'
-                           and namespace_id='${nsIndex}' 
-                           and ts = to_timestamp(${lastTs})
-                     order by ts
-                     limit ${pageSizeForSameTimestamp}`
-        log.debug(sql2)
-        const data2 = await pgPool.any(sql2)
-        for (const row of data2) {
-          const item = DbHelper.convertRowToItem(row, namespace)
-          items.set(item.skey, item)
-        }
-        log.debug(
-          `extra query with ${data2.length} items to fix duplicate timestamps pagination, total size is ${items.size}`
-        )
-      } else if (lastTsRowId > pageSize - 1) {
-        // we have more rows with same timestamp, they fit in pageSize+pageLookAhead rows
-        for (let i = pageSize; i <= lastTsRowId; i++) {
-          const item = DbHelper.convertRowToItem(data1[i], namespace)
-          items.set(item.skey, item)
-        }
-        log.debug(`updated to ${items.size} items to fix duplicate timestamps pagination`)
-      }
+    if (StrUtil.isEmpty(sort)) {
+      sort = 'DESC'
     }
-    const itemsArr = [...items.values()]
+    Check.isTrue(sort === 'ASC' || sort === 'DESC', 'invalid sort')
+    Check.isTrue(pageSize > 0 && pageSize <= 1000, 'invalid pageSize')
+    const isFirstQuery = StrUtil.isEmpty(firstTs)
+    Check.isTrue(isFirstQuery || DateUtil.parseUnixFloatOrFail(firstTs))
+    const comparator = sort === 'ASC' ? '>' : '<'
+    const data1 = await PgUtil.queryArr<{ skey: string; ts: number; payload: string }>(
+      `select skey as skey,
+       round(extract(epoch from ts)*1000) as ts,
+       payload as payload
+       from storage_node 
+       where namespace=$1 and namespace_id=$2 
+       ${isFirstQuery ? '' : `and ts ${comparator} to_timestamp($3)`}
+       order by ts ${sort}
+       FETCH FIRST ${pageSize} ROWS WITH TIES`,
+      category,
+      walletInCaip,
+      firstTs
+    )
+    const itemsArr = data1.map((row) => {
+      let p: any = row.payload
+      return {
+        ns: category,
+        skey: row.skey,
+        ts: NumUtil.toString(row.ts),
+        payload: {
+          data: p.data,
+          hash: p.hash,
+          type: p.type,
+          sender: p.sender,
+          category: p.category,
+          recipientsList: p.recipientsList
+        } as Payload
+      } as Item
+    })
+    let lastTs = itemsArr.length == 0 ? null : itemsArr[itemsArr.length - 1].ts
     return {
       items: itemsArr,
       lastTs: lastTs
-    }
+    } as PushGetTransactionsResult
   }
 
   private static convertRowToItem(rowObj: any, namespace: string) {
@@ -640,16 +636,10 @@ END $$ LANGUAGE plpgsql;
 
 `
     }
-
     log.debug(query)
-    try {
-      const res = await PgUtil.queryOneRow(query, wallet)
-      log.debug('getAccountInfo() res: ', res)
-      return res
-    } catch (error) {
-      log.error(error)
-      return []
-    }
+    const res = await PgUtil.queryOneRow<AccountInfoInterface>(query, wallet)
+    log.debug('getAccountInfo() res: ', res)
+    return res
   }
 }
 
@@ -665,4 +655,25 @@ export class StorageRecord {
     this.ts = ts
     this.payload = payload
   }
+}
+
+type Payload = {
+  data: string
+  hash: string
+  type: number
+  sender: string
+  category: string
+  recipientsList: string
+}
+
+type Item = {
+  ns: string
+  skey: string
+  ts: string
+  payload: Payload
+}
+
+type PushGetTransactionsResult = {
+  items: Item[]
+  lastTs: string | null
 }
