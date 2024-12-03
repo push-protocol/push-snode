@@ -44,10 +44,10 @@ export class RpcUtils {
   // function that calls with retires
   async callWithRetires(allowedRetries: number, retryDelay: number = 10000, _functionName?: string, _params?: any[] | object) {
     let retries = 0;
-  
+    let functionName = _functionName?? this.functionName;
     while (retries <= allowedRetries) {
       try {
-        const res = await this.call(_functionName?? this.functionName, _params?? this.params);
+        const res = await this.call(functionName, _params?? this.params);
         
         // Check if the response is successful
         if (res && res.status === 200 && res.data) {
@@ -55,7 +55,7 @@ export class RpcUtils {
         }
         
         // Log failed attempt
-        console.log(`Attempt ${retries + 1} failed for ${_functionName}`);
+        console.log(`Attempt ${retries + 1} failed for ${functionName}`);
       } catch (e) {
         console.error(`Error calling ${this.baseUrl} on attempt ${retries + 1}: ${e}`);
       }
@@ -65,7 +65,7 @@ export class RpcUtils {
   
       // Check if we've hit the retry limit
       if (retries > allowedRetries) {
-        throw new Error(`Failed after ${allowedRetries} retries for ${_functionName}`);
+        throw new Error(`Failed after ${allowedRetries} retries for ${functionName}`);
       }
   
       // Wait for the delay before next attempt
@@ -73,6 +73,6 @@ export class RpcUtils {
     }
   
     // Fallback error in case the while loop exits unexpectedly
-    throw new Error(`Unexpected failure for ${_functionName}`);
+    throw new Error(`Unexpected failure for ${functionName}`);
   }
 }

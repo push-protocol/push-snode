@@ -53,7 +53,7 @@ describe('StorageNode Test', () => {
   })
   describe.only('handleReshard testcases', () => {
     it('Should end as the newShards is same as existing shards', async () => {
-      const newShards = [0, 1, 2, 3, 4]
+      const newShards = [6, 7, 8]
       const oldShards = new Set([9, 10, 11, 12, 13])
       await storageNode.postConstruct()
       await storageNode.handleReshard(new Set(newShards), currentNodeMap, oldShards)

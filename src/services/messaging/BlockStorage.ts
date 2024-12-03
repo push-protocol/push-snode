@@ -26,6 +26,7 @@ export class BlockStorage {
             object        TEXT         NOT NULL,
             object_shards JSONB        NOT NULL, -- message block shards
             object_raw    TEXT      NOT NULL, -- raw message block
+            ts         TIMESTAMP    NOT NULL, -- timestamp from block
             PRIMARY KEY (object_hash)
         );
     `)
@@ -148,6 +149,23 @@ export class BlockStorage {
     //     USING btree (did ASC, sessionpubkey ASC, derivedkeyindex ASC);`)
   }
 
+  static async getBulkBlockHashes(blockHash: string[]): Promise<string[]> {
+    const res = await PgUtil.queryArr<{ object_hash: string }>(
+      `SELECT object_hash FROM blocks WHERE object_hash = ANY($1)`,
+      blockHash
+    )
+    return res.filter((row) => row && row.object_hash).map((row) => row.object_hash)
+  }
+
+  static async getBlockHashMap(blockHashes: string[]) {
+    const blockHashesRes = await BlockStorage.getBulkBlockHashes(blockHashes)
+    const blockHashMap = new Map<string, boolean>()
+    blockHashes.forEach((hash) => {
+      blockHashMap.set(hash, blockHashesRes.includes(hash))
+    })
+    return blockHashMap
+  }
+
   async saveBlockWithShardData(
     mb: Block,
     calculatedHash: string,
@@ -173,14 +191,16 @@ export class BlockStorage {
     this.log.info('received block with hash %s, adding to the db', calculatedHash)
     const objectAsJson = JSON.stringify(BlockUtil.blockToJson(mb))
     const shardSetAsJson = JSON.stringify(Coll.setToArray(shardSet))
+    const ts = mb.getTs()
     const res = await PgUtil.insert(
-      `INSERT INTO blocks(object, object_hash, object_shards, object_raw)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO blocks(object, object_hash, object_shards, object_raw, ts)
+       VALUES ($1, $2, $3, $4, to_timestamp($5 / 1000))
        ON CONFLICT DO NOTHING`,
       objectAsJson,
       calculatedHash,
       shardSetAsJson,
-      mbRaw
+      mbRaw,
+      ts
     )
     const requiresProcessing = res === 1
     if (!requiresProcessing) {

@@ -1,16 +1,21 @@
-import { Service } from 'typedi'
+import { Inject, Service } from 'typedi'
 
 import { BitUtil } from '../../utilz/bitUtil'
 import { Coll } from '../../utilz/coll'
+// import { DateUtil } from '../../utilz/dateUtil'
 import { PgUtil } from '../../utilz/pgUtil'
 import { RandomUtil } from '../../utilz/randomUtil'
 import { StrUtil } from '../../utilz/strUtil'
 import { WinstonUtil } from '../../utilz/winstonUtil'
+import { IndexStorage } from '../messaging/IndexStorage'
 
 // noinspection UnnecessaryLocalVariableJS
 @Service()
 export class Block {
   private static log = WinstonUtil.newLog(Block)
+
+  @Inject()
+  private static indexStorage: IndexStorage
 
   static async getBlockByHash(blockHash: string) {
     const query = `SELECT * FROM blocks WHERE block_hash = $1`
@@ -139,6 +144,18 @@ export class Block {
       throw new Error('Page number and page size must be positive integers')
     }
 
+    const shardIdQuery = `SELECT shard_ids FROM storage_sync_info WHERE view_name = $1;`
+    const shardIdResult = await PgUtil.queryOneValue<string>(shardIdQuery, viewTableName)
+
+    if (shardIdResult) {
+      // keep increaing the expiry time for the shards
+      // const shardIdSet = new Set<number>(shardIdResult.split(',').map(Number))
+      // await Block.indexStorage.setExpiryTime(
+      //   shardIdSet,
+      //   new Date(Math.floor(Date.now()) + DateUtil.ONE_DAY_IN_MILLISECONDS)
+      // )
+    }
+
     const query = `
       WITH filtered_blocks AS (
         SELECT DISTINCT object_hash, object_shards
@@ -216,30 +233,30 @@ export class Block {
       lastSyncedPageNumber?: number
       currentlySyncingShardId?: string
       syncStatus?: 'SYNCING' | 'SYNCED'
-      alreadySynedShardId?: string
+      alreadySynedShardId?: number
     }
   ) {
     const { viewTableName, flowType } = condition
     let { lastSyncedPageNumber, currentlySyncingShardId, syncStatus, alreadySynedShardId } =
       fieldToBeUpdated
     const query = `
-      UPDATE storage_sync_info
-      SET
-        last_synced_page_number = COALESCE($1, last_synced_page_number),
-        current_syncing_shard_id = COALESCE($2, current_syncing_shard_id),
-        sync_status = COALESCE($3, sync_status),
-        already_synced_shards = 
-          CASE 
+ UPDATE storage_sync_info
+SET
+    last_synced_page_number = COALESCE($1, last_synced_page_number),
+    current_syncing_shard_id = COALESCE($2, current_syncing_shard_id),
+    sync_status = COALESCE($3, sync_status),
+    already_synced_shards = 
+        CASE 
             WHEN $4 IS NOT NULL THEN 
-              jsonb_insert(
-                COALESCE(already_synced_shards, '[]'::jsonb), 
-                '{-1}', 
-                to_jsonb($4::text)
-              )
+                jsonb_insert(
+                    COALESCE(already_synced_shards, '[]'::jsonb), 
+                    '{-1}', 
+                    to_jsonb($4::numeric) 
+                )
             ELSE 
-              already_synced_shards 
-          END
-      WHERE view_name = $5 AND flow_type = $6;
+                already_synced_shards 
+        END
+WHERE view_name = $5 AND flow_type = $6;
     `
     try {
       await PgUtil.update(
@@ -279,20 +296,24 @@ export class Block {
       const jsonbShards = JSON.stringify(Array.from(shards))
 
       const createViewQuery = `
-      CREATE OR REPLACE VIEW ${viewTableName} AS
+      CREATE TABLE ${viewTableName} AS
       SELECT
         object_hash,
         object_shards,
-        object_raw
+        object_raw,
+        ts
       FROM
         blocks
       WHERE
+        ts < NOW() AND 
         EXISTS (
           SELECT 1
           FROM jsonb_array_elements(object_shards) AS shard
           WHERE shard::int = ANY (ARRAY${jsonbShards}::int[])
         )
-      ORDER BY object_hash DESC;
+      ORDER BY ts DESC;
+
+      CREATE INDEX idx_${viewTableName}_ts ON ${viewTableName} (ts DESC);
       `
       this.log.info(`Executing query: ${createViewQuery}`)
 
@@ -302,14 +323,19 @@ export class Block {
         this.log.info('Query executed successfully')
         const countQuery = `SELECT COUNT(*) FROM ${viewTableName};`
         const count = await PgUtil.queryOneValue<number>(countQuery)
-        await Block.createRecordInStorageSyncTable(
-          viewTableName,
-          'OUT',
-          count,
-          shards,
-          snodeUrl && snodeUrl.length != 0 ? snodeUrl : null
-        )
-        return { viewId: viewTableName, count }
+        if (count !== 0) {
+          await Block.createRecordInStorageSyncTable(
+            viewTableName,
+            'OUT',
+            count,
+            shards,
+            snodeUrl && snodeUrl.length != 0 ? snodeUrl : null
+          )
+          return { viewId: viewTableName, count }
+        } else {
+          Block.dropView(viewTableName)
+          return { viewId: null, count: null, error: 'View has no data' }
+        }
       } catch (queryError) {
         this.log.error(`Error executing CREATE VIEW query: ${queryError}`)
         return { viewId: null, count: null, error: queryError }

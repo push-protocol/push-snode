@@ -1,9 +1,10 @@
-import Container from 'typedi'
+import Container, { Service } from 'typedi'
 
 import { BitUtil } from '../../utilz/bitUtil'
 import { PgUtil } from '../../utilz/pgUtil'
 import { PromiseUtil } from '../../utilz/promiseUtil'
 import { WinstonUtil } from '../../utilz/winstonUtil'
+import { BlockStorage } from '../messaging/BlockStorage'
 import StorageNode from '../messaging/storageNode'
 import { HashReply, StorageSyncClient } from '../messaging/storageSyncClient'
 import { BlockUtil } from '../messaging-common/blockUtil'
@@ -17,7 +18,7 @@ export interface NodeSyncInfo {
   total_count: string
   snode_url: string
   current_syncing_shard_id: string
-  already_synced_shards: string[]
+  already_synced_shards: number[]
 }
 
 enum syncStatus {
@@ -25,6 +26,7 @@ enum syncStatus {
   SYNCED = 'SYNCED'
 }
 
+@Service()
 export class BlockPooling {
   private static readonly FLOW_TYPE_IN = 'IN'
   private readonly log = WinstonUtil.newLog(BlockPooling.name)
@@ -75,7 +77,7 @@ export class BlockPooling {
         totalShards.add(shard)
       }
       for (const shard of node.already_synced_shards) {
-        alreadySyncedShards.add(shard)
+        alreadySyncedShards.add(shard.toString())
       }
     }
     return Array.from(new Set([...totalShards].filter((shard) => !alreadySyncedShards.has(shard))))
@@ -139,49 +141,103 @@ export class BlockPooling {
       }
 
       // start pooling from the nodes
-      for (const [shardId, clients] of this.nodeMap.entries()) {
-        this.log.info('Initiating pooling for shard:', { shardId })
-        for (const client of clients) {
-          // updating the currently syncing shard ids
-          await client.updateCurrentlySyncingShard(parseInt(shardId))
-          await client.updateLastSyncedPageNumber(1)
-        }
+      // for (const [shardId, clients] of this.nodeMap.entries()) {
+      //   this.log.info('Initiating pooling for shard:', { shardId })
+      //   const syncPromises = clients.map((client) =>
+      //     Promise.all([
+      //       client.updateCurrentlySyncingShard(parseInt(shardId)),
+      //       client.updateLastSyncedPageNumber(1)
+      //     ])
+      //   )
 
-        // retry for 3 times before moving to the next shard
-        let retryCount = 0
-        const maxRetries = 3
-        let res = false
+      //   await Promise.all(syncPromises)
 
-        while (retryCount < maxRetries) {
-          res = await this.validateAndStoreBlockHashes(shardId, clients)
-          if (res === true) {
-            // Success, break the retry loop
-            for (const client of clients) {
-              // updating the currently syncing shard ids
-              await client.updateAlreadySyncedShards(shardId)
+      //   // retry for 3 times before moving to the next shard
+      //   let retryCount = 0
+      //   const maxRetries = 3
+      //   let res = false
+
+      //   while (retryCount < maxRetries) {
+      //     res = await this.validateAndStoreBlockHashes(shardId, clients)
+      //     if (res === true) {
+      //       // Success, break the retry loop
+      //       let updatePromises = []
+      //       for (const client of clients) {
+      //         // updating the currently syncing shard ids
+      //         updatePromises.push(client.updateAlreadySyncedShards(parseInt(shardId)))
+      //       }
+      //       await PromiseUtil.allSettled(updatePromises)
+      //       break
+      //     }
+
+      //     this.log.warn(
+      //       `Validation failed for shard ${shardId}, retry ${retryCount + 1}/${maxRetries}`
+      //     )
+
+      //     retryCount++
+
+      //     if (retryCount < maxRetries) {
+      //       await new Promise((resolve) => setTimeout(resolve, 5000)) // 5-second delay between retries
+      //     }
+      //   }
+
+      //   // If all retries fail,continue to next shard
+      //   if (res === false) {
+      //     this.log.error(
+      //       `Failed to validate and store block hashes for shard ${shardId} after ${maxRetries} attempts. Skipping to next shard.`
+      //     )
+      //     continue // Move to next iteration (next shard)
+      //   }
+      // }
+      const shardProcessingPromises = Array.from(this.nodeMap.entries()).map(
+        async ([shardId, clients]) => {
+          this.log.info('Initiating pooling for shard:', { shardId })
+
+          // Batch initial sync updates
+          const syncPromises = clients.map((client) =>
+            Promise.all([
+              client.updateCurrentlySyncingShard(parseInt(shardId)),
+              client.updateLastSyncedPageNumber(1)
+            ])
+          )
+          await Promise.all(syncPromises)
+
+          // Retry mechanism with max retries
+          for (let retryCount = 0; retryCount < 3; retryCount++) {
+            try {
+              const res = await this.validateAndStoreBlockHashes(shardId, clients)
+
+              if (res === true) {
+                // Batch update of already synced shards
+                const updatePromises = clients.map((client) =>
+                  client.updateAlreadySyncedShards(parseInt(shardId))
+                )
+                await PromiseUtil.allSettled(updatePromises)
+                return true // Successfully processed shard
+              }
+
+              this.log.warn(`Validation failed for shard ${shardId}, retry ${retryCount + 1}/3`)
+
+              // Delay between retries
+              if (retryCount < 2) {
+                await new Promise((resolve) => setTimeout(resolve, 5000))
+              }
+            } catch (error) {
+              this.log.error(`Error processing shard ${shardId}: ${error}`)
             }
-            break
           }
 
-          this.log.warn(
-            `Validation failed for shard ${shardId}, retry ${retryCount + 1}/${maxRetries}`
-          )
-
-          retryCount++
-
-          if (retryCount < maxRetries) {
-            await new Promise((resolve) => setTimeout(resolve, 5000)) // 5-second delay between retries
-          }
-        }
-
-        // If all retries fail,continue to next shard
-        if (res === false) {
           this.log.error(
-            `Failed to validate and store block hashes for shard ${shardId} after ${maxRetries} attempts. Skipping to next shard.`
+            `Failed to validate and store block hashes for shard ${shardId} after 3 attempts.`
           )
-          continue // Move to next iteration (next shard)
+          return false // Failed to process shard
         }
-      }
+      )
+
+      // Process all shards in parallel
+      const shardResults = await Promise.all(shardProcessingPromises)
+
+      console.log('shardResults:', shardResults)
 
       this.log.info('Pooling initiated successfully')
     } catch (error) {
@@ -192,12 +248,60 @@ export class BlockPooling {
   }
 
   /**
-   * 1. choose a seednode
-   * 2. get paginated blockhashes
-   * 3. check with other nodes if they have the blockhashes
-   * 4. get the full block for all valid hashes
+   * 1. for each shard_id, call all the clients responsible for the shard
+   * 2. for each response from the clients, check if the blockhashes are present in the db
+   * 3. if the blockhashes are not present in the db, query the pull block from the respective node
+   * 4. parse the block and store it in the db
    */
   public async validateAndStoreBlockHashes(
+    shardId,
+    clients: StorageSyncClient[]
+  ): Promise<boolean> {
+    try {
+      // 1. for each client, call the push_getPaginatedBlockHashFromView
+      for (let i = 0; i < clients.length; i++) {
+        const client = clients[i]
+        // for this client, get paginated block hashes
+        const blockHashes = await client.push_getPaginatedBlockHashFromView(
+          shardId,
+          client.getLastSyncedPageNumber()
+        )
+
+        // for the received block hashes, check if any of them are already present in the db
+        const blockHashesRes = await BlockStorage.getBulkBlockHashes(blockHashes)
+        // collect the block hashes that are not present in the db
+        const missingBlockHashes = blockHashes.filter((hash) => !blockHashesRes.includes(hash))
+        // for the missing blockhashes, fetch the full block
+        if (missingBlockHashes.length > 0) {
+          const fullBlocks = await client.push_getBlocksFromHashes(
+            missingBlockHashes,
+            client.getViewName()
+          )
+          // batch process the full blocks
+          const blockProcessPromises = []
+          for (let i = 0; i < fullBlocks.length; i++) {
+            const block = fullBlocks[i]
+            const blockBytes = BitUtil.base16ToBytes(block)
+            const parsedBlock = BlockUtil.parseBlock(blockBytes)
+            blockProcessPromises.push(
+              Container.get(StorageNode).handleBlock(parsedBlock, blockBytes)
+            )
+          }
+          await PromiseUtil.allSettled(blockProcessPromises)
+          for (let client of clients) {
+            await client.updateLastSyncedPageNumber(client.getLastSyncedPageNumber() + 1)
+          }
+        }
+
+        return true
+      }
+    } catch (error) {
+      this.log.error('Error in validateAndStoreBlock:', error)
+      return false
+    }
+  }
+
+  public async validateAndStoreBlockHashesOld(
     shardId,
     clients: StorageSyncClient[],
     seedNodeIndex?: number
@@ -214,9 +318,6 @@ export class BlockPooling {
         this.log.info(
           `No block hashes to sync from node ${seedStorageClient.getNodeUrl()} for shardid ${shardId}`
         )
-        // TODO:
-        // check for all the nodes to see if they dont have any more record for the specific shard
-        // if all the nodes dont have any more records, then update the page number in the storage_sync_info table
         return true
       }
       let blockHashesPromiseRes: Promise<HashReply[]>[] = []

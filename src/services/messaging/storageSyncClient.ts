@@ -9,7 +9,7 @@ export class StorageSyncClient {
   private log = WinstonUtil.newLog(StorageSyncClient.name)
   private nodeUrl: string
   private shards: string[]
-  private alreadySyncedShardIds: string[]
+  private alreadySyncedShardIds: number[]
   private viewName: string
   private flowType: 'IN' | 'OUT'
   private lastSyncedPageNumber: number
@@ -27,7 +27,7 @@ export class StorageSyncClient {
     flowType: 'IN' | 'OUT',
     lastSyncedPageNumber: number,
     totalCount: number,
-    alreadySyncedShardIds: string[]
+    alreadySyncedShardIds: number[]
   ) {
     this.alreadySyncedShardIds = alreadySyncedShardIds
     this.nodeUrl = nodeUrl
@@ -55,7 +55,7 @@ export class StorageSyncClient {
     return this.currentlySyncingShard
   }
 
-  getAlreadySyncedShardIds(): string[] {
+  getAlreadySyncedShardIds(): number[] {
     return this.alreadySyncedShardIds
   }
 
@@ -72,12 +72,19 @@ export class StorageSyncClient {
     )
   }
 
-  async updateAlreadySyncedShards(shardId: string) {
+  async updateAlreadySyncedShards(shardId: number) {
     this.log.debug(`Adding the shard ${shardId} to alreadySyncedShardIds`)
     this.alreadySyncedShardIds.push(shardId)
+    let fieldToUpdate: {
+      alreadySynedShardId: number
+      syncStatus?: 'SYNCED' | 'SYNCING'
+    } = { alreadySynedShardId: shardId }
+    if (this.alreadySyncedShardIds.length == this.shards.length) {
+      fieldToUpdate.syncStatus = 'SYNCED'
+    }
     await Block.updateInfoInStorageSyncTable(
       { viewTableName: this.viewName, flowType: this.flowType },
-      { alreadySynedShardId: shardId }
+      fieldToUpdate
     )
   }
 

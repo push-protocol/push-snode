@@ -205,70 +205,84 @@ export default class StorageNode implements Consumer<QItem>, StorageContractList
     allNodeShards?: Map<string, Set<number>>,
     oldShardsTest?: Set<number>
   ) {
-    this.log.debug('handleReshard()')
-    this.log.debug('currentNodeShards: %j', Coll.setToArray(currentNodeShards))
-    this.log.debug('allNodeShards: %j', allNodeShards)
-    const newShards = currentNodeShards ?? new Set()
-    const oldShards = oldShardsTest ?? (await this.blockStorage.loadNodeShards())
-    this.log.debug(
-      'handleReshard(): newShards: %j oldShards: %j',
-      Coll.setToArray(newShards),
-      Coll.setToArray(oldShards)
-    )
-    if (Coll.isEqualSet(newShards, oldShards)) {
-      this.log.debug('handleReshard(): no reshard is needed')
-      return
-    }
-    const { shardsToAdd, shardsToDelete, commonShards } = this.getShardStatus(oldShards, newShards)
-    this.log.debug(
-      'shardsToAdd %j shardsToDelete %j shardsRemaining %j',
-      Coll.setToArray(shardsToAdd),
-      Coll.setToArray(shardsToDelete),
-      Coll.setToArray(commonShards)
-    )
-    if (shardsToDelete.size != 0) {
-      const expiryTime = new Date(Math.floor(Date.now()) + DateUtil.ONE_DAY_IN_MILLISECONDS)
-      await this.indexStorage.setExpiryTime(shardsToDelete, expiryTime)
-    }
-    if (shardsToAdd.size != 0) {
-      this.log.debug('Syncing new shards')
-      // from the allNodeShards, extract the node info whose shards are in shardsToAdd
-      // if shardsToAdd is not empty, we need to reindex all blocks
-      // for the missing shards, query all the snodes for the block_hashes
-      // if majority of the nodes have the block_hash, query the block details from one of the snode.
-      // call the function to accept the block.
-      await this.snodeInfoUtil.init(shardsToAdd)
-      const sNodeInfo = this.snodeInfoUtil.mapNodeInfoToShards
-      for (const [nodeInfo, shards] of sNodeInfo) {
-        if (
-          nodeInfo &&
-          shards.size > 0 &&
-          nodeInfo.nodeId != this.storageContractState.getNodeAddress()
-        ) {
-          const shardsArray = Coll.setToArray(shards)
-          console.log(`Node Info: ${JSON.stringify(nodeInfo)} Shards: ${shardsArray}`)
-          const response = await SNodeInfoUtil.getViewDetails(nodeInfo.url, shardsArray)
-          if (!response.error) {
-            this.log.debug('Response from node: %j', response)
-            const viewInfo: { count; viewId } = response
-            if (viewInfo && viewInfo.count && viewInfo.viewId) {
-              await BlockClass.createRecordInStorageSyncTable(
-                viewInfo.viewId,
-                'IN',
-                viewInfo.count,
-                shards,
-                nodeInfo.url
-              )
-            }
-          } else {
-            this.log.error('Error fetching view details from node: %s', nodeInfo.url)
-            this.log.error('Error: %s', response.error)
-          }
-        }
+    try {
+      this.log.debug('handleReshard()')
+      this.log.debug('currentNodeShards: %j', Coll.setToArray(currentNodeShards))
+      this.log.debug('allNodeShards: %j', allNodeShards)
+      const newShards = currentNodeShards ?? new Set()
+      const oldShards = oldShardsTest ?? (await this.blockStorage.loadNodeShards())
+      this.log.debug(
+        'handleReshard(): newShards: %j oldShards: %j',
+        Coll.setToArray(newShards),
+        Coll.setToArray(oldShards)
+      )
+      if (Coll.isEqualSet(newShards, oldShards)) {
+        this.log.debug('handleReshard(): no reshard is needed')
+        return
       }
+      const { shardsToAdd, shardsToDelete, commonShards } = this.getShardStatus(
+        oldShards,
+        newShards
+      )
+      this.log.debug(
+        'shardsToAdd %j shardsToDelete %j shardsRemaining %j',
+        Coll.setToArray(shardsToAdd),
+        Coll.setToArray(shardsToDelete),
+        Coll.setToArray(commonShards)
+      )
+      if (shardsToDelete.size != 0) {
+        const expiryTime = new Date(Math.floor(Date.now()) + DateUtil.ONE_DAY_IN_MILLISECONDS)
+        await this.indexStorage.setExpiryTime(shardsToDelete, expiryTime)
+      }
+      if (shardsToAdd.size != 0) {
+        this.log.debug('Syncing new shards')
+        // from the allNodeShards, extract the node info whose shards are in shardsToAdd
+        // if shardsToAdd is not empty, we need to reindex all blocks
+        // for the missing shards, query all the snodes for the block_hashes
+        // if majority of the nodes have the block_hash, query the block details from one of the snode.
+        // call the function to accept the block.
+        await this.snodeInfoUtil.init(shardsToAdd)
+        const sNodeInfo = this.snodeInfoUtil.mapNodeInfoToShards
+        const viewDetailsPromises = Array.from(sNodeInfo).map(async ([nodeInfo, shards]) => {
+          if (
+            nodeInfo &&
+            shards.size > 0 &&
+            nodeInfo.nodeId != this.storageContractState.getNodeAddress()
+          ) {
+            const shardsArray = Coll.setToArray(shards)
+            console.log(`Node Info: ${JSON.stringify(nodeInfo)} Shards: ${shardsArray}`)
+
+            try {
+              const response = await SNodeInfoUtil.getViewDetails(nodeInfo.url, shardsArray)
+              if (!response.error) {
+                this.log.debug('Response from node: %j', response)
+                const viewInfo: { count; viewId } = response
+                if (viewInfo && viewInfo.count && viewInfo.viewId) {
+                  await BlockClass.createRecordInStorageSyncTable(
+                    viewInfo.viewId,
+                    'IN',
+                    viewInfo.count,
+                    shards,
+                    nodeInfo.url
+                  )
+                }
+              } else {
+                this.log.error('Error fetching view details from node: %s', nodeInfo.url)
+                this.log.error('Error: %s', response.error)
+              }
+            } catch (e) {
+              this.log.error('Error fetching view details from node: %s', nodeInfo.url)
+              this.log.error('Error: %s', e)
+            }
+          }
+        })
+        await Promise.all(viewDetailsPromises)
+        await this.blockStorage.saveNodeShards(newShards)
+        await this.snodePooling.initiatePooling()
+      }
+    } catch (e) {
+      this.log.error('Error while handling reshard: %s', e)
     }
-    await this.blockStorage.saveNodeShards(newShards)
-    await this.snodePooling.initiatePooling()
 
     // add to index
     // reprocess every block from blocks table (only once per each block)
