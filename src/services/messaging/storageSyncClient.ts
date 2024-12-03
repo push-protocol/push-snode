@@ -74,11 +74,14 @@ export class StorageSyncClient {
 
   async updateAlreadySyncedShards(shardId: number) {
     this.log.debug(`Adding the shard ${shardId} to alreadySyncedShardIds`)
-    this.alreadySyncedShardIds.push(shardId)
     let fieldToUpdate: {
       alreadySynedShardId: number
       syncStatus?: 'SYNCED' | 'SYNCING'
     } = { alreadySynedShardId: shardId }
+    this.alreadySyncedShardIds = this.alreadySyncedShardIds = (
+      await Block.getStorageSyncInfo(this.viewName)
+    ).already_synced_shards
+    this.alreadySyncedShardIds.push(shardId)
     if (this.alreadySyncedShardIds.length == this.shards.length) {
       fieldToUpdate.syncStatus = 'SYNCED'
     }

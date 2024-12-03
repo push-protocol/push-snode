@@ -97,7 +97,7 @@ export class Block {
   }
 
   static async getStorageSyncInfo(viewTableName: string) {
-    const query = `SELECT view_name, flow_type, created_at, last_synced_page_number, total_count FROM storage_sync_info WHERE view_name = $1;`
+    const query = `SELECT view_name, flow_type, created_at, last_synced_page_number, total_count, already_synced_shards FROM storage_sync_info WHERE view_name = $1;`
     try {
       const result = await PgUtil.queryOneRow<{
         view_name: string
@@ -105,6 +105,7 @@ export class Block {
         created_at: any
         last_synced_page_number: string
         total_count: string
+        already_synced_shards: number[]
       }>(query, viewTableName)
       this.log.info(`Successfully fetched record from storage_sync_info for view ${viewTableName}`)
       return result
