@@ -123,7 +123,7 @@ export class StorageContractState {
       )
       nodeShards = this.getNodeShards()
     }
-    // await this.listener.handleReshard(nodeShards, this.nodeShardMap)
+    await this.listener.handleReshard(nodeShards, this.nodeShardMap)
   }
 
   // fails if this.nodeAddress is not defined

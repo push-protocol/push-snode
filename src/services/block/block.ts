@@ -2,7 +2,7 @@ import { Inject, Service } from 'typedi'
 
 import { BitUtil } from '../../utilz/bitUtil'
 import { Coll } from '../../utilz/coll'
-// import { DateUtil } from '../../utilz/dateUtil'
+import { DateUtil } from '../../utilz/dateUtil'
 import { PgUtil } from '../../utilz/pgUtil'
 import { RandomUtil } from '../../utilz/randomUtil'
 import { StrUtil } from '../../utilz/strUtil'
@@ -146,15 +146,16 @@ export class Block {
     }
 
     const shardIdQuery = `SELECT shard_ids FROM storage_sync_info WHERE view_name = $1;`
-    const shardIdResult = await PgUtil.queryOneValue<string>(shardIdQuery, viewTableName)
+    const shardIdResult = Coll.arrayToSet(
+      await PgUtil.queryOneValue<number[]>(shardIdQuery, viewTableName)
+    )
 
     if (shardIdResult) {
       // keep increaing the expiry time for the shards
-      // const shardIdSet = new Set<number>(shardIdResult.split(',').map(Number))
-      // await Block.indexStorage.setExpiryTime(
-      //   shardIdSet,
-      //   new Date(Math.floor(Date.now()) + DateUtil.ONE_DAY_IN_MILLISECONDS)
-      // )
+      await Block.indexStorage.setExpiryTime(
+        shardIdResult,
+        new Date(Math.floor(Date.now()) + DateUtil.ONE_DAY_IN_MILLISECONDS)
+      )
     }
 
     const query = `
@@ -169,7 +170,7 @@ export class Block {
       )
       SELECT object_hash
       FROM filtered_blocks
-      ORDER BY object_shards
+      ORDER BY ts DESC
       LIMIT $1 OFFSET $2;
     `
 
