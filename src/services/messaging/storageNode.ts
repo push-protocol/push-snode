@@ -242,11 +242,6 @@ export default class StorageNode implements Consumer<QItem>, StorageContractList
       }
       if (shardsToAdd.size != 0) {
         this.log.debug('Syncing new shards')
-        // from the allNodeShards, extract the node info whose shards are in shardsToAdd
-        // if shardsToAdd is not empty, we need to reindex all blocks
-        // for the missing shards, query all the snodes for the block_hashes
-        // if majority of the nodes have the block_hash, query the block details from one of the snode.
-        // call the function to accept the block.
         await this.snodeInfoUtil.init(shardsToAdd)
         const sNodeInfo = this.snodeInfoUtil.mapNodeInfoToShards
         const viewDetailsPromises = Array.from(sNodeInfo).map(async ([nodeInfo, shards]) => {
