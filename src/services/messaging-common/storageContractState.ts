@@ -68,7 +68,7 @@ export class StorageContractState {
       )
     }
     await this.readContractState() 
-    await this.subscribeToContractChanges() // todo ? ethers or hardhat always emits 1 fake event
+    // await this.subscribeToContractChanges() // todo ? ethers or hardhat always emits 1 fake event
   }
 
   public async readContractState() {

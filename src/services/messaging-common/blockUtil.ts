@@ -74,7 +74,11 @@ export class BlockUtil {
   }
 
   public static hashBlockAsHex(blockRaw: Uint8Array): string {
-    return BitUtil.bytesToBase16(HashUtil.sha256AsBytes(blockRaw));
+    return BitUtil.bytesToBase16(HashUtil.sha256AsBytesEx(blockRaw));
+  }
+
+  public static blockAsHex(blockRaw: Uint8Array): string {
+    return BitUtil.bytesToBase16(blockRaw);
   }
 
   // when the block has not been signed, we still need a valid immutable hash based on tx data
@@ -135,6 +139,11 @@ export class BlockUtil {
   static calculateAffectedShardsTx(tx: Transaction, shardCount: number, shards = new Set<number>()): Set<number> {
     const category = tx.getCategory()
     if (category === 'INIT_DID') {
+      for (let i = 0; i < shardCount; i++) {
+        // init did affects all shards
+        // NOTE: improve later
+        shards.add(i);
+      }
       return shards;
     }
     let senderAndRecipients = [tx.getSender(), ...tx.getRecipientsList()];
@@ -146,6 +155,24 @@ export class BlockUtil {
       shards.add(shardId);
     }
     return shards;
+  }
+
+  static calculateTxAffectedAddresses(block: Block, txIndex: number = null): string[] {
+    let arr = [];
+    if (txIndex == null) {
+      for (let txObj of block.getTxobjList()) {
+        const tx = txObj.getTx();
+        arr.push(tx.getRecipientsList());
+        arr.push(tx.getSender());
+      }
+    } else {
+      const txObj = block.getTxobjList()[txIndex];
+      Check.notNull(txObj, 'invalid txIndex ' + txIndex);
+      const tx = txObj.getTx();
+      arr.push(tx.getRecipientsList());
+      arr.push(tx.getSender());
+    }
+    return arr;
   }
 
   /**
@@ -492,7 +519,7 @@ export class BlockUtil {
     const blockValidatorNodeId = await BlockUtil.recoverSignerAddress(blockSignedByV, 0);
     BlockUtil.log.debug('signature # %s by %s (validator) ', 0, blockValidatorNodeId);
     const allowed = validatorsFromContract.has(blockValidatorNodeId);
-    if(!allowed) {
+    if (!allowed) {
       return CheckR.failWithText(`unregistered validator_: ${blockValidatorNodeId}`);
     }
     return CheckR.ok();

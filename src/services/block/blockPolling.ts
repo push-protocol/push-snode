@@ -8,6 +8,7 @@ import { BlockStorage } from '../messaging/BlockStorage'
 import StorageNode from '../messaging/storageNode'
 import { HashReply, StorageSyncClient } from '../messaging/storageSyncClient'
 import { BlockUtil } from '../messaging-common/blockUtil'
+import { Block } from './block'
 
 export interface NodeSyncInfo {
   view_name: string
@@ -134,9 +135,27 @@ export class BlockPooling {
     return this.nodeMap
   }
 
+  public async checkAndInitiatePooling(): Promise<void> {
+    // check the storage_sync_info table for the nodes that are syncing
+    // if there are any, call the initiatePooling method
+    try {
+      const syncInfo = await Block.getViewsBasedOnSyncStatus(syncStatus.SYNCING)
+      if (syncInfo.length > 0) {
+        void (async () => {
+          try {
+            await this.initiatePooling()
+          } catch (error) {
+            this.log.error('Background pooling error: %s', error)
+          }
+        })()
+      }
+    } catch (error) {
+      this.log.error('Error in checkAndInitiatePooling:', error)
+    }
+  }
+
   /**
    * Initializes the pooling mechanism
-   * @throws {Error} If initialization fails
    */
   public async initiatePooling(): Promise<void> {
     try {
@@ -194,7 +213,7 @@ export class BlockPooling {
   /**
    * 1. for each shard_id, call all the clients responsible for the shard
    * 2. for each response from the clients, check if the blockhashes are present in the db
-   * 3. if the blockhashes are not present in the db, query the pull block from the respective node
+   * 3. if the blockhashes are not present in the db, query the full block from the respective node
    * 4. parse the block and store it in the db
    */
   public async validateAndStoreBlockHashes(

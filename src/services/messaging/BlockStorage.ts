@@ -25,8 +25,9 @@ export class BlockStorage {
             object_hash   VARCHAR(255) NOT NULL, -- optional: a uniq field to fight duplicates
             object        TEXT         NOT NULL,
             object_shards JSONB        NOT NULL, -- message block shards
-            object_raw    TEXT      NOT NULL, -- raw message block
-            ts         TIMESTAMP    NOT NULL, -- timestamp from block
+            object_raw    TEXT         NOT NULL, -- raw message block
+            ts            TIMESTAMP    NOT NULL, -- timestamp from block
+            expiry_ts     TIMESTAMP    DEFAULT NULL, -- optional: expiry timestamp
             PRIMARY KEY (object_hash)
         );
     `)
@@ -125,7 +126,8 @@ export class BlockStorage {
             shard_ids JSONB NOT NULL,
             current_syncing_shard_id  VARCHAR(255) NOT NULL, -- current shard id being synced
             sync_status VARCHAR(255) DEFAULT 'SYNCING',
-            already_synced_shards JSONB DEFAULT '[]'
+            already_synced_shards JSONB DEFAULT '[]',
+            expiry_ts TIMESTAMP DEFAULT NULL -- only for out flowing data
             );`)
     await PgUtil.update(
       `CREATE INDEX IF NOT EXISTS storage_sync_info_index ON storage_sync_info USING btree (view_name ASC, created_at  ASC, last_synced_page_number ASC);`

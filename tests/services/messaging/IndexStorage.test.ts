@@ -43,5 +43,12 @@ describe('Index Storage Testcases', () => {
     it('Should delete data from the storage_node table', async () => {
       await indexStorage.deleteShardsFromInboxes()
     })
+
+    it('Should set expiry time for blocks', async () => {
+      await indexStorage.updateBlockExpiryTimestampPaginated(
+        new Set([1, 2, 3]),
+        new Date(Date.now())
+      )
+    })
   })
 })

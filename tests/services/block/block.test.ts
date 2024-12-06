@@ -32,7 +32,9 @@ describe('Block Service Testcase', () => {
         'vw_blocks_1234567',
         'IN',
         10,
-        new Set([1, 2, 3, 4, 5, 6, 7])
+        new Set([1, 2, 3, 4, 5, 6, 7]),
+        'test.com',
+        new Date(Math.floor(Date.now()))
       )
       const res = await Block.getStorageSyncInfo('vw_blocks_1234567')
       expect(res).to.be.not.null

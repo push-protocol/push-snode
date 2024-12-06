@@ -11,6 +11,7 @@ import { WinstonUtil } from '../../utilz/winstonUtil'
 import { Block as BlockClass } from '../block/block'
 import { BlockPooling } from '../block/blockPolling'
 import { BlockUtil } from '../messaging-common/blockUtil'
+import { CronScheduler } from '../messaging-common/cronScheduler'
 import {
   StorageContractListener,
   StorageContractState
@@ -52,6 +53,9 @@ export default class StorageNode implements Consumer<QItem>, StorageContractList
   @Inject()
   private snodePooling: BlockPooling
 
+  @Inject()
+  private cronScheduler: CronScheduler
+
   private client: QueueClient
 
   public async postConstruct() {
@@ -60,6 +64,7 @@ export default class StorageNode implements Consumer<QItem>, StorageContractList
     await this.valContractState.postConstruct()
     await this.storageContractState.postConstruct(true, this)
     await this.queueManager.postConstruct()
+    await this.cronScheduler.postConstruct()
   }
 
   // remote queue handler
@@ -167,7 +172,7 @@ export default class StorageNode implements Consumer<QItem>, StorageContractList
     )
     if (shardsToDelete.size != 0) {
       const expiryTime = new Date(Math.floor(Date.now()) + DateUtil.ONE_DAY_IN_MILLISECONDS)
-      await this.indexStorage.setExpiryTime(shardsToDelete, expiryTime)
+      await this.indexStorage.setExpiryTimeForTransactions(shardsToDelete, expiryTime)
     } else if (shardsToAdd.size != 0) {
       // from the allNodeShards, extract the node info whose shards are in shardsToAdd
       // if shardsToAdd is not empty, we need to reindex all blocks
@@ -232,7 +237,8 @@ export default class StorageNode implements Consumer<QItem>, StorageContractList
       )
       if (shardsToDelete.size != 0) {
         const expiryTime = new Date(Math.floor(Date.now()) + DateUtil.ONE_DAY_IN_MILLISECONDS)
-        await this.indexStorage.setExpiryTime(shardsToDelete, expiryTime)
+        await this.indexStorage.setExpiryTimeForTransactions(shardsToDelete, expiryTime)
+        await this.indexStorage.updateBlockExpiryTimestampPaginated(shardsToDelete, expiryTime)
       }
       if (shardsToAdd.size != 0) {
         this.log.debug('Syncing new shards')
@@ -278,7 +284,13 @@ export default class StorageNode implements Consumer<QItem>, StorageContractList
         })
         await Promise.all(viewDetailsPromises)
         await this.blockStorage.saveNodeShards(newShards)
-        await this.snodePooling.initiatePooling()
+        void (async () => {
+          try {
+            await this.snodePooling.initiatePooling()
+          } catch (error) {
+            this.log.error('Background pooling error: %s', error)
+          }
+        })()
       }
     } catch (e) {
       this.log.error('Error while handling reshard: %s', e)

@@ -1,29 +1,53 @@
 import * as nodeScheduler from "node-schedule"
 import { WinstonUtil } from "../../utilz/winstonUtil"
 import { IndexStorage } from "../messaging/IndexStorage"
-import Container from "typedi"
+import Container, { Service } from "typedi"
 import { Logger } from "winston"
-import { BlockPooling } from "../block/blockPolling"
+import { Block } from "../block/block"
+
+@Service()
 export class CronScheduler {
-    indexStorage: IndexStorage
-    blockPool: BlockPooling
-    log: Logger = WinstonUtil.newLog(CronScheduler.name)
-    postConstuct(){
+    private indexStorage: IndexStorage
+    private log: Logger = WinstonUtil.newLog(CronScheduler.name)
+
+    public async postConstruct() {
         this.indexStorage = Container.get(IndexStorage)
-        this.blockPool = Container.get(BlockPooling)
+        await this.initializeScheduledJobs()
+
     }
-    scheduleShardDeletionJob() {
-        nodeScheduler.scheduleJob('*/5 * * * * *', async () => {
-           this.log.info('deleteShardsFromInboxes():Cron job started for')
-            await this.indexStorage.deleteShardsFromInboxes()
-            this.log.info('deleteShardsFromInboxes():Cron job ended')
+
+    public initializeScheduledJobs() {
+        this.scheduleShardDeletionJob()
+        this.scheduleSyncTableDeletionJob()
+    }
+
+    private scheduleShardDeletionJob() {
+        this.log.info('Scheduling Shard Deletion Job')
+        nodeScheduler.scheduleJob('*/5 * * * *', async () => {
+            try {
+                this.log.info('Shard Deletion Job: Started')
+                await this.indexStorage.deleteShardsFromInboxes()
+                await this.indexStorage.deleteExpiredBlocksPaginated()
+                this.log.info('Shard Deletion Job: Completed')
+            } catch (error) {
+                console.log(error)
+                this.log.error('Shard Deletion Job: Error occurred', { error })
+            }
         })
     }
-    scheduleShardPoolingJob() {
-        nodeScheduler.scheduleJob('*/5 * * * * *', async () => {
-            this.log.info('shardPoolingJob():Cron job started for')
-            await this.blockPool.initiatePooling()
-            this.log.info('shardPoolingJob():Cron job ended')
+
+    private scheduleSyncTableDeletionJob() {
+        this.log.info('Scheduling Sync Table Deletion Job')
+        nodeScheduler.scheduleJob('*/5 * * * *', async () => {
+            try {
+                this.log.info('Sync Table Deletion Job: Started')
+                await Block.dropExpiredTables()
+                await Block.dropSyncedTables()
+                this.log.info('Sync Table Deletion Job: Completed')
+            } catch (error) {
+                console.log(error)
+                this.log.error('Sync Table Deletion Job: Error occurred', { error })
+            }
         })
     }
 }

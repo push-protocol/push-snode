@@ -69,14 +69,15 @@ export class Block {
     flowType: 'IN' | 'OUT',
     totalCount: number,
     shardIds: Set<number>,
-    snodeUrl?: string
+    snodeUrl?: string,
+    expiryTime?: Date
   ) {
     if (totalCount <= 0) {
       this.log.info(`Total count is ${totalCount}, not creating record in storage_sync_info`)
       return
     }
     const shardSetAsJson = JSON.stringify(Coll.setToArray(shardIds))
-    const query = `INSERT INTO storage_sync_info (view_name, flow_type, total_count, snode_url, shard_ids, current_syncing_shard_id) VALUES ($1, $2, $3, $4, $5, $6);`
+    const query = `INSERT INTO storage_sync_info (view_name, flow_type, total_count, snode_url, shard_ids, current_syncing_shard_id, expiry_ts) VALUES ($1, $2, $3, $4, $5, $6, $7);`
     try {
       await PgUtil.update(
         query,
@@ -85,7 +86,8 @@ export class Block {
         totalCount,
         snodeUrl ?? null,
         shardSetAsJson,
-        shardIds.values().next().value
+        shardIds.values().next().value,
+        expiryTime ?? null
       )
       this.log.info(`Successfully created record in storage_sync_info for view ${viewTableName}`)
     } catch (error) {
@@ -151,16 +153,16 @@ export class Block {
     )
 
     if (shardIdResult) {
-      // keep increaing the expiry time for the shards
-      await Block.indexStorage.setExpiryTime(
-        shardIdResult,
-        new Date(Math.floor(Date.now()) + DateUtil.ONE_DAY_IN_MILLISECONDS)
+      // keep increaing the expiry time for the view
+      await Block.updateInfoInStorageSyncTable(
+        { viewTableName, flowType: 'OUT' },
+        { expiry_ts: new Date(Math.floor(Date.now()) + DateUtil.ONE_DAY_IN_MILLISECONDS) }
       )
     }
 
     const query = `
       WITH filtered_blocks AS (
-        SELECT DISTINCT object_hash, object_shards
+        SELECT DISTINCT object_hash, object_shards, ts
         FROM ${viewTableName}
         WHERE EXISTS (
           SELECT 1
@@ -236,6 +238,7 @@ export class Block {
       currentlySyncingShardId?: string
       syncStatus?: 'SYNCING' | 'SYNCED'
       alreadySynedShardId?: number
+      expiry_ts?: Date
     }
   ) {
     const { viewTableName, flowType } = condition
@@ -279,6 +282,55 @@ WHERE view_name = $5 AND flow_type = $6;
     }
   }
 
+  static async dropSyncedTables() {
+    // delete the records from storage_sync_info whose sync_status is SYNCED
+    // drop the view_table corrosponding to it
+    try {
+      const query = `SELECT view_name FROM storage_sync_info WHERE sync_status = 'SYNCED';`
+      const result = await PgUtil.queryArr<{ view_name: string }>(query)
+      this.log.info(`Found ${result.length} synced tables to drop`)
+      for (const row of result) {
+        await Block.dropView(row.view_name)
+        await Block.dropViewRowFromStorageSyncTable(row.view_name)
+      }
+      this.log.info('Successfully dropped synced tables')
+    } catch (error) {
+      this.log.error(`Error dropping synced tables: ${error}`)
+    }
+  }
+
+  static async dropExpiredTables() {
+    // delete the row from storage_sync_info whose expiry_ts has exceeded i.e they are not being used
+    // drop the view_table corrosponding to it
+    const currentTime = new Date()
+    const query = `SELECT view_name FROM storage_sync_info WHERE expiry_ts < $1;`
+    try {
+      const result = await PgUtil.queryArr<{ view_name: string }>(query, currentTime)
+      this.log.info(`Found ${result.length} expired tables to drop`)
+      for (const row of result) {
+        await Block.dropView(row.view_name)
+        await Block.dropViewRowFromStorageSyncTable(row.view_name)
+      }
+      this.log.info('Successfully dropped expired tables')
+    } catch (error) {
+      this.log.error(`Error dropping expired tables: ${error}`)
+    }
+  }
+
+  static async getViewsBasedOnSyncStatus(status: 'SYNCED' | 'SYNCING') {
+    try {
+      const query = `SELECT view_name, total_count, shard_ids FROM storage_sync_info WHERE sync_status = $1;`
+      const result = await PgUtil.queryArr<{
+        view_name: string
+        total_count: number
+        shard_ids: number[]
+      }>(query, status)
+      return result
+    } catch (error) {
+      this.log.error(`Error getting view info based on status: ${error}`)
+    }
+  }
+
   static async createViewOfBlocksBasedOnShardIds(shards: Set<number>, snodeUrl?: string) {
     if (!shards.size) {
       return { viewId: null, count: null, error: 'Shards set cannot be empty' }
@@ -286,7 +338,7 @@ WHERE view_name = $5 AND flow_type = $6;
     // sort the shards
     shards = new Set([...shards].sort((a, b) => a - b))
 
-    const viewTableName = `vw_blocks_${StrUtil.concateSet<number>(shards, '_')}_${RandomUtil.getRandomInt(0, 1000000)}`
+    const viewTableName = `vw_blocks_${StrUtil.concateSet<number>(shards, '_').substring(0, 10)}_${RandomUtil.getRandomInt(0, 1000000)}`
 
     try {
       const viewExists = await Block.getStorageSyncInfo(viewTableName)
@@ -331,7 +383,8 @@ WHERE view_name = $5 AND flow_type = $6;
             'OUT',
             count,
             shards,
-            snodeUrl && snodeUrl.length != 0 ? snodeUrl : null
+            snodeUrl && snodeUrl.length != 0 ? snodeUrl : null,
+            new Date(Math.floor(Date.now()) + DateUtil.ONE_DAY_IN_MILLISECONDS)
           )
           return { viewId: viewTableName, count }
         } else {
@@ -350,11 +403,11 @@ WHERE view_name = $5 AND flow_type = $6;
 
   static async dropView(viewName: string): Promise<void> {
     try {
-      const query = `DROP VIEW IF EXISTS ${viewName};`
+      const query = `DROP TABLE IF EXISTS ${viewName};`
       await PgUtil.update(query)
-      this.log.info(`Successfully dropped view ${viewName}`)
+      this.log.info(`Successfully dropped view  table ${viewName}`)
     } catch (error) {
-      this.log.error(`Error dropping view ${viewName}: ${error}`)
+      this.log.error(`Error dropping view table ${viewName}: ${error}`)
       throw error
     }
   }

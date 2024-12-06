@@ -51,7 +51,7 @@ describe('StorageNode Test', () => {
       expect(result.commonShards).to.deep.equal(new Set([1, 2, 3, 4]))
     })
   })
-  describe.only('handleReshard testcases', () => {
+  describe('handleReshard testcases', () => {
     it('Should end as the newShards is same as existing shards', async () => {
       const newShards = [6, 7, 8]
       const oldShards = new Set([9, 10, 11, 12, 13])

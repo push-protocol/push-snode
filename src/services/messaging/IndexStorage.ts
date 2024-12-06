@@ -118,7 +118,49 @@ export class IndexStorage {
     this.log.debug(`found value: ${storageValue}`)
   }
 
-  public async setExpiryTime(shardsToDelete: Set<number>, expiryTime: Date): Promise<void> {
+  async updateBlockExpiryTimestampPaginated(
+    shardIds: Set<number>,
+    expiryTs: Date,
+    pageSize = 1000
+  ) {
+    const shardIdsArray = Array.from(shardIds)
+
+    let offset = 0
+    let rowsAffected = 0
+
+    while (true) {
+      const query = `
+        WITH subset_blocks AS (
+          SELECT object_hash
+          FROM blocks
+          WHERE (
+            SELECT array_agg(elem::int)
+            FROM jsonb_array_elements(object_shards) elem
+          ) <@ $1::int[]
+          LIMIT $2 OFFSET $3
+        )
+        UPDATE blocks b
+        SET expiry_ts = $4
+        FROM subset_blocks sb
+        WHERE b.object_hash = sb.object_hash
+        RETURNING 1;
+      `
+
+      const result = await PgUtil.queryArr<{}>(query, shardIdsArray, pageSize, offset, expiryTs)
+
+      rowsAffected += result.length
+
+      if (result.length < pageSize) break
+      offset += pageSize
+    }
+
+    return rowsAffected
+  }
+
+  public async setExpiryTimeForTransactions(
+    shardsToDelete: Set<number>,
+    expiryTime: Date
+  ): Promise<void> {
     this.log.debug('setExpiryTime(): shardsToDelete: %j', Array.from(shardsToDelete))
 
     if (shardsToDelete.size === 0) {
@@ -194,5 +236,36 @@ export class IndexStorage {
     }
 
     this.log.debug('deleteShardsFromInboxes(): deleted %d rows', count)
+  }
+
+  async deleteExpiredBlocksPaginated(pageSize = 1000) {
+    const expiryTs = new Date()
+    let offset = 0
+    let totalDeletedRows = 0
+    this.log.debug('deleteExpiredBlocksPaginated() for time %s', expiryTs.toISOString())
+
+    while (true) {
+      const query = `
+        WITH expired_blocks AS (
+          SELECT object_hash
+          FROM blocks
+          WHERE expiry_ts IS NOT NULL AND expiry_ts < $1
+          LIMIT $2 OFFSET $3
+        )
+        DELETE FROM blocks b
+        USING expired_blocks eb
+        WHERE b.object_hash = eb.object_hash
+        RETURNING 1;
+      `
+
+      const result = await PgUtil.queryArr<{}>(query, expiryTs, pageSize, offset)
+
+      totalDeletedRows += result.length
+
+      if (result.length < pageSize) break
+      offset += pageSize
+    }
+
+    this.log.debug('deleteShardsFromInboxes(): deleted %d rows', totalDeletedRows)
   }
 }
