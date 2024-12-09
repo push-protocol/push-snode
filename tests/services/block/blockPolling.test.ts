@@ -1,9 +1,9 @@
 // import { expect } from 'chai'
 
-import { BlockPooling } from '../../../src/services/block/blockPolling'
+import { BlockPolling } from '../../../src/services/block/blockPolling'
 
 describe('BlockPolling Testcases', () => {
-  const blockPolling = new BlockPooling()
+  const blockPolling = new BlockPolling()
   describe('getNodePoolingInfo Testcases', () => {
     it('Should return the node pooling info', async () => {
       const result = await blockPolling.getNodePoolingInfo()

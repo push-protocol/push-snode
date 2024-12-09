@@ -9,7 +9,7 @@ import { DateUtil } from '../../utilz/dateUtil'
 import { SNodeInfoUtil } from '../../utilz/snodeInfoUtil'
 import { WinstonUtil } from '../../utilz/winstonUtil'
 import { Block as BlockClass } from '../block/block'
-import { BlockPooling } from '../block/blockPolling'
+import { BlockPolling } from '../block/blockPolling'
 import { BlockUtil } from '../messaging-common/blockUtil'
 import { CronScheduler } from '../messaging-common/cronScheduler'
 import {
@@ -51,7 +51,7 @@ export default class StorageNode implements Consumer<QItem>, StorageContractList
   private snodeInfoUtil: SNodeInfoUtil
 
   @Inject()
-  private snodePooling: BlockPooling
+  private snodePolling: BlockPolling
 
   @Inject()
   private cronScheduler: CronScheduler
@@ -281,7 +281,7 @@ export default class StorageNode implements Consumer<QItem>, StorageContractList
         await this.blockStorage.saveNodeShards(newShards)
         void (async () => {
           try {
-            await this.snodePooling.initiatePooling()
+            await this.snodePolling.initiatePooling()
           } catch (error) {
             this.log.error('Background pooling error: %s', error)
           }

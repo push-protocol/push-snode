@@ -28,9 +28,9 @@ enum syncStatus {
 }
 
 @Service()
-export class BlockPooling {
+export class BlockPolling {
   private static readonly FLOW_TYPE_IN = 'IN'
-  private readonly log = WinstonUtil.newLog(BlockPooling.name)
+  private readonly log = WinstonUtil.newLog(BlockPolling.name)
   private nodeMap = new Map<string, StorageSyncClient[]>()
 
   /**
@@ -48,7 +48,7 @@ export class BlockPooling {
     try {
       const result = await PgUtil.queryArr<NodeSyncInfo>(
         query,
-        BlockPooling.FLOW_TYPE_IN,
+        BlockPolling.FLOW_TYPE_IN,
         syncStatus.SYNCING
       )
       this.log.info('Successfully fetched records from storage_sync_info:', {
