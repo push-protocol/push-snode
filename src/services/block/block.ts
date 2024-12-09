@@ -317,14 +317,14 @@ WHERE view_name = $5 AND flow_type = $6;
     }
   }
 
-  static async getViewsBasedOnSyncStatus(status: 'SYNCED' | 'SYNCING') {
+  static async getViewsBasedOnSyncAndFlowStatus(status: 'SYNCED' | 'SYNCING', flow: 'IN' | 'OUT') {
     try {
-      const query = `SELECT view_name, total_count, shard_ids FROM storage_sync_info WHERE sync_status = $1;`
+      const query = `SELECT view_name, total_count, shard_ids FROM storage_sync_info WHERE sync_status = $1 AND flow_type = $2;`
       const result = await PgUtil.queryArr<{
         view_name: string
         total_count: number
         shard_ids: number[]
-      }>(query, status)
+      }>(query, status, flow)
       return result
     } catch (error) {
       this.log.error(`Error getting view info based on status: ${error}`)

@@ -65,6 +65,7 @@ export default class StorageNode implements Consumer<QItem>, StorageContractList
     await this.storageContractState.postConstruct(true, this)
     await this.queueManager.postConstruct()
     await this.cronScheduler.postConstruct()
+    await this.snodePolling.checkAndInitiatePooling()
   }
 
   // remote queue handler

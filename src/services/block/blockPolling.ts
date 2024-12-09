@@ -27,6 +27,11 @@ enum syncStatus {
   SYNCED = 'SYNCED'
 }
 
+enum flowType {
+  IN = 'IN',
+  OUT = 'OUT'
+}
+
 @Service()
 export class BlockPolling {
   private static readonly FLOW_TYPE_IN = 'IN'
@@ -139,7 +144,7 @@ export class BlockPolling {
     // check the storage_sync_info table for the nodes that are syncing
     // if there are any, call the initiatePooling method
     try {
-      const syncInfo = await Block.getViewsBasedOnSyncStatus(syncStatus.SYNCING)
+      const syncInfo = await Block.getViewsBasedOnSyncAndFlowStatus(syncStatus.SYNCING, flowType.IN)
       if (syncInfo.length > 0) {
         void (async () => {
           try {
