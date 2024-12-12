@@ -24,10 +24,6 @@
   </a>
 </h4>
 
-<p align="center">
-    <img src="https://res.cloudinary.com/drdjegqln/image/upload/v1686230764/1500x500_bhmpkc.jpg" alt="dashboard"/>
-</p>
-
 # Push Storage Node
 
 Push Storage Node is a part of Push's Proof of Stake (PoS) chain and is responsible for storing transactions along with the payload data in a sharded fashion.
