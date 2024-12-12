@@ -435,7 +435,7 @@ export class NodeInfo {
 }
 
 export enum NodeType {
-  VNode = 0, // validator 0
-  SNode = 1, // storage 1
-  ANode = 2 // delivery 2
+  VNode, // validator 0
+  SNode, // storage 1
+  ANode // archieve 2
 }

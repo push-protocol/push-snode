@@ -67,8 +67,8 @@ export class StorageContractState {
         )
       )
     }
-    await this.readContractState()
-    await this.subscribeToContractChanges() // todo ? ethers or hardhat always emits 1 fake event
+    await this.readContractState() 
+    // await this.subscribeToContractChanges() // todo ? ethers or hardhat always emits 1 fake event
   }
 
   public async readContractState() {
@@ -136,6 +136,10 @@ export class StorageContractState {
 
   public getStorageNodesForShard(shard: number): Set<string> | null {
     return this.shardToNodesMap.get(shard)
+  }
+
+  public getNodeAddress(): string {
+    return this.nodeAddress
   }
 }
 

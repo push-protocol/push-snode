@@ -1,10 +1,10 @@
 import { expect } from 'chai'
 import { Wallet } from 'ethers'
 
-import { Block, Transaction } from '../src/generated/push/block_pb'
-import { BlockUtil } from '../src/services/messaging-common/blockUtil'
-import { BitUtil } from '../src/utilz/bitUtil'
-import { StrUtil } from '../src/utilz/strUtil'
+import { Block, Transaction } from '../../src/generated/push/block_pb'
+import { BlockUtil } from '../../src/services/messaging-common/blockUtil'
+import { BitUtil } from '../../src/utilz/bitUtil'
+import { StrUtil } from '../../src/utilz/strUtil'
 
 type WalletInfo = {
   address: string
@@ -77,7 +77,7 @@ describe('parsing tests', async function () {
 })
 
 describe('normal tests', async function () {
-  it.only('generate a transaction', async function () {
+  it('generate a transaction', async function () {
     const tx = await buildCustomTx1()
     console.log('signed tx %s bytes', BitUtil.bytesToBase16(tx.serializeBinary()))
     console.log('signed tx %o', tx.toObject())
