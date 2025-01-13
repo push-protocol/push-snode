@@ -24,6 +24,7 @@ import {ArrayUtil} from "../../utilz/arrayUtil";
 import {SolUtil} from "../../utilz/solUtil";
 import {StarkNetUtil} from "../../utilz/starkNetUtil";
 import {PushSdkUtil, SigCheck} from "./pushSdkUtil";
+import { Coll } from "../../utilz/coll";
 
 
 export class BlockUtil {
@@ -157,22 +158,21 @@ export class BlockUtil {
     return shards;
   }
 
-  static calculateTxAffectedAddresses(block: Block, txIndex: number = null): string[] {
+  static calculateAddressesInTransaction(trx: Transaction): Set<string> {
     let arr = [];
-    if (txIndex == null) {
-      for (let txObj of block.getTxobjList()) {
+    arr.push(...trx.getRecipientsList());
+    arr.push(trx.getSender());
+    return Coll.arrayToSet(arr)
+  }
+
+  static calculateAddressesInBlock(block: Block): Set<string> {
+    let arr = [];
+    for (let txObj of block.getTxobjList()) {
         const tx = txObj.getTx();
-        arr.push(tx.getRecipientsList());
+        arr.push(...tx.getRecipientsList());
         arr.push(tx.getSender());
-      }
-    } else {
-      const txObj = block.getTxobjList()[txIndex];
-      Check.notNull(txObj, 'invalid txIndex ' + txIndex);
-      const tx = txObj.getTx();
-      arr.push(tx.getRecipientsList());
-      arr.push(tx.getSender());
     }
-    return arr;
+    return Coll.arrayToSet(arr);
   }
 
   /**
