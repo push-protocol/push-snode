@@ -6,7 +6,7 @@ import { PromiseUtil } from '../../utilz/promiseUtil'
 import { WinstonUtil } from '../../utilz/winstonUtil'
 import { BlockStorage } from '../messaging/BlockStorage'
 import StorageNode from '../messaging/storageNode'
-import { HashReply, StorageSyncClient } from '../messaging/storageSyncClient'
+import { StorageSyncClient } from '../messaging/storageSyncClient'
 import { BlockUtil } from '../messaging-common/blockUtil'
 import { Block } from './block'
 
@@ -56,14 +56,14 @@ export class BlockPolling {
         BlockPolling.FLOW_TYPE_IN,
         syncStatus.SYNCING
       )
-      this.log.info('Successfully fetched records from storage_sync_info:', {
+      this.log.info('Successfully fetched records from storage_sync_info: %o', {
         count: result.length
       })
       this.log.info(result)
       return result
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      this.log.error('Error fetching records from storage_sync_info:', { error: errorMessage })
+      this.log.error('Error fetching records from storage_sync_info: %s', error)
       throw new Error(`Failed to fetch node pooling info: ${errorMessage}`)
     }
   }
@@ -123,7 +123,7 @@ export class BlockPolling {
       }
     }
 
-    this.log.info('Node shard map constructed successfully', {
+    this.log.info('Node shard map constructed successfully %o ', {
       totalShards: this.nodeMap.size,
       totalClients: this.getTotalClientCount()
     })
@@ -155,7 +155,7 @@ export class BlockPolling {
         })()
       }
     } catch (error) {
-      this.log.error('Error in checkAndInitiatePooling:', error)
+      this.log.error('Error in checkAndInitiatePooling: %s', error)
     }
   }
 
@@ -171,11 +171,11 @@ export class BlockPolling {
 
       // start pooling from the nodes
       for (const [shardId, clients] of this.nodeMap.entries()) {
-        this.log.info('Initiating pooling for shard:', { shardId })
+        this.log.info('Initiating pooling for shard: %o', { shardId })
         // Update the currently syncing shard and last synced page number
         clients.map(async (client) => {
-          await client.updateCurrentlySyncingShard(parseInt(shardId)),
-            await client.updateLastSyncedPageNumber(1)
+          await client.updateCurrentlySyncingShard(parseInt(shardId))
+          await client.updateLastSyncedPageNumber(1)
         })
 
         // Retry mechanism with max retries
@@ -202,15 +202,16 @@ export class BlockPolling {
               continue // Move to next iteration (next shard)
             }
           } catch (error) {
-            this.log.error(`Error processing shard ${shardId}: ${error}`)
+            this.log.error(`Error processing shard ${shardId}: %s`, error)
           }
         }
       }
 
       this.log.info('Pooling initiated successfully')
     } catch (error) {
+      this.log.error('Error in initiatePooling: %s', error)
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      this.log.error('Failed to initiate pooling:', { error: errorMessage })
+      this.log.error('Failed to initiate pooling: %s', { error: errorMessage })
       throw new Error(`Failed to initiate pooling: ${errorMessage}`)
     }
   }
@@ -280,99 +281,14 @@ export class BlockPolling {
               clientPaginationState.get(client).lastSyncedPage
             )
           } catch (error) {
-            this.log.error(`Error processing client ${client.getNodeUrl()}: ${error}`)
+            this.log.error(`Error processing client ${client.getNodeUrl()}: %s`, error)
             break // Move to next client
           }
         }
       }
       return true
     } catch (error) {
-      this.log.error('Error in validateAndStoreBlock:', error)
-      return false
-    }
-  }
-
-  public async validateAndStoreBlockHashesOld(
-    shardId,
-    clients: StorageSyncClient[],
-    seedNodeIndex?: number
-  ) {
-    try {
-      //TODO: choose a random node as seed node
-      const seedStorageClient = clients[seedNodeIndex ?? 0]
-      // get paginated block hashes from the seed storage node
-      const blockHashes = await seedStorageClient.push_getPaginatedBlockHashFromView(
-        shardId,
-        seedStorageClient.getLastSyncedPageNumber()
-      )
-      if (blockHashes.length === 0) {
-        this.log.info(
-          `No block hashes to sync from node ${seedStorageClient.getNodeUrl()} for shardid ${shardId}`
-        )
-        return true
-      }
-      let blockHashesPromiseRes: Promise<HashReply[]>[] = []
-      // check with other nodes if they have the block hashes
-      for (const client of clients) {
-        if (client.getViewName() === seedStorageClient.getViewName()) continue
-        blockHashesPromiseRes.push(client.push_putBlockHash(blockHashes))
-      }
-      // get the response and for each blockhash, check if the other nodes have the block hash
-      // for the valid blockhashes, get the full block from the seed storage node
-      const blockHashesRes = await PromiseUtil.allSettled(blockHashesPromiseRes)
-      const validBlockHashes: string[] = []
-      const invalidBlockHashes: string[] = []
-      // for each of the blockhash, look for the response for other nodes
-      for (let i = 0; i < blockHashes.length; i++) {
-        this.log.info('Checking for blockhashes majority', { blockHash: blockHashes[i] })
-        if (blockHashesRes[i].isRejected()) {
-          this.log.error('Error in getting blockhashes majority', { blockHash: blockHashes[i] })
-          invalidBlockHashes.push(blockHashes[i])
-          continue
-        }
-        let hashReply = blockHashesRes[i].val
-        let validCount = 0
-        for (let j = 0; j < hashReply.length; j++) {
-          if (hashReply[j] === 'DO_NOT_SEND') {
-            validCount++
-          }
-        }
-        // store all valid blockhashes in an array
-        if (validCount >= Math.floor(clients.length / 2)) {
-          validBlockHashes.push(blockHashes[i])
-        } else {
-          // store all invalid blockhashes in another array for logging
-          invalidBlockHashes.push(blockHashes[i])
-        }
-      }
-      this.log.info('Valid blockhashes:', validBlockHashes)
-      this.log.info('Invalid blockhashes:', invalidBlockHashes)
-      // read full block for all valid blockhashes from the seed storage node
-      const fullBlocks = await seedStorageClient.push_getBlocksFromHashes(
-        validBlockHashes,
-        seedStorageClient.getViewName()
-      )
-      // loop through each of the blocks
-      for (const block of fullBlocks) {
-        this.log.info('Full block:', block)
-        // parse the block and store it in the storage node
-        const blockBytes = BitUtil.base16ToBytes(block)
-        const parsedBlock = BlockUtil.parseBlock(blockBytes)
-        const res = await Container.get(StorageNode).handleBlock(parsedBlock, blockBytes)
-        if (res) {
-          this.log.info('Block successfully validated')
-          return true
-        } else {
-          this.log.error('Block validation failed')
-          this.log.error('Block:', block)
-          continue
-        }
-      }
-      for (let client of clients) {
-        await client.updateLastSyncedPageNumber(client.getLastSyncedPageNumber() + 1)
-      }
-    } catch (error) {
-      this.log.error('Error in validateAndStoreBlock:', error)
+      this.log.error('Error in validateAndStoreBlock: %s', error)
       return false
     }
   }

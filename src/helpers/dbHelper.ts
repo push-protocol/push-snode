@@ -39,7 +39,7 @@ const options = {
 logger.info(`PG_USER is ${EnvLoader.getPropertyOrFail('PG_USER')}`)
 const pg: pgPromise.IMain<{}, IClient> = pgPromise(options)
 export const pgPool = pg(
-  `postgres://${EnvLoader.getPropertyOrFail('PG_USER')}:${EnvLoader.getPropertyOrFail('PG_PASS')}@${EnvLoader.getPropertyOrFail('PG_HOST')}:${EnvLoader.getPropertyOrDefault('PG_PORT', '10007')}/${EnvLoader.getPropertyOrFail('DB_NAME')}`
+  `postgres://${EnvLoader.getPropertyOrFail('PG_USER')}:${EnvLoader.getPropertyOrFail('PG_PASS')}@${EnvLoader.getPropertyOrFail('PG_HOST')}:${EnvLoader.getPropertyOrDefault('PG_PORT', '5432')}/${EnvLoader.getPropertyOrFail('DB_NAME')}`
 )
 
 PgUtil.init(pgPool)

@@ -50,20 +50,6 @@ export class Block {
     return statusArray
   }
 
-  static async checkIfTableViewExists(viewName: string): Promise<boolean> {
-    const query = `
-      SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_views WHERE viewname = $1
-      );`
-
-    try {
-      const result = await PgUtil.queryOneRow<{ exists: boolean }>(query, viewName)
-      return result.exists
-    } catch (error) {
-      this.log.error(`Error checking if view exists: ${error}`)
-      throw error
-    }
-  }
-
   static async createRecordInStorageSyncTable(
     viewTableName: string,
     flowType: 'IN' | 'OUT',
@@ -92,7 +78,8 @@ export class Block {
       this.log.info(`Successfully created record in storage_sync_info for view ${viewTableName}`)
     } catch (error) {
       this.log.error(
-        `Error creating record in storage_sync_info for view ${viewTableName}: ${error}`
+        `Error creating record in storage_sync_info for view ${viewTableName}: %s`,
+        error
       )
       throw error
     }
@@ -113,7 +100,8 @@ export class Block {
       return result
     } catch (error) {
       this.log.error(
-        `Error fetching record from storage_sync_info for view ${viewTableName}: ${error}`
+        `Error fetching record from storage_sync_info for view ${viewTableName}: %o`,
+        error
       )
       throw error
     }
@@ -126,7 +114,8 @@ export class Block {
       this.log.info(`Successfully deleted record from storage_sync_info for view ${viewTableName}`)
     } catch (error) {
       this.log.error(
-        `Error deleting record from storage_sync_info for view ${viewTableName}: ${error}`
+        `Error deleting record from storage_sync_info for view ${viewTableName}: %s`,
+        error
       )
       throw error
     }
@@ -187,13 +176,13 @@ export class Block {
         shardIds
       )
 
-      console.log({
-        message: `Successfully fetched paginated blocks from view ${viewTableName}`,
+      this.log.debug({
+        message: `Successfully fetched paginated blocks from view ${viewTableName} %s %s`,
         pageNumber,
         pageSize
       })
 
-      console.log(result)
+      this.log.debug(result)
 
       if (result?.length) {
         // Update sync info only if we actually got results
@@ -224,7 +213,7 @@ export class Block {
       const resultArray = result.map((row) => row.object_raw ?? '')
       return resultArray
     } catch (error) {
-      this.log.error(`Error fetching block info from view ${viewTableName}: ${error}`)
+      this.log.error(`Error fetching block info from view ${viewTableName} %s:`, error)
       throw error
     }
   }
@@ -276,7 +265,8 @@ WHERE view_name = $5 AND flow_type = $6;
       this.log.info(`Successfully updated record in storage_sync_info for view ${viewTableName}`)
     } catch (error) {
       this.log.error(
-        `Error updating record in storage_sync_info for view ${viewTableName}: ${error}`
+        `Error updating record in storage_sync_info for view ${viewTableName}: %s`,
+        error
       )
       throw error
     }
@@ -295,7 +285,7 @@ WHERE view_name = $5 AND flow_type = $6;
       }
       this.log.info('Successfully dropped synced tables')
     } catch (error) {
-      this.log.error(`Error dropping synced tables: ${error}`)
+      this.log.error(`Error dropping synced tables: %s`, error)
     }
   }
 
@@ -313,7 +303,7 @@ WHERE view_name = $5 AND flow_type = $6;
       }
       this.log.info('Successfully dropped expired tables')
     } catch (error) {
-      this.log.error(`Error dropping expired tables: ${error}`)
+      this.log.error(`Error dropping expired tables: %s`, error)
     }
   }
 
@@ -327,7 +317,7 @@ WHERE view_name = $5 AND flow_type = $6;
       }>(query, status, flow)
       return result
     } catch (error) {
-      this.log.error(`Error getting view info based on status: ${error}`)
+      this.log.error(`Error getting view info based on status: %s`, error)
     }
   }
 
@@ -392,11 +382,11 @@ WHERE view_name = $5 AND flow_type = $6;
           return { viewId: null, count: null, error: 'View has no data' }
         }
       } catch (queryError) {
-        this.log.error(`Error executing CREATE VIEW query: ${queryError}`)
+        this.log.error(`Error executing CREATE VIEW query: %s`, queryError)
         return { viewId: null, count: null, error: queryError }
       }
     } catch (error) {
-      this.log.error(`Error creating view ${viewTableName}: ${error}`)
+      this.log.error(`Error creating view ${viewTableName}: %s`, error)
       return { viewId: null, count: null, error }
     }
   }
@@ -407,7 +397,7 @@ WHERE view_name = $5 AND flow_type = $6;
       await PgUtil.update(query)
       this.log.info(`Successfully dropped view  table ${viewName}`)
     } catch (error) {
-      this.log.error(`Error dropping view table ${viewName}: ${error}`)
+      this.log.error(`Error dropping view table ${viewName}: %s`, error)
       throw error
     }
   }

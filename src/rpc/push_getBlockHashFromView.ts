@@ -11,12 +11,11 @@ export class PushGetBlockHashFromView extends RpcBase {
 
   public async execute(params: [string, number, number, number]) {
     try {
-      console.log('Executing push_getBlockHashFromView', { params })
+      this.log.debug('Executing push_getBlockHashFromView %o', { params })
       // view_name, shard_id, page_number, page_size
       return await Block.getPaginatedBlockHashFromView(params[0], [params[1]], params[2], params[3])
     } catch (error) {
-      console.log(error)
-      this.log.error('Error executing push_getBlockHashFromView', { error })
+      this.log.error('Error executing push_getBlockHashFromView %o', { error })
       return new Error('Error executing push_getBlockHashFromView')
     }
   }

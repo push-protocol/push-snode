@@ -31,7 +31,7 @@ export class CronScheduler {
                 this.log.info('Shard Deletion Job: Completed')
             } catch (error) {
                 console.log(error)
-                this.log.error('Shard Deletion Job: Error occurred', { error })
+                this.log.error('Shard Deletion Job: Error occurred %o', { error })
             }
         })
     }
@@ -46,7 +46,7 @@ export class CronScheduler {
                 this.log.info('Sync Table Deletion Job: Completed')
             } catch (error) {
                 console.log(error)
-                this.log.error('Sync Table Deletion Job: Error occurred', { error })
+                this.log.error('Sync Table Deletion Job: Error occurred %o', { error })
             }
         })
     }

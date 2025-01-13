@@ -11,14 +11,13 @@ export class PushGetBlocksFromHashes extends RpcBase {
 
   public async execute(params: { hashes: string[]; table: string }) {
     try {
-      console.log('Executing push_getBlocksFromBlockHashes', { params })
+      this.log.debug('Executing push_getBlocksFromBlockHashes %o', { params })
       const res = await Block.getBlockInfoFromViewBasedOnBlockHashs(params.table, params.hashes)
       if (res && res.length >= 0) {
         return res
       }
     } catch (error) {
-      console.log(error)
-      this.log.error('Error executing push_getBlocksFromBlockHashes', { error })
+      this.log.error('Error executing push_getBlocksFromBlockHashes %o', { error })
       return new Error('Error executing push_getBlocksFromBlockHashes')
     }
   }

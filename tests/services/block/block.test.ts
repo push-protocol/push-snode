@@ -8,12 +8,12 @@ describe('Block Service Testcase', () => {
   beforeEach(async () => {
     await Container.get(StorageNode).postConstruct()
   })
-  describe('chekcIfTableViewExists', () => {
-    it('Shoudld return false as view doesnt exists', async () => {
-      const result = await Block.checkIfTableViewExists('test812345234567')
-      expect(result).to.be.false
-    })
-  })
+  // describe('chekcIfTableViewExists', () => {
+  //   it('Shoudld return false as view doesnt exists', async () => {
+  //     const result = await Block.checkIfTableViewExists('test812345234567')
+  //     expect(result).to.be.false
+  //   })
+  // })
 
   describe('createViewOfBlocksBasedOnShardIds', () => {
     it('Should create a view of the blocks table', async () => {
