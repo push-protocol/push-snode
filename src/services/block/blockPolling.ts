@@ -1,3 +1,6 @@
+import 'reflect-metadata'
+
+import { Mutex } from 'async-mutex'
 import Container, { Service } from 'typedi'
 
 import { BitUtil } from '../../utilz/bitUtil'
@@ -9,7 +12,6 @@ import StorageNode from '../messaging/storageNode'
 import { StorageSyncClient } from '../messaging/storageSyncClient'
 import { BlockUtil } from '../messaging-common/blockUtil'
 import { Block } from './block'
-
 export interface NodeSyncInfo {
   view_name: string
   flow_type: 'IN' | 'OUT'
@@ -36,6 +38,9 @@ enum flowType {
 export class BlockPolling {
   private static readonly FLOW_TYPE_IN = 'IN'
   private readonly log = WinstonUtil.newLog(BlockPolling.name)
+  private static mutex = new Mutex()
+  private storageNode: StorageNode = Container.get(StorageNode)
+
   private nodeMap = new Map<string, StorageSyncClient[]>()
 
   /**
@@ -163,57 +168,60 @@ export class BlockPolling {
    * Initializes the pooling mechanism
    */
   public async initiatePooling(): Promise<void> {
-    try {
-      // initialise the node shard map
-      if (this.nodeMap.size === 0) {
-        await this.constructNodeShardMap()
-      }
+    return BlockPolling.mutex.runExclusive(async () => {
+      try {
+        if (this.nodeMap.size === 0) {
+          await this.constructNodeShardMap()
+        }
 
-      // start pooling from the nodes
-      for (const [shardId, clients] of this.nodeMap.entries()) {
-        this.log.info('Initiating pooling for shard: %o', { shardId })
-        // Update the currently syncing shard and last synced page number
-        clients.map(async (client) => {
-          await client.updateCurrentlySyncingShard(parseInt(shardId))
-          await client.updateLastSyncedPageNumber(1)
-        })
+        for (const [shardId, clients] of this.nodeMap.entries()) {
+          this.log.info('Initiating pooling for shard: %o', { shardId })
 
-        // Retry mechanism with max retries
-        for (let retryCount = 0; retryCount < 3; retryCount++) {
-          try {
-            const res = await this.validateAndStoreBlockHashes(shardId, clients)
+          const parsedShardId = parseInt(shardId)
+          await PromiseUtil.allSettled(
+            clients.map(async (client) => {
+              await client.updateCurrentlySyncingShard(parsedShardId)
+              await client.updateLastSyncedPageNumber(client.getLastSyncedPageNumber())
+            })
+          )
 
-            if (res === true) {
-              this.log.info(`Validation and storage successful for shard ${shardId}`)
-              break
+          for (let retryCount = 0; retryCount < 3; retryCount++) {
+            try {
+              const res = await this.validateAndStoreBlockHashes(parseInt(shardId), clients)
+              if (res === true) {
+                this.log.info(`Validation and storage successful for shard ${shardId}`)
+                break
+              }
+              this.log.warn(`Validation failed for shard ${shardId}, retry ${retryCount + 1}/3`)
+
+              if (retryCount < 2) {
+                await new Promise((resolve) => setTimeout(resolve, 5000))
+              }
+
+              if (res === false) {
+                this.log.error(
+                  `Failed to validate and store block hashes for shard ${shardId} after 3 attempts. Skipping to next shard.`
+                )
+                continue
+              }
+            } catch (error) {
+              this.log.error(`Error processing shard ${shardId}: %s`, error)
             }
-            this.log.warn(`Validation failed for shard ${shardId}, retry ${retryCount + 1}/3`)
-
-            // Delay between retries
-            if (retryCount < 2) {
-              await new Promise((resolve) => setTimeout(resolve, 5000))
-            }
-
-            // If all retries fail,continue to next shard
-            if (res === false) {
-              this.log.error(
-                `Failed to validate and store block hashes for shard ${shardId} after 3 attempts. Skipping to next shard.`
-              )
-              continue // Move to next iteration (next shard)
-            }
-          } catch (error) {
-            this.log.error(`Error processing shard ${shardId}: %s`, error)
           }
         }
-      }
 
-      this.log.info('Pooling initiated successfully')
-    } catch (error) {
-      this.log.error('Error in initiatePooling: %s', error)
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      this.log.error('Failed to initiate pooling: %s', { error: errorMessage })
-      throw new Error(`Failed to initiate pooling: ${errorMessage}`)
-    }
+        this.log.info('Pooling initiated successfully')
+      } catch (error) {
+        this.log.error('Error in initiatePooling: %s', error)
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        this.log.error('Failed to initiate pooling: %s', { error: errorMessage })
+        throw new Error(`Failed to initiate pooling: ${errorMessage}`)
+      }
+    })
+  }
+
+  async delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms))
   }
 
   /**
@@ -223,7 +231,7 @@ export class BlockPolling {
    * 4. parse the block and store it in the db
    */
   public async validateAndStoreBlockHashes(
-    shardId,
+    shardId: number,
     clients: StorageSyncClient[]
   ): Promise<boolean> {
     try {
@@ -244,8 +252,10 @@ export class BlockPolling {
         ])
       )
 
-      for (const client of clients) {
+      // Create an async function to process a single client
+      const processClient = async (client: StorageSyncClient): Promise<void> => {
         this.log.info(`Client ${client.getNodeUrl()} is responsible for shard ${shardId}`)
+
         // keep calling the client until all the block hashes are exhausted
         while (!clientPaginationState.get(client).exhausted) {
           try {
@@ -257,6 +267,7 @@ export class BlockPolling {
             if (blockHashes.length === 0) {
               clientPaginationState.get(client).exhausted = true
               await client.updateAlreadySyncedShards(shardId)
+              await client.updateLastSyncedPageNumber(client.getLastSyncedPageNumber())
               continue
             }
 
@@ -269,12 +280,24 @@ export class BlockPolling {
                 client.getViewName()
               )
 
-              const blockProcessPromises = fullBlocks.map((block) => {
-                const blockBytes = BitUtil.base16ToBytes(block)
-                const parsedBlock = BlockUtil.parseBlock(blockBytes)
-                return Container.get(StorageNode).handleBlock(parsedBlock, blockBytes)
+              const blockProcessPromises = fullBlocks.map(async (block) => {
+                try {
+                  const blockBytes = BitUtil.base16ToBytes(block)
+                  const parsedBlock = BlockUtil.parseBlock(blockBytes)
+                  await this.storageNode.handleBlock(parsedBlock, blockBytes)
+                  return true
+                } catch (error) {
+                  this.log.error('Error processing block: %s', error)
+                  return false
+                }
               })
-              await PromiseUtil.allSettled(blockProcessPromises)
+
+              try {
+                await PromiseUtil.allSettled(blockProcessPromises)
+                await this.delay(50)
+              } catch {
+                this.log.error('Error in allSettled')
+              }
             }
             clientPaginationState.get(client).lastSyncedPage++
             await client.updateLastSyncedPageNumber(
@@ -286,6 +309,11 @@ export class BlockPolling {
           }
         }
       }
+
+      // Process all clients in parallel
+      const clientPromises = clients.map((client) => processClient(client))
+      await PromiseUtil.allSettled(clientPromises)
+
       return true
     } catch (error) {
       this.log.error('Error in validateAndStoreBlock: %s', error)

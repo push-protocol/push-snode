@@ -51,6 +51,7 @@
   "homepage": "https://github.com/push-protocol/push-snode#readme",
   "dependencies": {
     "@solana/web3.js": "^1.95.3",
+    "async-mutex": "^0.5.0",
     "axios": "^1.2.0",
     "bech32": "^2.0.0",
     "bs58": "^6.0.0",
