@@ -4,6 +4,7 @@ import { NextFunction, Request, Response } from 'express'
 import jsonRouter from 'express-json-rpc-router'
 
 import { rpcControllerConfigs } from '../rpc/index'
+import { EnvLoader } from '../utilz/envLoader'
 
 interface AppError extends Error {
   status?: number
@@ -21,8 +22,8 @@ export default ({ app }: { app: express.Application }) => {
   // Alternate description:
   // Enable Cross Origin Resource Sharing to all origins by default
   app.use(cors())
-
-  app.use(express.json())
+  const MAX_HTTP_PAYLOAD = EnvLoader.getPropertyOrDefault('MAX_HTTP_PAYLOAD', '20mb')
+  app.use(express.json({ limit: MAX_HTTP_PAYLOAD }))
 
   app.use(
     jsonRouter({
