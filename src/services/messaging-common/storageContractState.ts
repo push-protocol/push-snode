@@ -137,6 +137,10 @@ export class StorageContractState {
   public getStorageNodesForShard(shard: number): Set<string> | null {
     return this.shardToNodesMap.get(shard)
   }
+
+  public getNodeAddress(): string {
+    return this.nodeAddress
+  }
 }
 
 type StorageContract = StorageContractAPI & Contract

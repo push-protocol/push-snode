@@ -4,6 +4,7 @@ import {Check} from "./check";
 export class DateUtil {
   public static readonly MAX_UNIX_TS = Math.floor(new Date('9999-12-31T23:59:59Z').getTime() / 1000);
   public static readonly TIMESTAMP_REGEXP = /^(\d+)$|^(\d+)\.(\d{0,6})$/;
+  public static readonly ONE_DAY_IN_MILLISECONDS=86400000
 
   public static formatYYYYMMDD(yearValue: number, monthValue: number, dayValue: number): string {
     return DateTime.fromObject({ year: yearValue, month: monthValue, day: dayValue }).toFormat(

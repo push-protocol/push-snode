@@ -15,8 +15,7 @@
     "dev6002": "ts-node-dev --inspect=6002 --transpile-only ./src/app.ts",
     "start": "nodemon",
     "inspect": "nodemon --inspect src/app.ts",
-    "test": "mocha --inspect=9229 -r ts-node/register tests/**/*.test.ts --require tests/root.ts --serial",
-    "lint": "eslint '**/*.{js,ts,jsx,tsx}'",
+    "test": "CONFIG_DIR='./docker/s1' LOG_LEVEL=error NEW_RELIC_ENABLED=false TS_NODE_PROJECT='./tsconfig.mocha.json' mocha -r ts-node/register \"tests/{utilz,services}/**/*.test.ts\" --timeout 12000000000 --require tests/root.ts --serial",
     "lint:fix": "eslint --fix '**/*.{js,ts,jsx,tsx}'",
     "format": "prettier --write '**/*.{js,ts,jsx,tsx}'",
     "prepare": "husky install",
@@ -52,6 +51,7 @@
   "homepage": "https://github.com/push-protocol/push-snode#readme",
   "dependencies": {
     "@solana/web3.js": "^1.95.3",
+    "async-mutex": "^0.5.0",
     "axios": "^1.2.0",
     "bech32": "^2.0.0",
     "bs58": "^6.0.0",

@@ -118,27 +118,154 @@ export class IndexStorage {
     this.log.debug(`found value: ${storageValue}`)
   }
 
-  // todo remove shard entries from node_storage_layout also?
-  public async deleteShardsFromInboxes(shardsToDelete: Set<number>) {
-    this.log.debug('deleteShardsFromInboxes(): shardsToDelete: %j', Coll.setToArray(shardsToDelete))
-    if (shardsToDelete.size == 0) {
+  async updateBlockExpiryTimestampPaginated(
+    shardIds: Set<number>,
+    expiryTs: Date,
+    pageSize = 1000
+  ) {
+    const shardIdsArray = Array.from(shardIds)
+
+    let offset = 0
+    let rowsAffected = 0
+
+    while (true) {
+      const query = `
+        WITH subset_blocks AS (
+          SELECT object_hash
+          FROM blocks
+          WHERE (
+            SELECT array_agg(elem::int)
+            FROM jsonb_array_elements(object_shards) elem
+          ) <@ $1::int[]
+          LIMIT $2 OFFSET $3
+        )
+        UPDATE blocks b
+        SET expiry_ts = $4
+        FROM subset_blocks sb
+        WHERE b.object_hash = sb.object_hash
+        RETURNING 1;
+      `
+
+      const result = await PgUtil.queryArr<{}>(query, shardIdsArray, pageSize, offset, expiryTs)
+
+      rowsAffected += result.length
+
+      if (result.length < pageSize) break
+      offset += pageSize
+    }
+
+    return rowsAffected
+  }
+
+  public async setExpiryTimeForTransactions(
+    shardsToDelete: Set<number>,
+    expiryTime: Date
+  ): Promise<void> {
+    this.log.debug('setExpiryTime(): shardsToDelete: %j', Array.from(shardsToDelete))
+
+    if (shardsToDelete.size === 0) {
       return
     }
-    // delete from index
-    const idsToDelete = Coll.numberSetToSqlQuoted(shardsToDelete)
-    const rows = await PgUtil.queryArr<{ table_name: string }>(
-      `select distinct table_name
-       from node_storage_layout
-       where namespace_shard_id in ${idsToDelete}`
-    )
-    for (const row of rows) {
-      this.log.debug('clearing table %s from shards %o', row, idsToDelete)
+
+    // Convert Set to Array once
+    const shardIdsArray = Array.from(shardsToDelete)
+
+    for (const shardId of shardIdsArray) {
+      // Get count of data present for this shard_id
+      const count: number = await PgUtil.queryOneValue(
+        `SELECT count(skey) FROM storage_node WHERE namespace_shard_id = $1`,
+        shardId.toString()
+      )
+
+      // Define page size and calculate the number of pages
+      const pageSize = 1000
+      const pageCount = Math.ceil(count / pageSize)
+
+      for (let i = 0; i < pageCount; i++) {
+        const offset = i * pageSize
+
+        await PgUtil.update(
+          `WITH batch AS (
+             SELECT skey
+             FROM storage_node
+             WHERE namespace_shard_id = $1
+             LIMIT $2 OFFSET $3
+           )
+           UPDATE storage_node
+           SET expiration_ts = $4
+           WHERE skey IN (SELECT skey FROM batch)`,
+          shardId.toString(),
+          pageSize,
+          offset,
+          expiryTime
+        )
+      }
+    }
+  }
+
+  // todo remove shard entries from node_storage_layout also?
+  public async deleteShardsFromInboxes() {
+    const currentTime = new Date()
+    this.log.debug('deleteShardsFromInboxes() for time %s', currentTime.toISOString())
+
+    const countQuery = `SELECT count(skey) FROM storage_node WHERE expiration_ts IS NOT NULL AND expiration_ts < $1`
+    const count: number = parseInt(await PgUtil.queryOneValue(countQuery, currentTime))
+    this.log.debug('deleteShardsFromInboxes(): count: %d', count)
+
+    if (count === 0) {
+      this.log.debug('deleteShardsFromInboxes(): nothing to delete')
+      return
+    }
+
+    const pageSize = 1000
+    const pageCount = Math.ceil(count / pageSize)
+
+    for (let i = 0; i <= pageCount; i++) {
       await PgUtil.update(
-        `delete
-                           from ${row.table_name}
-                           where namespace_shard_id in ${idsToDelete}`,
-        idsToDelete
+        `WITH batch AS (
+           SELECT skey
+           FROM storage_node
+           WHERE expiration_ts < $1
+           LIMIT $2
+         )
+         DELETE FROM storage_node
+         WHERE skey IN (SELECT skey FROM batch)`,
+        currentTime,
+        pageSize
       )
     }
+
+    this.log.debug('deleteShardsFromInboxes(): deleted %d rows', count)
+  }
+
+  async deleteExpiredBlocksPaginated(pageSize = 1000) {
+    const expiryTs = new Date()
+    let offset = 0
+    let totalDeletedRows = 0
+    this.log.debug('deleteExpiredBlocksPaginated() for time %s', expiryTs.toISOString())
+
+    while (true) {
+      const query = `
+        WITH expired_blocks AS (
+          SELECT object_hash
+          FROM blocks
+          WHERE expiry_ts IS NOT NULL AND expiry_ts < $1
+          LIMIT $2 OFFSET $3
+        )
+        DELETE FROM blocks b
+        USING expired_blocks eb
+        WHERE b.object_hash = eb.object_hash
+        RETURNING 1;
+      `
+
+      const result = await PgUtil.queryArr<{}>(query, expiryTs, pageSize, offset)
+
+      totalDeletedRows += result.length
+
+      if (result.length < pageSize) break
+      offset += pageSize
+    }
+
+    this.log.debug('deleteShardsFromInboxes(): deleted %d rows', totalDeletedRows)
   }
 }
