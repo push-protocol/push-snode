@@ -6,6 +6,7 @@ import { BitUtil } from '../../utilz/bitUtil'
 import { Check } from '../../utilz/check'
 import { Coll } from '../../utilz/coll'
 import { DateUtil } from '../../utilz/dateUtil'
+import { EnvLoader } from '../../utilz/envLoader'
 import { SNodeInfoUtil } from '../../utilz/snodeInfoUtil'
 import { WinstonUtil } from '../../utilz/winstonUtil'
 import { Block as BlockClass } from '../block/block'
@@ -63,7 +64,9 @@ export default class StorageNode implements Consumer<QItem>, StorageContractList
     await this.indexStorage.postConstruct()
     await this.valContractState.postConstruct()
     await this.storageContractState.postConstruct(true, this)
-    await this.queueManager.postConstruct()
+    if (!EnvLoader.getPropertyAsBool('DISABLE_VALIDATOR_POLLING')) {
+      await this.queueManager.postConstruct()
+    }
     await this.cronScheduler.postConstruct()
     await this.snodePolling.checkAndInitiatePooling()
   }

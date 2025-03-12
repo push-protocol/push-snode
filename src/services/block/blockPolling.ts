@@ -4,6 +4,7 @@ import { Mutex } from 'async-mutex'
 import Container, { Service } from 'typedi'
 
 import { BitUtil } from '../../utilz/bitUtil'
+import { EnvLoader } from '../../utilz/envLoader'
 import { PgUtil } from '../../utilz/pgUtil'
 import { PromiseUtil } from '../../utilz/promiseUtil'
 import { WinstonUtil } from '../../utilz/winstonUtil'
@@ -146,6 +147,9 @@ export class BlockPolling {
   }
 
   public async checkAndInitiatePooling(): Promise<void> {
+    if (EnvLoader.getPropertyAsBool('DISABLE_P2P_POLLING')) {
+      return
+    }
     // check the storage_sync_info table for the nodes that are syncing
     // if there are any, call the initiatePooling method
     try {
@@ -168,6 +172,9 @@ export class BlockPolling {
    * Initializes the pooling mechanism
    */
   public async initiatePooling(): Promise<void> {
+    if (EnvLoader.getPropertyAsBool('DISABLE_P2P_POLLING')) {
+      return
+    }
     return BlockPolling.mutex.runExclusive(async () => {
       try {
         if (this.nodeMap.size === 0) {
