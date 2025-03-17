@@ -147,9 +147,13 @@ export class BlockPolling {
   }
 
   public async checkAndInitiatePooling(): Promise<void> {
-    if (EnvLoader.getPropertyAsBool('DISABLE_P2P_POLLING')) {
+    const disableP2PPolling = EnvLoader.getPropertyAsBool('DISABLE_P2P_POLLING')
+    this.log.debug('checkAndInitiatePooling(): disableP2PPolling: %s', disableP2PPolling)
+    if (disableP2PPolling) {
+      this.log.debug('checkAndInitiatePooling(): exiting')
       return
     }
+    this.log.debug('checkAndInitiatePooling(): checking storage_sync_info')
     // check the storage_sync_info table for the nodes that are syncing
     // if there are any, call the initiatePooling method
     try {

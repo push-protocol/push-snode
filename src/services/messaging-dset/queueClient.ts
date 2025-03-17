@@ -19,13 +19,13 @@ export class QueueClient {
   }
 
   /**
-   * Call in cycle until it returns true,
-   * fetches maxRequests at max per each invocation per each endpoint
-   * @param maxRequests
-   * @returns true, if no more data available; false otherwise
+   * Polls remote queue with maxRequests
+   * per every validator
+   *
+   * currently synchronous, no parallel calls
    */
-  public async pollRemoteQueue(maxRequests: number): Promise<any> {
-    const result = []
+  public async pollRemoteQueue(maxRequests: number): Promise<EndpointStats[]> {
+    const statsArr: EndpointStats[] = []
     const sameQueueEndpoints = await PgUtil.queryArr<{
       id: number
       queue_name: string
@@ -44,7 +44,7 @@ export class QueueClient {
     for (const endpoint of sameQueueEndpoints) {
       // todo EVERY ENDPOINT CAN BE DONE IN PARALLEL
       // read data from the endpoint (in cycle) , update the offset in db
-      const endpointStats = {
+      const endpointStats: EndpointStats = {
         queueName: this.queueName,
         target_node_id: endpoint.target_node_id,
         target_node_url: endpoint.target_node_url,
@@ -55,7 +55,7 @@ export class QueueClient {
       }
       let lastOffset = endpoint.target_offset
       for (let i = 0; i < maxRequests; i++) {
-        result.push(endpointStats)
+        statsArr.push(endpointStats)
         endpointStats.queries++
         const reply = await this.readItems(
           endpoint.queue_name,
@@ -78,18 +78,22 @@ export class QueueClient {
             endpointStats.newItems++
           }
         }
-        await PgUtil.update(
-          'UPDATE dset_client SET target_offset = $1 WHERE id = $2',
-          reply.lastOffset,
-          endpoint.id
-        )
-        lastOffset = reply.lastOffset
-        endpointStats.lastOffset = reply.lastOffset
+        // CHECK: never trust any offset lower than the current
+        if (reply.lastOffset <= lastOffset) {
+          this.log.error('reply offset %s < lastOffset %s', reply.lastOffset, lastOffset)
+        } else {
+          lastOffset = reply.lastOffset
+          endpointStats.lastOffset = lastOffset
+
+          await PgUtil.update(
+            'UPDATE dset_client SET target_offset = $1 WHERE id = $2',
+            lastOffset,
+            endpoint.id
+          )
+        }
       }
     }
-    return {
-      result: result
-    }
+    return statsArr
   }
 
   public async readItems(
@@ -120,4 +124,14 @@ export class QueueClient {
     const url = UrlUtil.append(baseUri, '/api/v1/rpc/')
     return await validatorRpc.callPushReadBlockQueueSizeRpc(url)
   }
+}
+
+export type EndpointStats = {
+  downloadedItems: number
+  newItems: number
+  queueName: string
+  target_node_url: string
+  lastOffset: number
+  target_node_id: string
+  queries: number
 }
