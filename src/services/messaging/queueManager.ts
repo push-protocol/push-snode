@@ -1,3 +1,4 @@
+import { Mutex } from 'async-mutex'
 import schedule from 'node-schedule'
 import { Inject, Service } from 'typedi'
 import { Logger } from 'winston'
@@ -31,8 +32,11 @@ export class QueueManager {
 
   constructor() {}
 
-  private readonly QUEUE_REPLY_PAGE_SIZE = 10
-  private readonly CLIENT_REQUEST_PER_SCHEDULED_JOB = 10
+  private readonly CLIENT_REQUEST_PER_SCHEDULED_JOB = EnvLoader.getPropertyAsNumber(
+    'CLIENT_REQUEST_PER_SCHEDULED_JOB',
+    5
+  )
+  private static mutex = new Mutex()
 
   // client -> queue -?-> channelService -> table <------- client
   public async postConstruct() {
@@ -43,15 +47,21 @@ export class QueueManager {
     ])
     const qs = this
     schedule.scheduleJob(this.CLIENT_READ_SCHEDULE, async function () {
-      const dbgPrefix = 'PollRemoteQueue'
-      try {
-        await qs.mblockClient.pollRemoteQueue(qs.CLIENT_REQUEST_PER_SCHEDULED_JOB)
-        qs.log.info(`CRON %s started`, dbgPrefix)
-      } catch (err) {
-        qs.log.error(`CRON %s failed %o`, dbgPrefix, err)
-      } finally {
-        qs.log.info(`CRON %s finished`, dbgPrefix)
+      const dbgPrefix = 'pollRemoteQueue():'
+      if (QueueManager.mutex.isLocked()) {
+        qs.log.error('%s failed to aquire mutex, the cron is still running', dbgPrefix)
+        return
       }
+      await QueueManager.mutex.runExclusive(async () => {
+        try {
+          qs.log.info(`%s CRON started`, dbgPrefix)
+          await qs.mblockClient.pollRemoteQueue(qs.CLIENT_REQUEST_PER_SCHEDULED_JOB)
+        } catch (err) {
+          qs.log.error(`%s CRON failed %o`, dbgPrefix, err)
+        } finally {
+          qs.log.info(`%s CRON finished`, dbgPrefix)
+        }
+      })
     })
   }
 
