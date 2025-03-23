@@ -79,7 +79,7 @@ export class QueueClient {
           }
         }
         // CHECK: never trust any offset lower than the current
-        if (reply.lastOffset <= lastOffset) {
+        if (Number(reply.lastOffset) <= Number(lastOffset)) {
           this.log.error('reply offset %s < lastOffset %s', reply.lastOffset, lastOffset)
         } else {
           lastOffset = reply.lastOffset
